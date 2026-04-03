@@ -11,6 +11,7 @@ const DEFAULT_CANDIDATES = [
     score: 94, 
     status: 'Strong Match',
     date: '1 day ago',
+    skills: ['React', 'TypeScript', 'Next.js', 'Tailwind CSS', 'JavaScript', 'CSS', 'HTML', 'Figma'],
     summary: 'Alice is a robust front-end specialist with a history of scaling design systems and optimizing web performance. Her GitHub activity indicates strong modern React adoption (Hooks, RSC, Next.js). There is a slight gap in container orchestration, but her infrastructure knowledge is sufficient for frontend DevOps.',
     experience: [
       { company: 'Acme Corp', title: 'Senior Staff UI Engineer', date: '2021 - Present', description: 'Led the development of a unified design system reducing UI inconsistencies by 40%. Implemented performance improvements yielding a 25% increase in Lighthouse score.' },
@@ -28,6 +29,7 @@ const DEFAULT_CANDIDATES = [
     score: 88, 
     status: 'Match',
     date: '2 days ago',
+    skills: ['Node.js', 'TypeScript', 'React', 'PostgreSQL', 'Docker', 'WebSocket', 'JavaScript', 'Express'],
     summary: 'Marcus possesses a balanced full-stack skill set with deep proficiency in Node.js and TypeScript. His experience at high-growth startups makes him a great cultural fit for fast-paced agile teams.',
     experience: [
       { company: 'StartupX', title: 'Fullstack Engineer', date: '2022 - Present', description: 'Built and scaled real-time collaboration tools using WebSockets and Node.js.' }
@@ -44,6 +46,7 @@ const DEFAULT_CANDIDATES = [
     score: 97, 
     status: 'Strong Match',
     date: '2 hours ago',
+    skills: ['Go', 'gRPC', 'PostgreSQL', 'Kubernetes', 'AWS', 'Distributed Systems', 'Terraform', 'Docker'],
     summary: 'Sofia is an exceptional backend lead with expertise in distributed systems and Go. She has a proven track record of reducing latency in high-traffic APIs by over 60% through strategic caching and DB optimization.',
     experience: [
       { company: 'CloudScale', title: 'Staff Software Engineer', date: '2020 - Present', description: 'Optimized high-throughput gRPC services and managed cross-functional engineering pods.' }
@@ -60,6 +63,7 @@ const DEFAULT_CANDIDATES = [
     score: 98, 
     status: 'Strong Match',
     date: 'Just now',
+    skills: ['Solidity', 'React', 'Django', 'Node.js', 'Web3', 'Python', 'JavaScript', 'LLaMA', 'AI', 'Agentic Systems'],
     summary: 'Highly skilled B.Tech candidate from Nirma University (Expected 2028). Winner of the Codeversity National Hackathon at IIT Gandhinagar. Deeply proficient in Web3 (Solidity), Agentic AI (LLaMA 3.1, Groq), and Fullstack development (React, Django, Node.js). Proven track record of building production-grade AI systems and decentralized platforms.',
     experience: [
       { company: 'Nirma University', title: 'Student Researcher', date: '2024 - Present', description: 'Developing agentic AI systems and exploring decentralized finance protocols.' }
