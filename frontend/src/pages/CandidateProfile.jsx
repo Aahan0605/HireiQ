@@ -53,7 +53,7 @@ export default function CandidateProfile() {
           };
       });
       // Pad to 6 categories if the candidate has fewer than 6 skills
-      const defaultSubjects = ['Frontend', 'Backend', 'Database', 'Cloud', 'Algorithms', 'System Design'];
+      const defaultSubjects = ['Technical Skills', 'Problem Solving', 'Communication', 'Leadership', 'Creativity', 'Performance'];
       while (radarData.length < 6) {
           const subject = defaultSubjects[radarData.length] || `Skill ${radarData.length + 1}`;
           radarData.push({ subject: subject, A: baseScore - 5, fullMark: 100 });
@@ -104,6 +104,8 @@ export default function CandidateProfile() {
                 <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-mint/10 px-3 py-1 text-sm font-medium text-mint">
                   <Award className="h-4 w-4" />
                   {candidate?.score || 'N/A'}% Match Score
+                </div>
+              </div>
 
               <div className="space-y-4 border-t border-border pt-6">
                 <div className="flex items-center gap-3 text-sm text-text-1">
@@ -208,6 +210,26 @@ export default function CandidateProfile() {
                 ) : (
                   <p className="text-text-3 text-sm">No experience data available</p>
                 )}
+              </div>
+            </MagneticCard>
+
+            <MagneticCard className="p-8 border-border bg-surface-2/80">
+              <h3 className="mb-6 text-xl font-semibold text-white">Top Skills Matched</h3>
+              <div className="space-y-4">
+                {candidate?.skills?.slice(0, 4).map((skill, i) => (
+                  <div key={i}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span className="font-medium text-text-1">{skill}</span>
+                      <span className="text-text-3">{90 - (i * 5)}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-3">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-mint to-sky"
+                        style={{ width: `${90 - (i * 5)}%` }}
+                      />
+                    </div>
+                  </div>
+                )) || <p className="text-text-3 text-sm">No skills available</p>}
               </div>
             </MagneticCard>
           </motion.div>
