@@ -19,6 +19,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from api.routes.candidates import router as candidates_router
 from api.routes.jobs import router as jobs_router
 
@@ -109,6 +114,7 @@ app.include_router(jobs_router, prefix="/api/v1")
 # Root routes
 # ─────────────────────────────────────────────────────────────
 
+
 @app.get("/", include_in_schema=False)
 async def root() -> RedirectResponse:
     """Redirect root to API docs."""
@@ -139,6 +145,7 @@ async def health_check_v1() -> dict:
 # ─────────────────────────────────────────────────────────────
 # Global exception handler
 # ─────────────────────────────────────────────────────────────
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(
