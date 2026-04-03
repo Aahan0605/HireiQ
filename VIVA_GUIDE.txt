@@ -1,4 +1,8 @@
-/**
+✓ backend/algorithms/dp_shortlist.py
+✓ backend/algorithms/skill_graph.py
+✓ backend/algorithms/interview_scheduler.py
+✓ backend/algorithms/merge_rank.py
+✓ VIVA_GUIDE.txt/**
 ═══════════════════════════════════════════════════════════════════════════════
                     HIREIQ — DAA PROJECT VIVA GUIDE
                     4 Algorithms for Candidate Evaluation

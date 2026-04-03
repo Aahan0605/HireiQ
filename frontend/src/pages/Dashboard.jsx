@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
-import { Menu, X, Users, FileSearch, TrendingUp, Sparkles } from 'lucide-react';
+import { Menu, X, Users, FileSearch, TrendingUp, Sparkles, Calendar, Target } from 'lucide-react';
 
 export default function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -94,6 +94,53 @@ export default function Dashboard() {
               trendLabel="vs last month"
               delay={0.3}
             />
+          </div>
+
+          {/* DAA Algorithm Cards */}
+          <div className="grid gap-6 sm:grid-cols-2 mb-8">
+            {/* Interviews Scheduled — Greedy Activity Selection */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-border/80 transition-colors"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-sm font-medium text-text-2">Interviews Scheduled Today</p>
+                  <p className="text-3xl font-bold text-white mt-2">4</p>
+                  <p className="text-xs text-text-3 mt-2">Greedy Scheduling · Max non-overlapping</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15 text-green-400">
+                  <Calendar className="h-6 w-6" />
+                </div>
+              </div>
+              <div className="h-1 w-full rounded-full bg-surface-3">
+                <div className="h-full w-4/5 rounded-full bg-gradient-to-r from-green-400 to-green-500" />
+              </div>
+            </motion.div>
+
+            {/* Optimal Shortlist Size — 0/1 Knapsack DP */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-border/80 transition-colors"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-sm font-medium text-text-2">Optimal Shortlist Size</p>
+                  <p className="text-3xl font-bold text-white mt-2">3</p>
+                  <p className="text-xs text-text-3 mt-2">DP Knapsack · Budget: 6</p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-400">
+                  <Target className="h-6 w-6" />
+                </div>
+              </div>
+              <div className="h-1 w-full rounded-full bg-surface-3">
+                <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-purple-400 to-violet" />
+              </div>
+            </motion.div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
