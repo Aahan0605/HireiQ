@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pdfplumber
+python-dotenv
+httpx
+aiohttp
+beautifulsoup4
+scikit-learn
+numpy
+pydantic
+sqlalchemy
+aiosqlite
+python-multipart

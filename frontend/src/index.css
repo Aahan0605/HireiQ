@@ -1,0 +1,109 @@
+@import url('https://fonts.bunny.net/css?family=bricolage-grotesque:400,500,600,700,800&display=swap');
+@import url('https://fonts.bunny.net/css?family=instrument-sans:400,500,600&display=swap');
+@import url('https://fonts.bunny.net/css?family=geist-mono:400,500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #07070E;
+    --surface: #0D0D1A;
+    --surface-2: #141428;
+    --surface-3: #1C1C35;
+    --border: rgba(255,255,255,0.07);
+    --border-glow: rgba(255,255,255,0.15);
+    
+    --mint: #4DFFA4;
+    --violet: #9D74FF;
+    --rose: #FF6B8A;
+    --amber: #FFB347;
+    --sky: #5DB8FF;
+    
+    --text-1: #EEEEF5;
+    --text-2: #9494B0;
+    --text-3: #4A4A6E;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text-1);
+    font-family: 'Instrument Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    letter-spacing: -0.03em;
+  }
+
+  /* Focus ring accessibility */
+  *:focus-visible {
+    outline: 2px solid var(--violet);
+    outline-offset: 2px;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-3);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--mint);
+  }
+}
+
+@layer utilities {
+  .gradient-text {
+    background: linear-gradient(135deg, var(--mint), var(--violet));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glass-card {
+    background: rgba(13, 13, 26, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+  }
+
+  .running-border {
+    position: relative;
+  }
+
+  .shimmer-text {
+    background: linear-gradient(
+      120deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0.8) 50%,
+      rgba(255,255,255,0) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
