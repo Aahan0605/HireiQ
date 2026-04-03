@@ -16,6 +16,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse
 
 from api.models import (
     CandidateResult,
@@ -27,6 +28,10 @@ from api.models import (
     SingleAnalysisRequest,
 )
 from algorithms.heap import CandidateHeap
+from algorithms.dp_shortlist import select_candidates as knapsack_shortlist
+from algorithms.skill_graph import find_learning_path
+from algorithms.interview_scheduler import schedule_interviews
+from algorithms.merge_rank import merge_sort_candidates
 from engine.bias_auditor import audit_bias, run_batch_bias_audit, create_blind_features
 from engine.score_fusion import compute_full_candidate_score
 from parser.resume_parser import async_extract_text as parse_resume_text
@@ -42,6 +47,7 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 # ─────────────────────────────────────────────────────────────
 # POST /candidates/rank
 # ─────────────────────────────────────────────────────────────
+
 
 @router.post("/rank", response_model=RankingResponse)
 async def rank_candidates(request: RankingRequest) -> RankingResponse:
@@ -96,7 +102,8 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
         if isinstance(result, Exception):
             logger.error(
                 "Scoring failed for candidate %d: %s",
-                i, str(result),
+                i,
+                str(result),
             )
             continue
         scored_results.append(result)
@@ -164,6 +171,7 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
 # POST /candidates/analyze-single
 # ─────────────────────────────────────────────────────────────
 
+
 @router.post("/analyze-single", response_model=CandidateResult)
 async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
     """
@@ -230,6 +238,7 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
 # POST /candidates/upload-resume
 # ─────────────────────────────────────────────────────────────
 
+
 @router.post("/upload-resume", response_model=ResumeUploadResponse)
 async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     """
@@ -251,6 +260,7 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
     if ext == ".pdf":
         # Save temp file and parse
         import tempfile, os
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(content)
             tmp_path = tmp.name
@@ -275,6 +285,7 @@ async def upload_resume(file: UploadFile = File(...)) -> ResumeUploadResponse:
 # GET /candidates/platforms/{username}
 # ─────────────────────────────────────────────────────────────
 
+
 @router.get("/platforms/{username}", response_model=PlatformSignalsResponse)
 async def fetch_platform_signals(
     username: str,
@@ -289,7 +300,9 @@ async def fetch_platform_signals(
     platform_list = [p.strip().lower() for p in platforms.split(",") if p.strip()]
 
     if not platform_list:
-        raise HTTPException(status_code=400, detail="At least one platform is required.")
+        raise HTTPException(
+            status_code=400, detail="At least one platform is required."
+        )
 
     valid_platforms = {"github", "codeforces", "leetcode", "codechef"}
     invalid = set(platform_list) - valid_platforms
@@ -324,3 +337,80 @@ async def fetch_platform_signals(
         platforms_queried=platform_list,
         signals=signals,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/shortlist — 0/1 Knapsack DP
+# ─────────────────────────────────────────────────────────────
+
+
+@router.post("/shortlist")
+async def shortlist_by_budget(request: dict[str, Any]) -> JSONResponse:
+    """
+    Select candidates to maximize total score within budget using 0/1 Knapsack DP.
+    Algorithm: Dynamic Programming (0/1 Knapsack)
+    Time Complexity: O(n × budget), Space: O(n × budget)
+    """
+    candidates = request.get("candidates", [])
+    budget = request.get("budget", 10)
+
+    result = knapsack_shortlist(candidates, budget)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/skill-gap — Graph + BFS
+# ─────────────────────────────────────────────────────────────
+
+
+@router.post("/skill-gap")
+async def analyze_skill_gap(request: dict[str, Any]) -> JSONResponse:
+    """
+    Find missing skills and shortest learning path using BFS on skill graph.
+    Algorithm: Graph Traversal + BFS
+    Time Complexity: O(V + E), Space: O(V + E)
+    """
+    from algorithms.skill_graph import build_skill_graph
+
+    current_skills = request.get("current_skills", [])
+    required_skills = request.get("required_skills", [])
+
+    graph = build_skill_graph()
+    result = find_learning_path(current_skills, required_skills, graph)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/schedule — Greedy Activity Selection
+# ─────────────────────────────────────────────────────────────
+
+
+@router.post("/schedule")
+async def schedule_interviews_endpoint(request: dict[str, Any]) -> JSONResponse:
+    """
+    Schedule maximum non-overlapping interviews using Greedy Activity Selection.
+    Algorithm: Greedy (Activity Selection)
+    Time Complexity: O(n log n) for sorting, Space: O(n)
+    """
+    candidates = request.get("candidates", [])
+
+    result = schedule_interviews(candidates)
+    return JSONResponse(content=result, status_code=200)
+
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/rank-sorted — Merge Sort with Rank Delta
+# ─────────────────────────────────────────────────────────────
+
+
+@router.post("/rank-sorted")
+async def rank_candidates_sorted(request: dict[str, Any]) -> JSONResponse:
+    """
+    Sort candidates by fusion score with rank delta tracking using Merge Sort.
+    Algorithm: Divide & Conquer (Merge Sort)
+    Time Complexity: O(n log n), Space: O(n)
+    """
+    candidates = request.get("candidates", [])
+
+    result = merge_sort_candidates(candidates)
+    return JSONResponse(content=result, status_code=200)

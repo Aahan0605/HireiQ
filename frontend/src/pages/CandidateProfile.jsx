@@ -5,6 +5,7 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } fro
 import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Workflow, Loader2, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
+import SkillGapCard from '../components/SkillGapCard';
 import { fadeUp, staggerContainer, listItem } from '../lib/animations';
 import { getCandidateById } from '../data/candidates';
 
@@ -176,6 +177,11 @@ export default function CandidateProfile() {
               </div>
             </MagneticCard>
           </motion.div>
+        </motion.div>
+
+        {/* Skill Gap Analysis */}
+        <motion.div variants={fadeUp} className="mt-8">
+          <SkillGapCard />
         </motion.div>
       </div>
     </div>
