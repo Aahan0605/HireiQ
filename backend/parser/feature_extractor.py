@@ -24,32 +24,126 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 KNOWN_SKILLS: list[str] = [
     # Programming Languages
-    "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go", "Rust",
-    "Ruby", "PHP", "Swift", "Kotlin", "Scala", "R", "MATLAB", "Perl",
-    "Haskell", "Elixir", "Dart", "Lua", "Julia",
+    "Python",
+    "Java",
+    "JavaScript",
+    "TypeScript",
+    "C++",
+    "C#",
+    "Go",
+    "Rust",
+    "Ruby",
+    "PHP",
+    "Swift",
+    "Kotlin",
+    "Scala",
+    "R",
+    "MATLAB",
+    "Perl",
+    "Haskell",
+    "Elixir",
+    "Dart",
+    "Lua",
+    "Julia",
     # Frontend Frameworks
-    "React", "Angular", "Vue", "Svelte", "Next.js", "Nuxt", "Gatsby",
-    "Remix", "Astro", "HTML", "CSS", "SASS", "Tailwind",
+    "React",
+    "Angular",
+    "Vue",
+    "Svelte",
+    "Next.js",
+    "Nuxt",
+    "Gatsby",
+    "Remix",
+    "Astro",
+    "HTML",
+    "CSS",
+    "SASS",
+    "Tailwind",
     # Backend Frameworks
-    "Node.js", "Express", "FastAPI", "Django", "Flask", "Spring Boot",
-    "Rails", "Laravel", "ASP.NET", "Gin", "Fiber", "NestJS",
+    "Node.js",
+    "Express",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "Spring Boot",
+    "Rails",
+    "Laravel",
+    "ASP.NET",
+    "Gin",
+    "Fiber",
+    "NestJS",
     # Databases
-    "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Cassandra",
-    "DynamoDB", "SQLite", "Neo4j", "CockroachDB", "MariaDB", "Oracle",
-    "SQL Server", "Supabase", "Firebase",
+    "PostgreSQL",
+    "MySQL",
+    "MongoDB",
+    "Redis",
+    "Elasticsearch",
+    "Cassandra",
+    "DynamoDB",
+    "SQLite",
+    "Neo4j",
+    "CockroachDB",
+    "MariaDB",
+    "Oracle",
+    "SQL Server",
+    "Supabase",
+    "Firebase",
     # Cloud & DevOps
-    "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Ansible",
-    "Jenkins", "GitHub Actions", "CircleCI", "GitLab CI", "Pulumi",
-    "CloudFormation", "Helm", "ArgoCD",
+    "AWS",
+    "Azure",
+    "GCP",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Ansible",
+    "Jenkins",
+    "GitHub Actions",
+    "CircleCI",
+    "GitLab CI",
+    "Pulumi",
+    "CloudFormation",
+    "Helm",
+    "ArgoCD",
     # ML / AI / Data
-    "TensorFlow", "PyTorch", "Scikit-learn", "Keras", "Pandas", "NumPy",
-    "Spark", "Hadoop", "Airflow", "dbt", "Kafka", "Flink",
-    "Hugging Face", "OpenCV", "NLTK", "SpaCy", "LangChain", "MLflow",
-    "Ray", "XGBoost", "LightGBM",
+    "TensorFlow",
+    "PyTorch",
+    "Scikit-learn",
+    "Keras",
+    "Pandas",
+    "NumPy",
+    "Spark",
+    "Hadoop",
+    "Airflow",
+    "dbt",
+    "Kafka",
+    "Flink",
+    "Hugging Face",
+    "OpenCV",
+    "NLTK",
+    "SpaCy",
+    "LangChain",
+    "MLflow",
+    "Ray",
+    "XGBoost",
+    "LightGBM",
     # Tools & Practices
-    "Git", "Linux", "Nginx", "GraphQL", "REST", "gRPC", "RabbitMQ",
-    "Celery", "WebSocket", "OAuth", "JWT", "CI/CD", "Agile", "Scrum",
-    "Microservices", "Serverless", "Event Driven",
+    "Git",
+    "Linux",
+    "Nginx",
+    "GraphQL",
+    "REST",
+    "gRPC",
+    "RabbitMQ",
+    "Celery",
+    "WebSocket",
+    "OAuth",
+    "JWT",
+    "CI/CD",
+    "Agile",
+    "Scrum",
+    "Microservices",
+    "Serverless",
+    "Event Driven",
 ]
 
 # Normalized lookup for deduplication
@@ -60,49 +154,49 @@ _SKILLS_LOWER: dict[str, str] = {s.lower(): s for s in KNOWN_SKILLS}
 # Maps keywords found in resume text → normalized degree level
 # ─────────────────────────────────────────────────────────────
 EDUCATION_KEYWORDS: dict[str, str] = {
-    "ph.d":                 "phd",
-    "phd":                  "phd",
-    "doctorate":            "phd",
+    "ph.d": "phd",
+    "phd": "phd",
+    "doctorate": "phd",
     "doctor of philosophy": "phd",
-    "master of science":    "masters",
+    "master of science": "masters",
     "master of technology": "mtech",
-    "master of engineering":"masters",
-    "master of arts":       "masters",
-    "m.tech":               "mtech",
-    "mtech":                "mtech",
-    "m.s.":                 "ms",
-    "m.s":                  "ms",
-    "ms ":                  "ms",
-    "m.sc":                 "msc",
-    "msc":                  "msc",
-    "mba":                  "mba",
-    "m.b.a":                "mba",
-    "master":               "masters",
-    "masters":              "masters",
-    "bachelor of science":  "bachelors",
-    "bachelor of technology":"btech",
-    "bachelor of engineering":"be",
-    "bachelor of arts":     "bachelors",
-    "b.tech":               "btech",
-    "btech":                "btech",
-    "b.e.":                 "be",
-    "b.e":                  "be",
-    "b.s.":                 "bs",
-    "b.s":                  "bs",
-    "bs ":                  "bs",
-    "b.sc":                 "bsc",
-    "bsc":                  "bsc",
-    "bca":                  "bca",
-    "b.c.a":                "bca",
-    "bachelor":             "bachelors",
-    "bachelors":            "bachelors",
-    "associate degree":     "associate",
-    "associate":            "associate",
-    "diploma":              "diploma",
-    "high school":          "high_school",
-    "bootcamp":             "bootcamp",
-    "self-taught":          "self_taught",
-    "self taught":          "self_taught",
+    "master of engineering": "masters",
+    "master of arts": "masters",
+    "m.tech": "mtech",
+    "mtech": "mtech",
+    "m.s.": "ms",
+    "m.s": "ms",
+    "ms ": "ms",
+    "m.sc": "msc",
+    "msc": "msc",
+    "mba": "mba",
+    "m.b.a": "mba",
+    "master": "masters",
+    "masters": "masters",
+    "bachelor of science": "bachelors",
+    "bachelor of technology": "btech",
+    "bachelor of engineering": "be",
+    "bachelor of arts": "bachelors",
+    "b.tech": "btech",
+    "btech": "btech",
+    "b.e.": "be",
+    "b.e": "be",
+    "b.s.": "bs",
+    "b.s": "bs",
+    "bs ": "bs",
+    "b.sc": "bsc",
+    "bsc": "bsc",
+    "bca": "bca",
+    "b.c.a": "bca",
+    "bachelor": "bachelors",
+    "bachelors": "bachelors",
+    "associate degree": "associate",
+    "associate": "associate",
+    "diploma": "diploma",
+    "high school": "high_school",
+    "bootcamp": "bootcamp",
+    "self-taught": "self_taught",
+    "self taught": "self_taught",
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -120,7 +214,10 @@ CERTIFICATION_PATTERNS: dict[str, list[str]] = {
         "AWS Certified Security",
         "AWS Certified Database",
         "AWS Certified Advanced Networking",
-        "AWS SAA", "AWS SAP", "AWS DVA", "AWS SOA",
+        "AWS SAA",
+        "AWS SAP",
+        "AWS DVA",
+        "AWS SOA",
     ],
     "GCP": [
         "Google Cloud Certified",
@@ -139,11 +236,20 @@ CERTIFICATION_PATTERNS: dict[str, list[str]] = {
         "Azure Data Engineer",
         "Azure AI Engineer",
         "Azure DevOps Engineer",
-        "AZ-900", "AZ-104", "AZ-204", "AZ-305", "AZ-400",
-        "DP-900", "DP-203", "AI-900", "AI-102",
+        "AZ-900",
+        "AZ-104",
+        "AZ-204",
+        "AZ-305",
+        "AZ-400",
+        "DP-900",
+        "DP-203",
+        "AI-900",
+        "AI-102",
     ],
     "Kubernetes": [
-        "CKA", "CKAD", "CKS",
+        "CKA",
+        "CKAD",
+        "CKS",
         "Certified Kubernetes Administrator",
         "Certified Kubernetes Application Developer",
         "Certified Kubernetes Security Specialist",
@@ -151,11 +257,19 @@ CERTIFICATION_PATTERNS: dict[str, list[str]] = {
     "Other": [
         "Terraform Associate",
         "HashiCorp Certified",
-        "Certified Scrum Master", "CSM",
-        "PMP", "Project Management Professional",
-        "CISSP", "CISA", "CEH",
-        "CompTIA Security+", "CompTIA Network+", "CompTIA A+",
-        "Oracle Certified", "OCP", "OCA",
+        "Certified Scrum Master",
+        "CSM",
+        "PMP",
+        "Project Management Professional",
+        "CISSP",
+        "CISA",
+        "CEH",
+        "CompTIA Security+",
+        "CompTIA Network+",
+        "CompTIA A+",
+        "Oracle Certified",
+        "OCP",
+        "OCA",
         "Salesforce Certified",
         "Databricks Certified",
         "Confluent Certified",
@@ -163,6 +277,114 @@ CERTIFICATION_PATTERNS: dict[str, list[str]] = {
         "Neo4j Certified",
     ],
 }
+
+
+def _extract_name(text: str) -> str:
+    """
+    Extract candidate name from resume text (first non-empty line or main heading).
+    Time: O(n)
+    """
+    if not text:
+        return ""
+
+    lines = text.strip().split("\n")
+    for line in lines[:5]:  # Check first 5 lines
+        line = line.strip()
+        if line and len(line) > 2 and len(line) < 100:
+            # Filter out common headers/footers
+            if not any(
+                keyword in line.lower()
+                for keyword in [
+                    "email",
+                    "phone",
+                    "linkedin",
+                    "github",
+                    "portfolio",
+                    "resume",
+                ]
+            ):
+                return line
+
+    return ""
+
+
+def _extract_email(text: str) -> str:
+    """
+    Extract email address from resume text.
+    Time: O(n)
+    """
+    if not text:
+        return ""
+
+    # Improved email regex
+    match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text)
+    return match.group(0) if match else ""
+
+
+def _extract_github(text: str) -> str:
+    """
+    Extract GitHub profile URL from resume text.
+    Time: O(n)
+    """
+    if not text:
+        return ""
+
+    # Look for github.com pattern
+    match = re.search(
+        r"(?:https?://)?(?:www\.)?github\.com/[\w-]+", text, re.IGNORECASE
+    )
+    if match:
+        return match.group(0)
+
+    # Fallback: look for just github username after @ or /
+    match = re.search(r"github[:\s/]*(\w+)", text, re.IGNORECASE)
+    if match:
+        return f"github.com/{match.group(1)}"
+
+    return ""
+
+
+def _extract_experience_from_timeline(text: str) -> list[dict]:
+    """
+    Extract work experience timeline entries from resume using date patterns.
+    Time: O(n)
+    """
+    if not text:
+        return []
+
+    experiences = []
+
+    # Look for date patterns: "2020", "2020-2023", "Jan 2022", "January 2022 - Present"
+    date_pattern = r"(?:\d{1,2}\s)?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}|\d{4}(?:\s*[-–]\s*(?:\d{4}|Present|Current))?"
+
+    lines = text.split("\n")
+
+    for i, line in enumerate(lines):
+        # Look for lines with dates
+        if re.search(date_pattern, line, re.IGNORECASE):
+            # Try to extract job title (usually before or after date) and company
+            company_match = re.search(
+                r"(?:at|@|\|)\s*([A-Z][A-Za-z\s&,.-]+?)(?:\s*-|\s*\||$)", line
+            )
+            dates = re.search(date_pattern, line, re.IGNORECASE)
+
+            if dates or company_match:
+                entry = {
+                    "title": line.split("|")[0]
+                    .replace("at", "")
+                    .replace("@", "")
+                    .strip()[:50]
+                    if "|" in line or "@" in line
+                    else "Not specified",
+                    "company": company_match.group(1).strip()
+                    if company_match
+                    else "Not specified",
+                    "date": dates.group(0) if dates else "Unknown",
+                    "description": "",
+                }
+                experiences.append(entry)
+
+    return experiences[:5]  # Return max 5 experiences
 
 
 def extract_features(text: str) -> dict:
@@ -288,73 +510,73 @@ def _extract_skills(text: str) -> list[str]:
 
     # Variant mapping: common alternate spellings → canonical name
     variants: dict[str, str] = {
-        "nodejs":       "Node.js",
-        "node js":      "Node.js",
-        "node.js":      "Node.js",
-        "reactjs":      "React",
-        "react.js":     "React",
-        "react js":     "React",
-        "vuejs":        "Vue",
-        "vue.js":       "Vue",
-        "angularjs":    "Angular",
-        "angular.js":   "Angular",
-        "nextjs":       "Next.js",
-        "next.js":      "Next.js",
-        "nuxtjs":       "Nuxt",
-        "nuxt.js":      "Nuxt",
-        "nestjs":       "NestJS",
-        "nest.js":      "NestJS",
-        "expressjs":    "Express",
-        "express.js":   "Express",
-        "fastapi":      "FastAPI",
-        "fast api":     "FastAPI",
-        "postgresql":   "PostgreSQL",
-        "postgres":     "PostgreSQL",
-        "mongo":        "MongoDB",
-        "mongodb":      "MongoDB",
-        "dynamodb":     "DynamoDB",
-        "dynamo db":    "DynamoDB",
-        "elasticsearch":"Elasticsearch",
-        "elastic search":"Elasticsearch",
+        "nodejs": "Node.js",
+        "node js": "Node.js",
+        "node.js": "Node.js",
+        "reactjs": "React",
+        "react.js": "React",
+        "react js": "React",
+        "vuejs": "Vue",
+        "vue.js": "Vue",
+        "angularjs": "Angular",
+        "angular.js": "Angular",
+        "nextjs": "Next.js",
+        "next.js": "Next.js",
+        "nuxtjs": "Nuxt",
+        "nuxt.js": "Nuxt",
+        "nestjs": "NestJS",
+        "nest.js": "NestJS",
+        "expressjs": "Express",
+        "express.js": "Express",
+        "fastapi": "FastAPI",
+        "fast api": "FastAPI",
+        "postgresql": "PostgreSQL",
+        "postgres": "PostgreSQL",
+        "mongo": "MongoDB",
+        "mongodb": "MongoDB",
+        "dynamodb": "DynamoDB",
+        "dynamo db": "DynamoDB",
+        "elasticsearch": "Elasticsearch",
+        "elastic search": "Elasticsearch",
         "scikit-learn": "Scikit-learn",
-        "scikit learn":  "Scikit-learn",
-        "sklearn":      "Scikit-learn",
-        "tensorflow":   "TensorFlow",
-        "tf ":          "TensorFlow",
-        "pytorch":      "PyTorch",
-        "torch":        "PyTorch",
+        "scikit learn": "Scikit-learn",
+        "sklearn": "Scikit-learn",
+        "tensorflow": "TensorFlow",
+        "tf ": "TensorFlow",
+        "pytorch": "PyTorch",
+        "torch": "PyTorch",
         "hugging face": "Hugging Face",
-        "huggingface":  "Hugging Face",
-        "langchain":    "LangChain",
-        "lang chain":   "LangChain",
-        "github actions":"GitHub Actions",
-        "gh actions":   "GitHub Actions",
-        "gitlab ci":    "GitLab CI",
-        "gitlab-ci":    "GitLab CI",
-        "circleci":     "CircleCI",
-        "circle ci":    "CircleCI",
-        "kubernetes":   "Kubernetes",
-        "k8s":          "Kubernetes",
-        "c++":          "C++",
-        "cplusplus":    "C++",
-        "c#":           "C#",
-        "csharp":       "C#",
-        "asp.net":      "ASP.NET",
-        "aspnet":       "ASP.NET",
-        "spring boot":  "Spring Boot",
-        "springboot":   "Spring Boot",
-        "tailwindcss":  "Tailwind",
+        "huggingface": "Hugging Face",
+        "langchain": "LangChain",
+        "lang chain": "LangChain",
+        "github actions": "GitHub Actions",
+        "gh actions": "GitHub Actions",
+        "gitlab ci": "GitLab CI",
+        "gitlab-ci": "GitLab CI",
+        "circleci": "CircleCI",
+        "circle ci": "CircleCI",
+        "kubernetes": "Kubernetes",
+        "k8s": "Kubernetes",
+        "c++": "C++",
+        "cplusplus": "C++",
+        "c#": "C#",
+        "csharp": "C#",
+        "asp.net": "ASP.NET",
+        "aspnet": "ASP.NET",
+        "spring boot": "Spring Boot",
+        "springboot": "Spring Boot",
+        "tailwindcss": "Tailwind",
         "tailwind css": "Tailwind",
-        "tailwind":     "Tailwind",
-        "graphql":      "GraphQL",
-        "graph ql":     "GraphQL",
-        "rabbitmq":     "RabbitMQ",
-        "rabbit mq":    "RabbitMQ",
-        "websocket":    "WebSocket",
-        "web socket":   "WebSocket",
-        "xgboost":      "XGBoost",
-        "lightgbm":     "LightGBM",
-        "light gbm":    "LightGBM",
+        "tailwind": "Tailwind",
+        "graphql": "GraphQL",
+        "graph ql": "GraphQL",
+        "rabbitmq": "RabbitMQ",
+        "rabbit mq": "RabbitMQ",
+        "websocket": "WebSocket",
+        "web socket": "WebSocket",
+        "xgboost": "XGBoost",
+        "lightgbm": "LightGBM",
+        "light gbm": "LightGBM",
     }
 
     # Check canonical skills via KMP
@@ -405,8 +627,8 @@ def _extract_experience(text: str) -> float:
 
     # Pattern 1: "X years of experience" / "X+ years" / "X yrs"
     pattern1 = re.findall(
-        r'(\d+\.?\d*)\s*\+?\s*(?:years?|yrs?)[\s\-]*(?:of\s+)?(?:experience|exp)?',
-        text_lower
+        r"(\d+\.?\d*)\s*\+?\s*(?:years?|yrs?)[\s\-]*(?:of\s+)?(?:experience|exp)?",
+        text_lower,
     )
     for match in pattern1:
         try:
@@ -416,8 +638,7 @@ def _extract_experience(text: str) -> float:
 
     # Pattern 2: "X-Y years" (range, take the max)
     pattern2 = re.findall(
-        r'(\d+\.?\d*)\s*[-–—to]+\s*(\d+\.?\d*)\s*(?:years?|yrs?)',
-        text_lower
+        r"(\d+\.?\d*)\s*[-–—to]+\s*(\d+\.?\d*)\s*(?:years?|yrs?)", text_lower
     )
     for low, high in pattern2:
         try:
@@ -427,8 +648,8 @@ def _extract_experience(text: str) -> float:
 
     # Pattern 3: "over/more than X years"
     pattern3 = re.findall(
-        r'(?:over|more\s+than|exceeding|above)\s+(\d+\.?\d*)\s*(?:years?|yrs?)',
-        text_lower
+        r"(?:over|more\s+than|exceeding|above)\s+(\d+\.?\d*)\s*(?:years?|yrs?)",
+        text_lower,
     )
     for match in pattern3:
         try:
@@ -438,8 +659,7 @@ def _extract_experience(text: str) -> float:
 
     # Pattern 4: "experience: X years" / "experience of X years"
     pattern4 = re.findall(
-        r'experience\s*(?::|of)\s*(\d+\.?\d*)\s*(?:years?|yrs?)',
-        text_lower
+        r"experience\s*(?::|of)\s*(\d+\.?\d*)\s*(?:years?|yrs?)", text_lower
     )
     for match in pattern4:
         try:
@@ -448,7 +668,7 @@ def _extract_experience(text: str) -> float:
             continue
 
     # Pattern 5: "since 20XX" — calculate approximate years
-    pattern5 = re.findall(r'since\s+(20\d{2})', text_lower)
+    pattern5 = re.findall(r"since\s+(20\d{2})", text_lower)
     for year_str in pattern5:
         try:
             start_year = int(year_str)
@@ -571,13 +791,24 @@ def _extract_required_skills(jd_text: str, all_skills: list[str]) -> list[str]:
 
     # Find "required" / "must have" sections
     required_markers = [
-        "required", "must have", "mandatory", "essential",
-        "minimum qualifications", "basic qualifications",
-        "requirements:", "you must",
+        "required",
+        "must have",
+        "mandatory",
+        "essential",
+        "minimum qualifications",
+        "basic qualifications",
+        "requirements:",
+        "you must",
     ]
     nice_markers = [
-        "nice to have", "preferred", "bonus", "good to have",
-        "desired", "plus", "optional", "ideally",
+        "nice to have",
+        "preferred",
+        "bonus",
+        "good to have",
+        "desired",
+        "plus",
+        "optional",
+        "ideally",
     ]
 
     # Simple heuristic: find the section boundaries
@@ -623,43 +854,123 @@ def get_skill_categories(skills: list[str]) -> dict[str, list[str]]:
         Dict mapping category name → list of skills in that category.
     """
     categories: dict[str, list[str]] = {
-        "Languages":    [],
-        "Frontend":     [],
-        "Backend":      [],
-        "Databases":    [],
+        "Languages": [],
+        "Frontend": [],
+        "Backend": [],
+        "Databases": [],
         "Cloud/DevOps": [],
-        "ML/AI/Data":   [],
-        "Tools":        [],
+        "ML/AI/Data": [],
+        "Tools": [],
     }
 
     language_set = {
-        "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "Go",
-        "Rust", "Ruby", "PHP", "Swift", "Kotlin", "Scala", "R", "MATLAB",
-        "Perl", "Haskell", "Elixir", "Dart", "Lua", "Julia",
+        "Python",
+        "Java",
+        "JavaScript",
+        "TypeScript",
+        "C++",
+        "C#",
+        "Go",
+        "Rust",
+        "Ruby",
+        "PHP",
+        "Swift",
+        "Kotlin",
+        "Scala",
+        "R",
+        "MATLAB",
+        "Perl",
+        "Haskell",
+        "Elixir",
+        "Dart",
+        "Lua",
+        "Julia",
     }
     frontend_set = {
-        "React", "Angular", "Vue", "Svelte", "Next.js", "Nuxt", "Gatsby",
-        "Remix", "Astro", "HTML", "CSS", "SASS", "Tailwind",
+        "React",
+        "Angular",
+        "Vue",
+        "Svelte",
+        "Next.js",
+        "Nuxt",
+        "Gatsby",
+        "Remix",
+        "Astro",
+        "HTML",
+        "CSS",
+        "SASS",
+        "Tailwind",
     }
     backend_set = {
-        "Node.js", "Express", "FastAPI", "Django", "Flask", "Spring Boot",
-        "Rails", "Laravel", "ASP.NET", "Gin", "Fiber", "NestJS",
+        "Node.js",
+        "Express",
+        "FastAPI",
+        "Django",
+        "Flask",
+        "Spring Boot",
+        "Rails",
+        "Laravel",
+        "ASP.NET",
+        "Gin",
+        "Fiber",
+        "NestJS",
     }
     db_set = {
-        "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch",
-        "Cassandra", "DynamoDB", "SQLite", "Neo4j", "CockroachDB",
-        "MariaDB", "Oracle", "SQL Server", "Supabase", "Firebase",
+        "PostgreSQL",
+        "MySQL",
+        "MongoDB",
+        "Redis",
+        "Elasticsearch",
+        "Cassandra",
+        "DynamoDB",
+        "SQLite",
+        "Neo4j",
+        "CockroachDB",
+        "MariaDB",
+        "Oracle",
+        "SQL Server",
+        "Supabase",
+        "Firebase",
     }
     cloud_set = {
-        "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform",
-        "Ansible", "Jenkins", "GitHub Actions", "CircleCI", "GitLab CI",
-        "Pulumi", "CloudFormation", "Helm", "ArgoCD",
+        "AWS",
+        "Azure",
+        "GCP",
+        "Docker",
+        "Kubernetes",
+        "Terraform",
+        "Ansible",
+        "Jenkins",
+        "GitHub Actions",
+        "CircleCI",
+        "GitLab CI",
+        "Pulumi",
+        "CloudFormation",
+        "Helm",
+        "ArgoCD",
     }
     ml_set = {
-        "TensorFlow", "PyTorch", "Scikit-learn", "Keras", "Pandas",
-        "NumPy", "Spark", "Hadoop", "Airflow", "dbt", "Kafka", "Flink",
-        "Hugging Face", "OpenCV", "NLTK", "SpaCy", "LangChain", "MLflow",
-        "Ray", "XGBoost", "LightGBM",
+        "TensorFlow",
+        "PyTorch",
+        "Scikit-learn",
+        "Keras",
+        "Pandas",
+        "NumPy",
+        "Spark",
+        "Hadoop",
+        "Airflow",
+        "dbt",
+        "Kafka",
+        "Flink",
+        "Hugging Face",
+        "OpenCV",
+        "NLTK",
+        "SpaCy",
+        "LangChain",
+        "MLflow",
+        "Ray",
+        "XGBoost",
+        "LightGBM",
     }
 
     for skill in skills:

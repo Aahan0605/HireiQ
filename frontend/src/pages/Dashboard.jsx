@@ -1,12 +1,15 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
 import { Menu, X, Users, FileSearch, TrendingUp, Sparkles, Calendar, Target } from 'lucide-react';
 
 export default function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const location = useLocation();
+
+  const isActive = (path) => location.pathname === path;
 
   return (
     <div className="flex min-h-screen bg-bg">
@@ -16,10 +19,10 @@ export default function Dashboard() {
           Hire<span className="text-violet">IQ</span>
         </Link>
         <nav className="flex flex-col gap-2">
-          <Link to="/dashboard" className="rounded-xl bg-surface-3 px-4 py-2.5 font-medium text-white transition-colors">Overview</Link>
-          <Link to="/analyze" className="rounded-xl px-4 py-2.5 font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-white">New Analysis</Link>
-          <Link to="/candidates" className="rounded-xl px-4 py-2.5 font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-white">Candidates</Link>
-          <Link to="/settings" className="rounded-xl px-4 py-2.5 font-medium text-text-2 transition-colors hover:bg-surface-2 hover:text-white">Settings</Link>
+          <Link to="/dashboard" className={`rounded-xl px-4 py-2.5 font-medium transition-colors ${isActive('/dashboard') ? 'bg-surface-3 text-white' : 'text-text-2 hover:bg-surface-2 hover:text-white'}`}>Overview</Link>
+          <Link to="/analyze" className={`rounded-xl px-4 py-2.5 font-medium transition-colors ${isActive('/analyze') ? 'bg-surface-3 text-white' : 'text-text-2 hover:bg-surface-2 hover:text-white'}`}>New Analysis</Link>
+          <Link to="/candidates" className={`rounded-xl px-4 py-2.5 font-medium transition-colors ${isActive('/candidates') ? 'bg-surface-3 text-white' : 'text-text-2 hover:bg-surface-2 hover:text-white'}`}>Candidates</Link>
+          <Link to="/settings" className={`rounded-xl px-4 py-2.5 font-medium transition-colors ${isActive('/settings') ? 'bg-surface-3 text-white' : 'text-text-2 hover:bg-surface-2 hover:text-white'}`}>Settings</Link>
         </nav>
       </aside>
 
