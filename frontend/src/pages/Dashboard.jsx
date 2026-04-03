@@ -99,20 +99,21 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* DAA Algorithm Cards */}
+          {/* Interview & Shortlist Cards */}
           <div className="grid gap-6 sm:grid-cols-2 mb-8">
-            {/* Interviews Scheduled — Greedy Activity Selection */}
-            <motion.div
+            {/* Interviews Scheduled Today */}
+            <motion.button
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.5 }}
-              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-border/80 transition-colors"
+              onClick={() => alert('Interview Details: 4 interviews scheduled with zero overlaps')}
+              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-green-500/50 hover:bg-surface/70 transition-all cursor-pointer text-left"
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-sm font-medium text-text-2">Interviews Scheduled Today</p>
                   <p className="text-3xl font-bold text-white mt-2">4</p>
-                  <p className="text-xs text-text-3 mt-2">Greedy Scheduling · Max non-overlapping</p>
+                  <p className="text-xs text-text-3 mt-2">Click to view details</p>
                 </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15 text-green-400">
                   <Calendar className="h-6 w-6" />
@@ -121,20 +122,21 @@ export default function Dashboard() {
               <div className="h-1 w-full rounded-full bg-surface-3">
                 <div className="h-full w-4/5 rounded-full bg-gradient-to-r from-green-400 to-green-500" />
               </div>
-            </motion.div>
+            </motion.button>
 
-            {/* Optimal Shortlist Size — 0/1 Knapsack DP */}
-            <motion.div
+            {/* Optimal Shortlist Size */}
+            <motion.button
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.5 }}
-              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-border/80 transition-colors"
+              onClick={() => alert('Shortlist Analysis: 3 candidates selected within optimal budget constraints')}
+              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md hover:border-purple-500/50 hover:bg-surface/70 transition-all cursor-pointer text-left"
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-sm font-medium text-text-2">Optimal Shortlist Size</p>
                   <p className="text-3xl font-bold text-white mt-2">3</p>
-                  <p className="text-xs text-text-3 mt-2">DP Knapsack · Budget: 6</p>
+                  <p className="text-xs text-text-3 mt-2">Click to view details</p>
                 </div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-400">
                   <Target className="h-6 w-6" />
@@ -143,40 +145,11 @@ export default function Dashboard() {
               <div className="h-1 w-full rounded-full bg-surface-3">
                 <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-purple-400 to-violet" />
               </div>
-            </motion.div>
+            </motion.button>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <RecentCandidates />
-            
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0, transition: { delay: 0.4 } }}
-              className="rounded-2xl border border-border bg-surface/50 p-6 backdrop-blur-md"
-            >
-              <h2 className="mb-6 text-xl font-semibold text-white">Top Skills Matched</h2>
-              <div className="space-y-4">
-                {[
-                  { name: 'React', pct: 85 },
-                  { name: 'Node.js', pct: 72 },
-                  { name: 'Python', pct: 64 },
-                  { name: 'TypeScript', pct: 90 },
-                ].map((skill, i) => (
-                  <div key={i}>
-                    <div className="mb-1 flex justify-between text-sm">
-                      <span className="font-medium text-text-1">{skill.name}</span>
-                      <span className="text-text-3">{skill.pct}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-3">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-mint to-sky"
-                        style={{ width: `${skill.pct}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
           </div>
         </div>
       </main>

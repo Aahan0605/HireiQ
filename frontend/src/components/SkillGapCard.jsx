@@ -16,9 +16,6 @@ export default function SkillGapCard() {
         {/* Header with Badge */}
         <div className="mb-8 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-white">Skill Gap Analysis</h3>
-          <span className="inline-flex items-center rounded-full bg-sky/10 px-3 py-1 text-xs font-medium text-sky">
-            BFS Algorithm
-          </span>
         </div>
 
         {/* Missing Skills Section */}
@@ -41,7 +38,7 @@ export default function SkillGapCard() {
 
         {/* Learning Path Section */}
         <div>
-          <h4 className="mb-4 text-sm font-semibold text-text-2 uppercase tracking-wide">Learning Path (BFS)</h4>
+          <h4 className="mb-4 text-sm font-semibold text-text-2 uppercase tracking-wide">Recommended Learning Path</h4>
           <div className="flex flex-wrap items-center gap-2">
             {learningPath.map((skill, i) => (
               <React.Fragment key={i}>
