@@ -59,9 +59,6 @@ export default function JobMatches() {
               <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-gray-400">{job.department}</span>
               <span className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-gray-400">{job.location}</span>
             </div>
-            <p className="text-gray-500 text-xs mt-2">
-              Candidates ranked by TF-IDF cosine similarity · Max-Heap ordering
-            </p>
           </div>
         )}
 
@@ -139,13 +136,6 @@ export default function JobMatches() {
           </div>
         )}
 
-        {/* Algorithm info footer */}
-        {!loading && (
-          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 text-xs text-purple-300 font-mono">
-            🧠 Powered by TF-IDF + Cosine Similarity + Max-Heap Ranking
-            &nbsp;·&nbsp; Time Complexity: O(n·m) scoring + O(n log n) heap ranking
-          </div>
-        )}
       </div>
     </motion.div>
   );
