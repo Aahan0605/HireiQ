@@ -1,19 +1,22 @@
 <div align="center">
+
   <img src="https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&q=80&w=1200&h=400" alt="HireIQ Banner" width="100%" style="border-radius: 12px;"/>
 
-  <br />
-  <br />
+  <br /><br />
 
   <h1>🚀 HireIQ — Intelligent Hiring Platform</h1>
-  
+
   <p>
-    <b>A premium, AI-powered recruitment ATS designed to streamline the modern hiring workflow.</b>
+    <b>A production-ready, AI-powered Applicant Tracking System built with FastAPI + React.<br/>
+    Ranks candidates using TF-IDF, Cosine Similarity, Max-Heap, Merge Sort, 0/1 Knapsack DP, BFS, Greedy, and KMP.</b>
   </p>
 
   <p>
-    <a href="#-key-features">Features</a> •
+    <a href="#-features">Features</a> •
+    <a href="#-algorithms">Algorithms</a> •
     <a href="#-tech-stack">Tech Stack</a> •
-    <a href="#-getting-started">Installation</a> •
+    <a href="#-getting-started">Setup</a> •
+    <a href="#-api-reference">API</a> •
     <a href="#-architecture">Architecture</a>
   </p>
 
@@ -23,112 +26,312 @@
     <img src="https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E" alt="Vite" />
     <img src="https://img.shields.io/badge/Python_3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
     <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+    <img src="https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white" alt="Framer Motion" />
   </p>
+
 </div>
 
 ---
 
-HireIQ leverages advanced data correlation and machine learning to help engineering teams identify, analyze, and schedule top talent with unprecedented efficiency and reduced human bias.
-
-## ✨ Key Features
+## ✨ Features
 
 | Feature | Description |
 | :--- | :--- |
-| **📄 Advanced Document Parsing** | Robust data extraction utilizing high-speed **PyMuPDF** (`fitz`), seamlessly parsing unstructured layouts into chronological structures. |
-| **⚡ Chronological Intelligence** | A dual-pass Regex engine that isolates exact Work Experience blocks, extracting timeframes and responsibilities accurately. |
-| **🎯 Deterministic Match Scoring** | Dynamic job-match calculations mapping strict role-based technical requirements directly against textual CV density. |
-| **📊 Frequency-Mapped Visualizations** | Deep-dive technical competency analyses powered by interactive, frequency-mapped skill radar charts. |
-| **🕸️ Social Graphing** | Automatically correlate GitHub, LinkedIn, and personal portfolios to form a holistic engineering profile. |
-| **📅 Seamless Scheduling** | Integrated single-click interview scheduling with automated candidate notifications. |
+| **📄 PDF Resume Parsing** | Extracts text from uploaded PDFs using `pdfplumber`, cleans camelCase/ALLCAPS artifacts, and runs KMP pattern matching across 100+ known skills |
+| **🧠 TF-IDF Job Matching** | Vectorises resume text and job descriptions using a from-scratch `TFIDFVectorizer`, then ranks candidates per job using cosine similarity + max-heap |
+| **⚖️ Weighted Score Fusion** | User-configurable weights (Resume, GitHub, LeetCode, Portfolio) stored in-memory and applied to every upload — adjustable live from the Settings page |
+| **🐙 Live GitHub Signals** | Fetches real GitHub stats (repos, stars, commit frequency, languages, PRs) via async httpx and computes a 0–100 GitHub score |
+| **💼 Job Listings & Matching** | Full CRUD for job postings with TF-IDF + cosine similarity matching and max-heap ranked candidate lists per job |
+| **📊 Skill Radar Charts** | Per-candidate radar charts built from actual skill frequency; per-category TF-IDF scores (Frontend / Backend / DevOps / Databases / ML-AI / Systems) in comparison view |
+| **🔍 Candidate Comparison** | Select any 2 candidates → side-by-side radar, category dominance analysis, unique skill diff |
+| **🛡️ Bias Audit Report** | Full vs blind scoring comparison with delta badges, CSS donut chart, and bias detection banner |
+| **📅 Interview Scheduling** | Greedy activity selection maximises non-overlapping interview slots |
+| **🎯 Optimal Shortlist** | 0/1 Knapsack DP selects the best candidates within a hiring budget |
+| **🗺️ Skill Gap Analysis** | BFS on a skill prerequisite graph finds the shortest learning path from current skills to job requirements |
+| **⬇️ Download Report** | One-click `.txt` candidate report download from any profile page |
+
+---
+
+## 🧮 Algorithms
+
+Every algorithm is implemented from scratch in `backend/algorithms/` — no sklearn, no external ML libraries.
+
+### 1. TF-IDF + Cosine Similarity — Resume & Job Matching
+**File:** `backend/algorithms/tfidf.py` · `backend/algorithms/cosine_similarity.py`
+
+Converts resume text and job descriptions into sparse TF-IDF vectors, then measures the angle between them.
+
+```
+TF(word, doc)  = count of word in doc / total words in doc
+IDF(word, all) = log(total docs / (1 + docs containing word)) + 1
+cosine(A, B)   = (A · B) / (‖A‖ × ‖B‖)
+```
+
+- **Time:** O(N × L × V) to fit, O(min|A|,|B|) per similarity
+- **Why not BERT:** Requires 400MB+ models; TF-IDF is fully explainable and deterministic
+- **Why not Euclidean distance:** Penalises longer resumes unfairly; cosine is length-independent
+
+### 2. Max-Heap — Candidate Ranking
+**File:** `backend/algorithms/heap.py`
+
+Wraps Python's `heapq` (min-heap) with negated scores for max-heap behaviour. Supports `push O(log n)`, `top_k O(k log n)`, `get_all_ranked O(n log n)`.
+
+- **Why not sort():** Heap gives top-K in O(k log n) without sorting the entire list
+- **Tie-breaking:** `seq` counter ensures FIFO stability for equal scores
+
+### 3. Merge Sort + Rank Delta — Score Re-ranking
+**File:** `backend/algorithms/merge_rank.py`
+
+Sorts candidates by fusion score using divide-and-conquer. Tracks `rank_delta = original_index - final_index` — powers the animated `+2 / -1` badges on the Candidates page.
+
+- **Time:** O(n log n) guaranteed · **Space:** O(n)
+- **Why not QuickSort:** Unstable (equal scores swap unpredictably); worst case O(n²)
+
+### 4. 0/1 Knapsack DP — Optimal Shortlist
+**File:** `backend/algorithms/dp_shortlist.py`
+
+Selects candidates to maximise total score within a hiring budget. Each candidate is either hired (1) or not (0).
+
+```
+dp[i][w] = max(dp[i-1][w],  dp[i-1][w-cost[i]] + score[i])
+```
+
+- **Time:** O(n × budget) · **Space:** O(n × budget)
+- **Why not Greedy:** Greedy by score/cost ratio provably fails for 0/1 variant
+
+### 5. Greedy Activity Selection — Interview Scheduling
+**File:** `backend/algorithms/interview_scheduler.py`
+
+Sorts candidates by end time, greedily picks the earliest-finishing non-overlapping interview slot.
+
+- **Time:** O(n log n) · **Proof of optimality:** Exchange argument
+- **Why not DP:** Greedy is already optimal here; DP would be over-engineering
+
+### 6. BFS on Skill Graph — Skill Gap Analysis
+**File:** `backend/algorithms/skill_graph.py`
+
+Models skills as nodes with prerequisite edges. Multi-source BFS from all current skills finds the shortest learning path to any missing required skill.
+
+- **Time:** O(V + E) · **Why not DFS:** DFS doesn't guarantee shortest path
+
+### 7. KMP String Matching — Skill Keyword Detection
+**File:** `backend/algorithms/kmp.py`
+
+Searches for 100+ skill keywords in resume text using the Knuth-Morris-Pratt failure function, avoiding redundant character comparisons.
+
+- **Time:** O(n + m) vs O(n × m) for naive search
+- **Used in:** `feature_extractor.py` for all skill and certification detection
+
+---
 
 ## 🚀 Tech Stack
 
-### Frontend Architecture
-* **Core:** React 18 with Vite for lightning-fast HMR and optimized builds.
-* **Styling:** Tailwind CSS + Glassmorphism aesthetic for a dark, tactile, premium feel.
-* **Motion:** Framer Motion for organic, physics-based micro-interactions.
-* **Visualization:** Recharts for dynamic radar and performance charting.
-* **Icons & Notifications:** Lucide React & Sonner toast engine.
+### Backend
+| Layer | Technology |
+| :--- | :--- |
+| API Framework | FastAPI (async, auto-docs at `/docs`) |
+| PDF Parsing | pdfplumber |
+| HTTP Client | httpx (async GitHub API calls) |
+| Algorithms | Pure Python stdlib — no sklearn |
+| Server | Uvicorn with `--reload` |
 
-### Backend Intelligence
-* **Core API:** Python-based FastAPI framework for async, high-performance endpoints.
-* **Document NLP Engine:** PyMuPDF & deep RegExp routines for robust, layout-agnostic PDF reading and algorithmic scoring mapping.
+### Frontend
+| Layer | Technology |
+| :--- | :--- |
+| Core | React 18 + Vite |
+| Styling | Tailwind CSS — dark theme `#0d0d1a` base |
+| Animation | Framer Motion |
+| Charts | Recharts (RadarChart, ResponsiveContainer) |
+| Routing | React Router v6 |
+| Notifications | Sonner toast |
+| Icons | Lucide React |
 
 ---
 
 ## 🛠️ Getting Started
 
 ### Prerequisites
-Make sure you have the following installed on your machine:
-- Node.js (`v18` or higher) & `npm` / `yarn`
-- Python (`3.9` or higher)
+- **Node.js** `v18+` and `npm`
+- **Python** `3.9+`
 
-### 1. Clone the Repository
+### 1. Clone
 ```bash
-git clone https://github.com/your-username/hireiq.git
-cd hireiq
+git clone https://github.com/Aahan0605/HireiQ.git
+cd HireiQ
 ```
 
-### 2. Start the Backend API (FastAPI)
-HireIQ relies on a Python backend for ML-based resume parsing, skill density extraction, and scoring.
+### 2. Start the Backend
 ```bash
 cd backend
 
 # Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies and run server
-pip install -r requirements.txt
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
-```
-> **Note:** The backend will run at `http://localhost:8000`. Keep this terminal window active.
-
-### 3. Start the Frontend Server (Vite Apps)
-Open a **new terminal window** in the repository root folder.
-```bash
-cd frontend
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # Install dependencies
-npm install
+pip install -r requirements.txt
 
-# Start the dev server
+# Start the API server
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+> Backend runs at **`http://localhost:8000`**  
+> Interactive API docs at **`http://localhost:8000/docs`**
+
+### 3. Start the Frontend
+Open a new terminal in the repo root:
+```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-### 4. Experience HireIQ
-Navigate to `http://localhost:5173` (or the port specified by Vite) in your browser and upload a CV to see the dynamic matching algorithm in action!
+> Frontend runs at **`http://localhost:3000`** (or the port Vite assigns)
+
+### 4. Optional — GitHub Token
+For higher GitHub API rate limits (60 → 5000 requests/hour), add a token:
+```bash
+# backend/.env
+GITHUB_TOKEN=your_github_personal_access_token
+```
+
+---
+
+## 📡 API Reference
+
+Base URL: `http://localhost:8000/api/v1`
+
+### Candidates
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/candidates` | List all candidates |
+| `POST` | `/candidates/upload-resume` | Upload PDF → TF-IDF scoring + job matching |
+| `GET` | `/candidates/github/{username}` | Live GitHub stats + score |
+| `POST` | `/candidates/rank-sorted` | Merge sort candidates by score |
+| `POST` | `/candidates/shortlist` | 0/1 Knapsack optimal shortlist |
+| `POST` | `/candidates/schedule` | Greedy interview scheduling |
+| `POST` | `/candidates/skill-gap` | BFS skill learning path |
+
+### Jobs
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/jobs` | List all job postings |
+| `POST` | `/jobs` | Create new job |
+| `GET` | `/jobs/{id}` | Get single job |
+| `PUT` | `/jobs/{id}` | Update job |
+| `DELETE` | `/jobs/{id}` | Delete job |
+| `GET` | `/jobs/{id}/matches` | TF-IDF ranked candidates for this job |
+
+### Settings
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/settings/weights` | Get current scoring weights |
+| `POST` | `/settings/weights` | Update weights (applied to next upload) |
+| `GET` | `/settings/thresholds` | Get match thresholds |
+| `POST` | `/settings/thresholds` | Update Strong / Match / Weak thresholds |
 
 ---
 
 ## 📂 Architecture
 
-```text
-hireiq/
-├── backend/                # Python / FastAPI ML parsing engine
-│   ├── api/                # Core routing endpoints
-│   ├── parser/             # CV & NLP extraction algorithms
-│   └── requirements.txt    # Python dependencies
-├── frontend/               # React / Vite Client
-│   ├── src/
-│   │   ├── components/     # High-end interactive UI (MagneticCard, Modals)
-│   │   ├── pages/          # Primary views (Dashboard, Analyzer, View)
-│   │   ├── data/           # Intelligent frontend mock controllers / data processing
-│   │   └── lib/            # Shared utilities & animation configs
-│   ├── public/             # Static graphics
-│   └── tailwind.config.js  # Theming and custom CSS variables
+```
+HireiQ/
+├── backend/
+│   ├── algorithms/
+│   │   ├── tfidf.py              # From-scratch TF-IDF vectoriser
+│   │   ├── cosine_similarity.py  # Sparse cosine similarity + Jaccard
+│   │   ├── heap.py               # Max-heap candidate ranking
+│   │   ├── merge_rank.py         # Merge sort + rank delta tracking
+│   │   ├── dp_shortlist.py       # 0/1 Knapsack DP shortlisting
+│   │   ├── interview_scheduler.py# Greedy activity selection
+│   │   ├── skill_graph.py        # BFS skill prerequisite graph
+│   │   ├── kmp.py                # KMP string matching
+│   │   └── rabin_karp.py         # Rabin-Karp (multi-pattern search)
+│   ├── api/
+│   │   ├── routes/
+│   │   │   ├── candidates.py     # Upload, GitHub, rank, shortlist, schedule
+│   │   │   ├── jobs.py           # CRUD + TF-IDF job matching
+│   │   │   └── settings.py       # Weights + thresholds (active_weights store)
+│   │   ├── main.py               # FastAPI app + CORS + router registration
+│   │   └── models.py             # Pydantic request/response models
+│   ├── engine/
+│   │   ├── score_fusion.py       # Weighted multi-signal score orchestrator
+│   │   ├── bias_auditor.py       # Full vs blind scoring comparison
+│   │   ├── matcher.py            # JD ↔ resume matching engine
+│   │   └── ranker.py             # Final ranking logic
+│   ├── parser/
+│   │   ├── resume_parser.py      # PDF/TXT extraction + text cleaning
+│   │   └── feature_extractor.py  # KMP skill detection, experience, education
+│   ├── signals/
+│   │   ├── github_signal.py      # Async GitHub API + score_github()
+│   │   ├── coding_signal.py      # Codeforces / LeetCode / CodeChef
+│   │   ├── linkedin_signal.py    # LinkedIn signal extraction
+│   │   └── portfolio_crawler.py  # Portfolio URL analysis
+│   ├── config.py                 # Scoring weights, role profiles, thresholds
+│   └── requirements.txt
+│
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── DashboardLayout.jsx  # Shared sidebar + page wrapper
+│       │   ├── MagneticCard.jsx     # 3D tilt card component
+│       │   ├── StatCard.jsx         # Animated metric card
+│       │   ├── RecentCandidates.jsx # Dashboard recent analyses list
+│       │   ├── SkillGapCard.jsx     # Skill gap + learning path display
+│       │   └── AlgorithmLegend.jsx  # Floating algorithm reference button
+│       ├── pages/
+│       │   ├── Dashboard.jsx        # Overview + 4 metric cards + modals
+│       │   ├── Candidates.jsx       # List + merge sort + compare bar
+│       │   ├── CandidateProfile.jsx # Full profile + GitHub stats + recommended roles
+│       │   ├── Analyze.jsx          # PDF upload + analysis progress
+│       │   ├── Jobs.jsx             # Job listings + post modal
+│       │   ├── JobMatches.jsx       # TF-IDF ranked candidates per job
+│       │   ├── CompareView.jsx      # Side-by-side radar + category scores
+│       │   ├── BiasReport.jsx       # Bias audit + donut chart
+│       │   ├── Settings.jsx         # Live weight sliders + threshold config
+│       │   └── SignIn.jsx           # Auth page
+│       ├── data/
+│       │   └── candidates.js        # Local store + addCandidateFromCV()
+│       └── lib/
+│           ├── animations.js        # Framer Motion variants
+│           └── hooks.js             # useMagneticTilt, useCountUp, useIntersection
+│
 └── README.md
 ```
 
-## 🎨 Design Philosophy
+---
 
-HireIQ is built with strict adherence to a **"Glassmorphism & Neon Dark"** modern aesthetic:
-- **Core Background:** Deep abyss (`#0A0A0B`) ensuring minimal eye strain.
-- **Accents:** Violet, Mint, and Rose gradients providing intelligent hierarchy.
-- **Interactions:** Magnetic layouts, glowing hover states, and smooth staggered entrance animations for an organic feel.
+## 🎨 Design System
+
+HireIQ uses a strict **Glassmorphism & Neon Dark** aesthetic:
+
+| Token | Value | Usage |
+| :--- | :--- | :--- |
+| Base background | `#0d0d1a` | All page backgrounds |
+| Card background | `#13131f` | All card surfaces |
+| Border | `white/10` | All card borders |
+| Primary accent | `#9D74FF` (violet) | Active states, CTAs |
+| Secondary accent | `#22d3ee` (cyan) | Comparison, GitHub |
+| Success | `#22c55e` (green) | Strong match, verified |
+| Warning | `#f59e0b` (amber) | Bias detected, warnings |
+
+---
+
+## 🎓 Viva Quick Reference
+
+| Question | One-line Answer |
+| :--- | :--- |
+| Why TF-IDF over BERT? | No large model downloads; fully explainable; deterministic output |
+| Why cosine over Euclidean? | Length-independent — a short resume isn't penalised vs a long one |
+| Why max-heap over sort? | Top-K in O(k log n) without sorting the entire candidate list |
+| Why merge sort over quicksort? | Stable + guaranteed O(n log n); quicksort is O(n²) worst case |
+| Why DP for shortlist? | Greedy by ratio provably fails for 0/1 knapsack; DP is exact |
+| Why greedy for scheduling? | Earliest-finish-first is provably optimal by exchange argument |
+| Why BFS over DFS for skills? | BFS guarantees shortest path (fewest prerequisite steps) |
+| Why KMP over str.find()? | O(n+m) vs O(n×m) naive; critical when scanning 100+ skills per resume |
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ by the HireIQ Engineering Team.</sub>
+  <sub>Built with ❤️ for the HireIQ Engineering Team · DAA Project 2025</sub>
 </div>
