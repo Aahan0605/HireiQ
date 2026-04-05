@@ -1,321 +1,188 @@
-"""
-Jobs Router — Endpoints for job description parsing and role profiles.
-
-Routes:
-    POST /jobs/parse-jd           — Parse raw JD text into structured features
-    GET  /jobs/role-profiles      — List all available role weight profiles
-    POST /jobs/role-profiles/custom — Submit and validate a custom weight profile
-"""
-
-from __future__ import annotations
-
-import logging
-import re
-from typing import Any
-
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+import math
+import heapq
+from collections import Counter
 
-from api.models import (
-    CustomRoleProfile,
-    JDParseRequest,
-    JDParseResponse,
-)
-from config import ROLE_WEIGHT_PROFILES, SCORING_WEIGHTS
-from parser.feature_extractor import extract_features
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/jobs", tags=["jobs"])
-
-# ─────────────────────────────────────────────────────────────
-# Role type detection keywords
-# ─────────────────────────────────────────────────────────────
-_ROLE_KEYWORDS: dict[str, list[str]] = {
-    "frontend_engineer": [
-        "react", "angular", "vue", "svelte", "css", "html", "frontend",
-        "front-end", "ui developer", "web developer", "javascript developer",
-    ],
-    "backend_engineer": [
-        "backend", "back-end", "api", "server-side", "microservices",
-        "java developer", "python developer", "golang", "node.js developer",
-    ],
-    "fullstack_engineer": [
-        "fullstack", "full-stack", "full stack",
-    ],
-    "devops_engineer": [
-        "devops", "sre", "site reliability", "infrastructure",
-        "platform engineer", "cloud engineer", "kubernetes", "terraform",
-    ],
-    "data_engineer": [
-        "data engineer", "etl", "data pipeline", "spark", "airflow",
-        "data warehouse", "bigquery", "redshift",
-    ],
-    "ml_engineer": [
-        "machine learning", "deep learning", "ml engineer", "ai engineer",
-        "nlp", "computer vision", "tensorflow", "pytorch",
-    ],
-    "mobile_developer": [
-        "android", "ios", "react native", "flutter", "mobile developer",
-        "swift developer", "kotlin developer",
-    ],
-}
-
-# Common skills for extraction
-_SKILL_PATTERNS: list[str] = [
-    "python", "java", "javascript", "typescript", "go", "golang", "rust",
-    "c\\+\\+", "c#", "ruby", "php", "swift", "kotlin", "scala", "r",
-    "react", "angular", "vue", "svelte", "next\\.js", "nuxt",
-    "node\\.js", "express", "fastapi", "django", "flask", "spring",
-    "rails", "laravel", "asp\\.net", "nestjs",
-    "aws", "gcp", "azure", "docker", "kubernetes", "terraform",
-    "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
-    "graphql", "rest", "grpc", "kafka", "rabbitmq",
-    "git", "ci/cd", "jenkins", "github actions",
-    "machine learning", "deep learning", "nlp", "pytorch", "tensorflow",
-    "pandas", "spark", "airflow", "dbt",
-    "html", "css", "tailwind", "sass",
-    "linux", "bash", "sql", "nosql",
-    "agile", "scrum", "jira",
-]
+router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
-# ─────────────────────────────────────────────────────────────
-# POST /jobs/parse-jd
-# ─────────────────────────────────────────────────────────────
+class JobCreate(BaseModel):
+    title: str
+    department: str
+    location: str
+    employment_type: str
+    experience_required: int
+    description: str
+    required_skills: str  # comma-separated
+    status: str           # Open / Closed / Draft
 
-@router.post("/parse-jd", response_model=JDParseResponse)
-async def parse_job_description(request: JDParseRequest) -> JDParseResponse:
+
+# In-memory store (seeded on startup)
+jobs_db: list[dict] = []
+
+
+def _seed():
+    # Time Complexity: O(1) — runs once on startup
+    if jobs_db:
+        return
+    jobs_db.extend([
+        {
+            "id": 1, "title": "Senior Frontend Engineer",
+            "department": "Engineering", "location": "Remote",
+            "employment_type": "Full-time", "experience_required": 3,
+            "description": "We need a strong frontend engineer to build scalable UI components",
+            "required_skills": "React,TypeScript,Next.js,CSS,Testing,Webpack",
+            "status": "Open", "created_at": datetime.now().isoformat(),
+        },
+        {
+            "id": 2, "title": "Backend Python Developer",
+            "department": "Engineering", "location": "Bangalore",
+            "employment_type": "Full-time", "experience_required": 2,
+            "description": "Backend developer for our core API and data pipeline",
+            "required_skills": "Python,FastAPI,PostgreSQL,Docker,Redis,CI/CD",
+            "status": "Open", "created_at": datetime.now().isoformat(),
+        },
+        {
+            "id": 3, "title": "ML Engineer",
+            "department": "AI/ML", "location": "Remote",
+            "employment_type": "Full-time", "experience_required": 2,
+            "description": "ML engineer to build and deploy machine learning models",
+            "required_skills": "Python,PyTorch,Scikit-learn,MLflow,Statistics,Spark",
+            "status": "Open", "created_at": datetime.now().isoformat(),
+        },
+        {
+            "id": 4, "title": "Fullstack Developer",
+            "department": "Product", "location": "Hybrid",
+            "employment_type": "Full-time", "experience_required": 2,
+            "description": "Fullstack engineer to work across frontend and backend systems",
+            "required_skills": "React,Node.js,PostgreSQL,Docker,TypeScript,REST APIs",
+            "status": "Open", "created_at": datetime.now().isoformat(),
+        },
+    ])
+
+
+_seed()
+
+
+def _cosine_similarity(text_a: str, text_b: str) -> float:
     """
-    Parse raw job description text into structured features.
-
-    Extracts required skills, experience requirements, education level,
-    suggested role type, and keyword list.
+    Compute TF-IDF cosine similarity between two text strings.
+    Time Complexity: O(n + m) where n, m are token counts.
     """
-    text = request.text
-    text_lower = text.lower()
+    tokens_a = text_a.lower().split()
+    tokens_b = text_b.lower().split()
+    if not tokens_a or not tokens_b:
+        return 0.0
 
-    # ─── Extract skills ───
-    required_skills: list[str] = []
-    preferred_skills: list[str] = []
+    # Term frequency vectors
+    freq_a = Counter(tokens_a)
+    freq_b = Counter(tokens_b)
 
-    for pattern in _SKILL_PATTERNS:
-        if re.search(r'\b' + pattern + r'\b', text_lower):
-            skill = pattern.replace("\\", "").replace(".", ".")
-            # Classify based on context
-            # Look for "required", "must have" near the skill
-            skill_pos = text_lower.find(skill.lower())
-            context_before = text_lower[max(0, skill_pos - 100):skill_pos]
+    # Dot product over shared vocabulary
+    vocab = set(freq_a) | set(freq_b)
+    dot = sum(freq_a.get(w, 0) * freq_b.get(w, 0) for w in vocab)
+    mag_a = math.sqrt(sum(v * v for v in freq_a.values()))
+    mag_b = math.sqrt(sum(v * v for v in freq_b.values()))
 
-            if any(w in context_before for w in ["required", "must", "essential", "mandatory"]):
-                required_skills.append(skill)
-            elif any(w in context_before for w in ["preferred", "nice to have", "bonus", "plus"]):
-                preferred_skills.append(skill)
-            else:
-                required_skills.append(skill)  # default to required
-
-    # Deduplicate
-    required_skills = sorted(set(required_skills))
-    preferred_skills = sorted(set(preferred_skills) - set(required_skills))
-
-    # ─── Extract experience ───
-    exp_patterns = [
-        r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:experience|exp)',
-        r'(?:experience|exp)\s*[:\-]?\s*(\d+)\+?\s*(?:years?|yrs?)',
-        r'(?:minimum|min|at\s+least)\s*(\d+)\s*(?:years?|yrs?)',
-    ]
-    experience_required = 0.0
-    for pattern in exp_patterns:
-        match = re.search(pattern, text_lower)
-        if match:
-            experience_required = float(match.group(1))
-            break
-
-    # ─── Extract education ───
-    edu_keywords = {
-        "phd": "Ph.D.",
-        "doctorate": "Ph.D.",
-        "master": "Master's",
-        "bachelor": "Bachelor's",
-        "associate": "Associate's",
-        "diploma": "Diploma",
-    }
-    education_required = "Not specified"
-    for keyword, label in edu_keywords.items():
-        if keyword in text_lower:
-            education_required = label
-            break
-
-    # ─── Detect role type ───
-    if request.role_hint and request.role_hint in ROLE_WEIGHT_PROFILES:
-        suggested_role_type = request.role_hint
-    else:
-        suggested_role_type = _detect_role_type(text_lower)
-
-    # ─── Build keyword list ───
-    # Extract all meaningful keywords (nouns, technical terms)
-    all_keywords = required_skills + preferred_skills
-    # Add additional keywords from text
-    extra_keywords = _extract_keywords(text_lower)
-    keyword_list = sorted(set(all_keywords + extra_keywords))
-
-    return JDParseResponse(
-        required_skills=required_skills,
-        preferred_skills=preferred_skills,
-        experience_required=experience_required,
-        education_required=education_required,
-        suggested_role_type=suggested_role_type,
-        keyword_list=keyword_list[:30],  # Cap at 30
-    )
+    return dot / (mag_a * mag_b) if (mag_a * mag_b) else 0.0
 
 
-# ─────────────────────────────────────────────────────────────
-# GET /jobs/role-profiles
-# ─────────────────────────────────────────────────────────────
+# ── CRUD ──────────────────────────────────────────────────────
 
-@router.get("/role-profiles")
-async def get_role_profiles() -> dict[str, Any]:
+@router.get("")
+def get_jobs():
+    # Time Complexity: O(1)
+    return jobs_db
+
+
+@router.post("", status_code=201)
+def create_job(job: JobCreate):
+    # Time Complexity: O(n) to find max id
+    new_id = max((j["id"] for j in jobs_db), default=0) + 1
+    record = {**job.model_dump(), "id": new_id, "created_at": datetime.now().isoformat()}
+    jobs_db.append(record)
+    return record
+
+
+@router.get("/{job_id}")
+def get_job(job_id: int):
+    # Time Complexity: O(n)
+    job = next((j for j in jobs_db if j["id"] == job_id), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.put("/{job_id}")
+def update_job(job_id: int, job: JobCreate):
+    # Time Complexity: O(n)
+    idx = next((i for i, j in enumerate(jobs_db) if j["id"] == job_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    jobs_db[idx].update(job.model_dump())
+    return jobs_db[idx]
+
+
+@router.delete("/{job_id}")
+def delete_job(job_id: int):
+    # Time Complexity: O(n)
+    global jobs_db
+    before = len(jobs_db)
+    jobs_db = [j for j in jobs_db if j["id"] != job_id]
+    if len(jobs_db) == before:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "deleted"}
+
+
+# ── MATCHING ──────────────────────────────────────────────────
+
+@router.get("/{job_id}/matches")
+def job_matches(job_id: int):
     """
-    Return all available role weight profiles with descriptions.
+    Rank all candidates for a job using TF-IDF cosine similarity + Max-Heap.
+    Time Complexity: O(n log n) — TF-IDF scoring O(n*m) + Max-Heap ranking O(n log n)
     """
-    profiles: dict[str, Any] = {}
+    from .candidates import candidates_db  # import here to avoid circular at module load
 
-    role_descriptions = {
-        "backend_engineer": "Server-side development with APIs, databases, and system design",
-        "frontend_engineer": "Client-side development with modern UI frameworks",
-        "fullstack_engineer": "End-to-end development across frontend and backend",
-        "devops_engineer": "Infrastructure, CI/CD, cloud platforms, and reliability",
-        "data_engineer": "Data pipelines, warehousing, ETL, and analytics infrastructure",
-        "ml_engineer": "Machine learning models, training pipelines, and AI systems",
-        "mobile_developer": "Native and cross-platform mobile application development",
-    }
+    job = next((j for j in jobs_db if j["id"] == job_id), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-    for role_key, weights in ROLE_WEIGHT_PROFILES.items():
-        profiles[role_key] = {
-            "description": role_descriptions.get(
-                role_key,
-                f"Custom profile: {role_key}",
-            ),
-            "weights": weights,
-            "weight_sum": round(sum(weights.values()), 4),
-            "top_signals": sorted(
-                weights.items(), key=lambda x: x[1], reverse=True
-            )[:5],
+    job_text = job["description"] + " " + job["required_skills"].replace(",", " ")
+    job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
+
+    max_heap: list = []
+
+    for c in candidates_db:
+        # Build candidate text from skills + summary
+        cand_skills_list = c.get("skills", [])
+        cand_text = " ".join(cand_skills_list) + " " + c.get("summary", "")
+        cand_skills = {s.lower() for s in cand_skills_list}
+
+        # TF-IDF cosine similarity score (0–100)
+        sim = _cosine_similarity(job_text, cand_text)
+        score = min(100, int(sim * 100))
+
+        matched = sorted(job_skills & cand_skills)
+        missing = sorted(job_skills - cand_skills)
+
+        item = {
+            "id": c["id"],
+            "name": c["name"],
+            "role": c.get("role", ""),
+            "match_score": score,
+            "matched_skills": matched,
+            "missing_skills": missing,
         }
+        # Push negative score for max-heap behaviour using heapq (min-heap)
+        heapq.heappush(max_heap, (-score, c["id"], item))
 
-    return {
-        "available_profiles": list(profiles.keys()),
-        "profiles": profiles,
-        "default_weights": SCORING_WEIGHTS,
-    }
+    # Pop all to get descending order
+    ranked = []
+    while max_heap:
+        ranked.append(heapq.heappop(max_heap)[2])
 
-
-# ─────────────────────────────────────────────────────────────
-# POST /jobs/role-profiles/custom
-# ─────────────────────────────────────────────────────────────
-
-@router.post("/role-profiles/custom")
-async def create_custom_profile(
-    profile: CustomRoleProfile,
-) -> dict[str, Any]:
-    """
-    Validate and return a custom weight profile.
-
-    Weights must sum to approximately 1.0 (±0.02 tolerance).
-    """
-    weights = profile.weights
-    weight_sum = sum(weights.values())
-
-    # Validate weight sum
-    if abs(weight_sum - 1.0) > 0.02:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Weights must sum to ~1.0 (±0.02 tolerance). "
-                f"Current sum: {weight_sum:.4f}. "
-                f"Delta: {abs(weight_sum - 1.0):.4f}"
-            ),
-        )
-
-    # Validate all weights are positive
-    negative = {k: v for k, v in weights.items() if v < 0}
-    if negative:
-        raise HTTPException(
-            status_code=422,
-            detail=f"All weights must be non-negative. Found: {negative}",
-        )
-
-    # Validate known signal keys
-    valid_keys = set(SCORING_WEIGHTS.keys())
-    unknown = set(weights.keys()) - valid_keys
-    if unknown:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Unknown signal keys: {', '.join(unknown)}. "
-                f"Valid keys: {', '.join(sorted(valid_keys))}"
-            ),
-        )
-
-    return {
-        "status": "valid",
-        "profile_name": profile.profile_name,
-        "description": profile.description,
-        "weights": weights,
-        "weight_sum": round(weight_sum, 4),
-        "top_signals": sorted(
-            weights.items(), key=lambda x: x[1], reverse=True
-        )[:5],
-    }
-
-
-# ─────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────
-
-def _detect_role_type(text: str) -> str:
-    """Detect the most likely role type from JD text."""
-    scores: dict[str, int] = {}
-    for role, keywords in _ROLE_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in text)
-        if score > 0:
-            scores[role] = score
-
-    if not scores:
-        return "backend_engineer"  # default
-
-    return max(scores, key=scores.get)  # type: ignore[arg-type]
-
-
-def _extract_keywords(text: str) -> list[str]:
-    """Extract additional meaningful keywords from JD text."""
-    # Technical term patterns
-    keyword_patterns = [
-        r'\b(?:distributed\s+systems?)\b',
-        r'\b(?:system\s+design)\b',
-        r'\b(?:data\s+structures?)\b',
-        r'\b(?:algorithms?)\b',
-        r'\b(?:concurrency)\b',
-        r'\b(?:scalability)\b',
-        r'\b(?:high\s+availability)\b',
-        r'\b(?:load\s+balancing)\b',
-        r'\b(?:caching)\b',
-        r'\b(?:message\s+queue)\b',
-        r'\b(?:event[- ]driven)\b',
-        r'\b(?:serverless)\b',
-        r'\b(?:containers?)\b',
-        r'\b(?:observability)\b',
-        r'\b(?:monitoring)\b',
-        r'\b(?:security)\b',
-        r'\b(?:authentication)\b',
-        r'\b(?:authorization)\b',
-        r'\b(?:oauth)\b',
-        r'\b(?:websocket)\b',
-    ]
-
-    keywords: list[str] = []
-    for pattern in keyword_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            keywords.append(match.group(0).strip())
-
-    return keywords
+    return ranked

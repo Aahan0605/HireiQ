@@ -66,7 +66,7 @@ export default function Analyze() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6 bg-bg overflow-hidden relative">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="flex min-h-screen items-center justify-center p-6 bg-bg overflow-hidden relative">
       <div className="absolute top-1/4 left-1/4 h-96 w-96 rounded-full bg-violet/10 blur-[120px] mix-blend-screen" />
       <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] rounded-full bg-mint/10 blur-[140px] mix-blend-screen" />
 
@@ -170,6 +170,6 @@ export default function Analyze() {
           </AnimatePresence>
         </MagneticCard>
       </main>
-    </div>
+    </motion.div>
   );
 }

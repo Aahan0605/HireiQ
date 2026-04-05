@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 # Main orchestrator
 # ─────────────────────────────────────────────────────────────
 
+
 async def compute_full_candidate_score(
     candidate_name: str,
     resume_text: str,
@@ -90,7 +91,9 @@ async def compute_full_candidate_score(
 
     # ── Step 2: Compute resume-based scores ──
     base_scores = _compute_resume_scores(
-        resume_features, jd_features, resume_text,
+        resume_features,
+        jd_features,
+        resume_text,
     )
 
     # ── Step 3: Fetch external signals concurrently ──
@@ -106,7 +109,9 @@ async def compute_full_candidate_score(
 
     # ── Step 4: Score external signals ──
     signal_scores = _score_external_signals(
-        external_signals, claimed_skills, role_type,
+        external_signals,
+        claimed_skills,
+        role_type,
     )
 
     # ── Step 5: Verify claims ──
@@ -140,8 +145,7 @@ async def compute_full_candidate_score(
 
     # ── Step 9: Generate recommendations ──
     low_scores = {
-        k: v for k, v in all_scores.items()
-        if v < 0.4 and role_weights.get(k, 0) > 0.05
+        k: v for k, v in all_scores.items() if v < 0.4 and role_weights.get(k, 0) > 0.05
     }
     recommendations = generate_recommendations(
         missing_skills=missing_skills,
@@ -189,6 +193,7 @@ async def compute_full_candidate_score(
 # Resume-based scoring
 # ─────────────────────────────────────────────────────────────
 
+
 def _compute_resume_scores(
     resume_features: dict,
     jd_features: dict,
@@ -198,7 +203,10 @@ def _compute_resume_scores(
     scores: dict[str, float] = {}
 
     # Skill match score via TF-IDF + cosine similarity
-    jd_skills = jd_features.get("required_skills", []) + jd_features.get("preferred_skills", [])
+    # ONLY compute if job description is provided with skills
+    jd_skills = jd_features.get("required_skills", []) + jd_features.get(
+        "preferred_skills", []
+    )
     resume_skills = resume_features.get("skills", [])
 
     if jd_skills and resume_skills:
@@ -221,6 +229,9 @@ def _compute_resume_scores(
             overlap = 0.0
 
         scores["resume_skill_match"] = round(0.6 * sim + 0.4 * overlap, 4)
+    elif not jd_skills:
+        # No job description provided — score is N/A, not a default 0.5
+        scores["resume_skill_match"] = None
     else:
         scores["resume_skill_match"] = 0.0
 
@@ -244,10 +255,19 @@ def _compute_resume_scores(
     education = resume_features.get("education", [])
     edu_score = 0.0
     degree_weights = {
-        "phd": 1.0, "doctorate": 1.0,
-        "master": 0.85, "ms": 0.85, "mtech": 0.85, "mca": 0.80,
-        "bachelor": 0.65, "bs": 0.65, "btech": 0.65, "bca": 0.60, "be": 0.65,
-        "associate": 0.40, "diploma": 0.35,
+        "phd": 1.0,
+        "doctorate": 1.0,
+        "master": 0.85,
+        "ms": 0.85,
+        "mtech": 0.85,
+        "mca": 0.80,
+        "bachelor": 0.65,
+        "bs": 0.65,
+        "btech": 0.65,
+        "bca": 0.60,
+        "be": 0.65,
+        "associate": 0.40,
+        "diploma": 0.35,
     }
     for edu in education:
         edu_lower = edu.lower() if isinstance(edu, str) else ""
@@ -263,6 +283,7 @@ def _compute_resume_scores(
 # ─────────────────────────────────────────────────────────────
 # External signal fetching
 # ─────────────────────────────────────────────────────────────
+
 
 async def _fetch_all_external_signals(
     resume_text: str,
@@ -302,9 +323,7 @@ async def _fetch_all_external_signals(
         )
         for key, result in zip(keys, results):
             if isinstance(result, Exception):
-                logger.warning(
-                    "Signal fetch failed for %s: %s", key, str(result)
-                )
+                logger.warning("Signal fetch failed for %s: %s", key, str(result))
                 signals[key] = {}
             else:
                 signals[key] = result if result else {}
@@ -323,6 +342,7 @@ async def _fetch_all_external_signals(
 # External signal scoring
 # ─────────────────────────────────────────────────────────────
 
+
 def _score_external_signals(
     external_signals: dict[str, Any],
     claimed_skills: list[str],
@@ -340,7 +360,9 @@ def _score_external_signals(
     cc_data = external_signals.get("codechef", {})
     lc_data = external_signals.get("leetcode", {})
     scores["competitive_coding"] = score_competitive_coding(
-        cf_data, cc_data, lc_data,
+        cf_data,
+        cc_data,
+        lc_data,
     )
 
     # Portfolio
@@ -354,7 +376,8 @@ def _score_external_signals(
     # Certifications
     cert_data = external_signals.get("certifications", [])
     scores["certification_score"] = score_certifications(
-        cert_data, claimed_skills,
+        cert_data,
+        claimed_skills,
     )
 
     # Placeholder scores for signals not yet implemented
@@ -370,6 +393,7 @@ def _score_external_signals(
 # ─────────────────────────────────────────────────────────────
 # Score fusion with role weights
 # ─────────────────────────────────────────────────────────────
+
 
 def _build_component_breakdown(
     all_scores: dict[str, float],
@@ -397,6 +421,7 @@ def _build_component_breakdown(
 # ─────────────────────────────────────────────────────────────
 # Recommendation engine
 # ─────────────────────────────────────────────────────────────
+
 
 def generate_recommendations(
     missing_skills: list[str] | None = None,
