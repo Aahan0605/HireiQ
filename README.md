@@ -317,21 +317,6 @@ HireIQ uses a strict **Glassmorphism & Neon Dark** aesthetic:
 
 ---
 
-## 🎓 Viva Quick Reference
-
-| Question | One-line Answer |
-| :--- | :--- |
-| Why TF-IDF over BERT? | No large model downloads; fully explainable; deterministic output |
-| Why cosine over Euclidean? | Length-independent — a short resume isn't penalised vs a long one |
-| Why max-heap over sort? | Top-K in O(k log n) without sorting the entire candidate list |
-| Why merge sort over quicksort? | Stable + guaranteed O(n log n); quicksort is O(n²) worst case |
-| Why DP for shortlist? | Greedy by ratio provably fails for 0/1 knapsack; DP is exact |
-| Why greedy for scheduling? | Earliest-finish-first is provably optimal by exchange argument |
-| Why BFS over DFS for skills? | BFS guarantees shortest path (fewest prerequisite steps) |
-| Why KMP over str.find()? | O(n+m) vs O(n×m) naive; critical when scanning 100+ skills per resume |
-
----
-
 <div align="center">
   <sub>Built with ❤️ for the HireIQ Engineering Team · DAA Project 2025</sub>
 </div>
