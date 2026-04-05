@@ -114,9 +114,11 @@ export const addCandidateFromCV = async (file) => {
   
   let extractedText = "";
   let features = { skills: [], experience: 0.0 };
+  let backendScore = null;   // real TF-IDF score from backend
+  let jobMatches   = [];     // ranked job matches from backend
 
   try {
-    const res = await fetch("http://localhost:8001/api/v1/candidates/upload-resume", {
+    const res = await fetch("http://localhost:8000/api/v1/candidates/upload-resume", {
       method: "POST",
       body: formData
     });
@@ -125,6 +127,14 @@ export const addCandidateFromCV = async (file) => {
       extractedText = data.extracted_text || "";
       if (data.features) {
         features = data.features;
+      }
+      // Use real TF-IDF score from backend if available
+      if (typeof data.tfidf_score === 'number') {
+        backendScore = data.tfidf_score;
+      }
+      // Store ranked job matches for the profile page
+      if (data.job_matches) {
+        jobMatches = data.job_matches;
       }
     }
   } catch (e) {
@@ -271,7 +281,7 @@ export const addCandidateFromCV = async (file) => {
     role = 'Backend Engineer';
   }
 
-  // Calculate Match Score based on Target Keywords directly mapped to the inferred job role
+  // Role keywords used for offline fallback scoring
   const roleKeywords = {
     'Frontend Specialist': ['react', 'vue', 'angular', 'javascript', 'typescript', 'html', 'css', 'tailwind', 'ui/ux', 'next.js', 'webpack'],
     'Backend Engineer': ['node', 'python', 'java', 'go', 'c++', 'sql', 'nosql', 'docker', 'kubernetes', 'aws', 'api', 'microservices'],
@@ -280,29 +290,24 @@ export const addCandidateFromCV = async (file) => {
     'Software Engineer': ['javascript', 'python', 'java', 'git', 'agile', 'sql', 'docker', 'aws', 'rest', 'oop', 'data structures']
   };
 
-  const expectedKeywords = roleKeywords[role] || roleKeywords['Software Engineer'];
-  let keywordMatches = 0;
-  
-  expectedKeywords.forEach(kw => {
-    // Exact or loose match in text
-    if (lowerText.includes(kw)) {
-      keywordMatches++;
-    }
-  });
-  
-  // Calculate a strict, accurate match percentage against the job role's required skills
-  // Adding a slight baseline (e.g. 50%) plus up to 45% based on keyword overlap
-  const matchPercentage = Math.round((keywordMatches / expectedKeywords.length) * 45);
-  const baseline = 50;
-  
-  let score = baseline + matchPercentage;
-  
-  // Experience bonus: if they have more dates, they probably have more experience
-  if (experiences.length > 2) score += 3;
-  if (experiences.length > 4) score += 2;
-  
-  // Cap at 99
-  score = Math.min(99, score);
+  // ── Score calculation ──────────────────────────────────────────
+  // If backend returned a real TF-IDF score, use it directly.
+  // Otherwise fall back to client-side keyword density (offline mode).
+  let score;
+  if (backendScore !== null) {
+    score = backendScore; // real TF-IDF + cosine similarity score
+  } else {
+    // Offline fallback: keyword density against inferred role
+    const expectedKeywords = roleKeywords[role] || roleKeywords['Software Engineer'];
+    let keywordMatches = 0;
+    expectedKeywords.forEach(kw => { if (lowerText.includes(kw)) keywordMatches++; });
+    const matchPercentage = Math.round((keywordMatches / expectedKeywords.length) * 44);
+    score = 55 + matchPercentage;
+    if (experiences.length > 2) score += 3;
+    if (experiences.length > 4) score += 2;
+    score = Math.min(99, score);
+  }
+
   const baseScore = score;
 
   // Extract a real summary from the CV text (First meaty paragraph)
@@ -401,8 +406,10 @@ export const addCandidateFromCV = async (file) => {
     summary: finalSummary,
     experience: experiences.slice(0, 4),
     skills: features.skills || [],
-    radarData: radarData, // Save the dynamic radar data directly
-    baseScore: score
+    radarData: radarData,
+    baseScore: score,
+    jobMatches: jobMatches,          // ranked job matches from TF-IDF
+    scoringMethod: backendScore !== null ? 'tfidf' : 'keyword', // audit trail
   };
 
   const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');

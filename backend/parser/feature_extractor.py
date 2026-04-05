@@ -279,55 +279,146 @@ CERTIFICATION_PATTERNS: dict[str, list[str]] = {
 }
 
 
+# ─────────────────────────────────────────────────────────────
+# Helper Functions for Text Cleanup & Summaries
+# ─────────────────────────────────────────────────────────────
+
+
+def _normalize_text(text: str) -> str:
+    """
+    Clean and normalize text: fix camelCase, ALLCAPS, remove extra spaces.
+    Time: O(n)
+    """
+    if not text:
+        return ""
+
+    # Fix camelCase: insert space between lowercase and uppercase (pythonCode → python Code)
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+
+    # Fix ALLCAPS: insert space before uppercase followed by lowercase (PDFFile → PDF File)
+    text = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", text)
+
+    # Remove extra spaces and normalize
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _build_summary(
+    skills: list[str], experience: float, projects_count: int = 0
+) -> str:
+    """
+    Build a concise, structured summary: max 50 words, 3 sentences.
+    Time: O(k) where k = number of top skills
+    """
+    if not skills and experience <= 0:
+        return "Candidate profile pending analysis."
+
+    top_skills = skills[:5] if len(skills) > 5 else skills
+    skills_text = ", ".join(top_skills) if top_skills else "various skills"
+
+    exp_text = f"{int(experience)} years" if experience > 0 else "Early-career"
+
+    # Build 3-sentence summary under 50 words
+    sentences = [
+        f"{exp_text} of experience.",
+        f"Key skills: {skills_text}.",
+        f"Demonstrates strong technical foundation."
+        if projects_count == 0
+        else f"Built {projects_count}+ projects.",
+    ]
+
+    return " ".join(sentences)
+
+
 def _extract_name(text: str) -> str:
     """
-    Extract candidate name from resume text (first non-empty line or main heading).
-    Time: O(n)
+    Extract candidate name from resume text (first non-empty line).
+    Validates name is real: 3–50 chars, only letters/spaces/hyphens.
+    Time: O(n) where n = number of lines checked
     """
     if not text:
         return ""
 
     lines = text.strip().split("\n")
-    for line in lines[:5]:  # Check first 5 lines
+
+    for line in lines[:5]:  # Check first 5 lines only
         line = line.strip()
-        if line and len(line) > 2 and len(line) < 100:
-            # Filter out common headers/footers
-            if not any(
-                keyword in line.lower()
-                for keyword in [
-                    "email",
-                    "phone",
-                    "linkedin",
-                    "github",
-                    "portfolio",
-                    "resume",
-                ]
-            ):
-                return line
+
+        # Skip empty lines
+        if not line:
+            continue
+
+        # Validate length (3–50 chars for realistic names)
+        if len(line) < 3 or len(line) > 50:
+            continue
+
+        # Skip lines with forbidden keywords
+        forbidden = [
+            "email",
+            "phone",
+            "linkedin",
+            "github",
+            "portfolio",
+            "resume",
+            "@",
+            "http",
+        ]
+        if any(kw in line.lower() for kw in forbidden):
+            continue
+
+        # Validate: only letters, spaces, hyphens allowed
+        if not all(c.isalpha() or c.isspace() or c == "-" for c in line):
+            continue
+
+        # Skip all-uppercase acronyms (AWS, PDF, etc.)
+        if line.isupper() and len(line.split()) == 1:
+            continue
+
+        # Valid name found
+        return line
 
     return ""
 
 
+def extract_contact(text: str) -> dict[str, str | None]:
+    """
+    Extract real contact information from resume text.
+
+    Only extracts email, GitHub, LinkedIn if explicitly present.
+    NEVER generates fake contact info. Returns None for missing fields.
+
+    Time: O(n) where n = text length
+    """
+    email_match = re.findall(r"[\w\.\-]+@[\w\.\-]+\.\w{2,}", text)
+    github_match = re.findall(r"github\.com/[\w\-]+", text, re.IGNORECASE)
+    linkedin_match = re.findall(r"linkedin\.com/in/[\w\-]+", text, re.IGNORECASE)
+
+    return {
+        "email": email_match[0] if email_match else None,
+        "github": github_match[0] if github_match else None,
+        "linkedin": linkedin_match[0] if linkedin_match else None,
+    }
+
+
 def _extract_email(text: str) -> str:
     """
-    Extract email address from resume text.
+    Extract email address from resume text. Real extraction only.
     Time: O(n)
     """
     if not text:
-        return ""
+        return None
 
-    # Improved email regex
-    match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", text)
-    return match.group(0) if match else ""
+    match = re.search(r"[\w\.-]+@[\w\.-]+\.\w{2,}", text)
+    return match.group(0) if match else None
 
 
 def _extract_github(text: str) -> str:
     """
-    Extract GitHub profile URL from resume text.
+    Extract GitHub profile URL from resume text. Real extraction only - no fakes.
     Time: O(n)
     """
     if not text:
-        return ""
+        return None
 
     # Look for github.com pattern
     match = re.search(
@@ -336,12 +427,25 @@ def _extract_github(text: str) -> str:
     if match:
         return match.group(0)
 
-    # Fallback: look for just github username after @ or /
-    match = re.search(r"github[:\s/]*(\w+)", text, re.IGNORECASE)
-    if match:
-        return f"github.com/{match.group(1)}"
+    return None
 
-    return ""
+
+def _extract_linkedin(text: str) -> str:
+    """
+    Extract LinkedIn profile URL from resume text. Real extraction only - no fakes.
+    Time: O(n)
+    """
+    if not text:
+        return None
+
+    # Look for linkedin.com/in/ pattern
+    match = re.search(
+        r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w\-]+", text, re.IGNORECASE
+    )
+    if match:
+        return match.group(0)
+
+    return None
 
 
 def _extract_experience_from_timeline(text: str) -> list[dict]:
@@ -397,6 +501,9 @@ def extract_features(text: str) -> dict:
         3. Education level identification
         4. Certification detection
 
+    Time Complexity: O(n·k) where n = text length, k = number of known skills (KMP for each)
+    Space Complexity: O(k) for skills list
+
     Args:
         text: Cleaned resume text (output of resume_parser).
 
@@ -449,6 +556,9 @@ def extract_jd_features(jd_text: str) -> dict:
         - education_required: minimum degree level
         - raw_text: original JD text
 
+    Time Complexity: O(n·k) where n = text length, k = number of known skills (KMP for each)
+    Space Complexity: O(k) for skills list
+
     Args:
         jd_text: Cleaned job description text.
 
@@ -488,136 +598,183 @@ def extract_jd_features(jd_text: str) -> dict:
 
 def _extract_skills(text: str) -> list[str]:
     """
-    Detect known skills in text using KMP string matching.
+    Detect known skills in text with expanded skill list and category parsing.
 
-    Uses case-insensitive KMP search for each known skill pattern.
-    Returns canonical skill names (properly cased) for matched skills.
-
-    Handles multi-word skills (e.g., "GitHub Actions", "Spring Boot")
-    and tech variants (e.g., "node.js", "Node", "NodeJS" all → "Node.js").
+    Time Complexity: O(n·k) where n = text length, k = number of skills
+    Space Complexity: O(k) for found skills set
 
     Args:
         text: Resume or JD text.
 
     Returns:
-        Deduplicated list of canonical skill names found, sorted alphabetically.
+        Deduplicated list of canonical skill names found (max 30).
     """
     if not text:
         return []
 
-    found: set[str] = set()
+    # Extended KNOWN_SKILLS list with more AI/ML and frameworks
+    extended_skills = [
+        # Programming Languages (expanded)
+        "Python",
+        "C++",
+        "JavaScript",
+        "Java",
+        "SQL",
+        "TypeScript",
+        "Go",
+        "Rust",
+        "C#",
+        "PHP",
+        "Ruby",
+        "Swift",
+        "Kotlin",
+        "Scala",
+        "R",
+        "MATLAB",
+        # Frontend Frameworks
+        "React",
+        "React.js",
+        "Vue",
+        "Angular",
+        "Svelte",
+        "Next.js",
+        "Nuxt",
+        "Astro",
+        "Gatsby",
+        "Tailwind",
+        "Tailwind CSS",
+        "HTML",
+        "CSS",
+        "SASS",
+        # Backend Frameworks
+        "Node.js",
+        "Express",
+        "FastAPI",
+        "Flask",
+        "Django",
+        "Spring Boot",
+        "Rails",
+        "Laravel",
+        "ASP.NET",
+        "Gin",
+        "Fiber",
+        "NestJS",
+        # AI/ML (expanded)
+        "TensorFlow",
+        "PyTorch",
+        "Scikit-learn",
+        "Keras",
+        "Hugging Face",
+        "Machine Learning",
+        "Deep Learning",
+        "Neural Networks",
+        "LLM",
+        "Computer Vision",
+        "NLP",
+        "Data Science",
+        # Database
+        "MySQL",
+        "MongoDB",
+        "PostgreSQL",
+        "SQLite",
+        "Redis",
+        "Elasticsearch",
+        "DynamoDB",
+        "Cassandra",
+        "Firebase",
+        "Supabase",
+        # Cloud & DevOps
+        "Docker",
+        "Kubernetes",
+        "Git",
+        "GitHub",
+        "GitLab",
+        "AWS",
+        "GCP",
+        "Azure",
+        "CI/CD",
+        "Jenkins",
+        "GitHub Actions",
+        "GitLab CI",
+        "CircleCI",
+        "Terraform",
+        "Ansible",
+        "Pulumi",
+        # Data & Tools
+        "Pandas",
+        "NumPy",
+        "Spark",
+        "Hadoop",
+        "Kafka",
+        "Airflow",
+        "Jupyter",
+        "VS Code",
+        "Linux",
+        "Postman",
+        # Other Tech
+        "REST APIs",
+        "GraphQL",
+        "Solidity",
+        "Blockchain",
+        "OAuth",
+        "JWT",
+        "Microservices",
+        "Serverless",
+        "gRPC",
+        "WebSocket",
+        "RabbitMQ",
+        "Celery",
+        "Data Structures",
+        "Algorithms",
+        "DBMS",
+        "Operating Systems",
+        "Agile",
+        "Scrum",
+        "JIRA",
+        "Figma",
+        "Nginx",
+        "Apache",
+    ]
+
+    found = []
     text_lower = text.lower()
+    found_lower = set()
 
-    # Variant mapping: common alternate spellings → canonical name
-    variants: dict[str, str] = {
-        "nodejs": "Node.js",
-        "node js": "Node.js",
-        "node.js": "Node.js",
-        "reactjs": "React",
-        "react.js": "React",
-        "react js": "React",
-        "vuejs": "Vue",
-        "vue.js": "Vue",
-        "angularjs": "Angular",
-        "angular.js": "Angular",
-        "nextjs": "Next.js",
-        "next.js": "Next.js",
-        "nuxtjs": "Nuxt",
-        "nuxt.js": "Nuxt",
-        "nestjs": "NestJS",
-        "nest.js": "NestJS",
-        "expressjs": "Express",
-        "express.js": "Express",
-        "fastapi": "FastAPI",
-        "fast api": "FastAPI",
-        "postgresql": "PostgreSQL",
-        "postgres": "PostgreSQL",
-        "mongo": "MongoDB",
-        "mongodb": "MongoDB",
-        "dynamodb": "DynamoDB",
-        "dynamo db": "DynamoDB",
-        "elasticsearch": "Elasticsearch",
-        "elastic search": "Elasticsearch",
-        "scikit-learn": "Scikit-learn",
-        "scikit learn": "Scikit-learn",
-        "sklearn": "Scikit-learn",
-        "tensorflow": "TensorFlow",
-        "tf ": "TensorFlow",
-        "pytorch": "PyTorch",
-        "torch": "PyTorch",
-        "hugging face": "Hugging Face",
-        "huggingface": "Hugging Face",
-        "langchain": "LangChain",
-        "lang chain": "LangChain",
-        "github actions": "GitHub Actions",
-        "gh actions": "GitHub Actions",
-        "gitlab ci": "GitLab CI",
-        "gitlab-ci": "GitLab CI",
-        "circleci": "CircleCI",
-        "circle ci": "CircleCI",
-        "kubernetes": "Kubernetes",
-        "k8s": "Kubernetes",
-        "c++": "C++",
-        "cplusplus": "C++",
-        "c#": "C#",
-        "csharp": "C#",
-        "asp.net": "ASP.NET",
-        "aspnet": "ASP.NET",
-        "spring boot": "Spring Boot",
-        "springboot": "Spring Boot",
-        "tailwindcss": "Tailwind",
-        "tailwind css": "Tailwind",
-        "tailwind": "Tailwind",
-        "graphql": "GraphQL",
-        "graph ql": "GraphQL",
-        "rabbitmq": "RabbitMQ",
-        "rabbit mq": "RabbitMQ",
-        "websocket": "WebSocket",
-        "web socket": "WebSocket",
-        "xgboost": "XGBoost",
-        "lightgbm": "LightGBM",
-        "light gbm": "LightGBM",
-    }
+    # Check each skill in text (case-insensitive)
+    for skill in extended_skills:
+        if skill.lower() not in found_lower and skill.lower() in text_lower:
+            found.append(skill)
+            found_lower.add(skill.lower())
 
-    # Check canonical skills via KMP
-    for skill in KNOWN_SKILLS:
-        if kmp_contains(text, skill):
-            found.add(skill)
+    # Also extract from "Category: skill1, skill2" pattern
+    category_pattern = r"(?:Programming|AI/ML|Frameworks|Database|Tools|Skills|Languages|Technologies|Expertise)[:\s]+([^\n]+)"
+    for match in re.finditer(category_pattern, text, re.IGNORECASE):
+        line = match.group(1)
+        # Split on common delimiters
+        inline_skills = re.split(r"[,|•\n]", line)
+        for s in inline_skills:
+            s = s.strip()
+            if len(s) > 1 and s.lower() not in found_lower:
+                found.append(s)
+                found_lower.add(s.lower())
 
-    # Check variant spellings
-    for variant, canonical in variants.items():
-        if kmp_contains(text, variant):
-            found.add(canonical)
+    # Deduplicate preserving order
+    seen = set()
+    unique = []
+    for s in found:
+        if s.lower() not in seen:
+            seen.add(s.lower())
+            unique.append(s)
 
-    return sorted(found)
+    return unique[:30]  # max 30 skills
 
 
 def _extract_experience(text: str) -> float:
     """
-    Extract years of experience from text using regex patterns.
+    Extract years of experience from experience entries with dates.
 
-    Matches patterns like:
-        - "5 years of experience"
-        - "3+ years experience"
-        - "5-7 years"
-        - "over 10 years"
-        - "2.5 years"
-        - "experience: 4 years"
-
-    Returns the maximum years value found (assumes candidates state
-    their total/highest experience). Returns 0.0 if no match.
-
-    Args:
-        text: Resume or JD text.
-
-    Returns:
-        Estimated years of experience as float.
-
-    Examples:
-        >>> _extract_experience("I have 5+ years of software development experience")
-        5.0
-        >>> _extract_experience("3-5 years required")
-        5.0
+    Parses experience timeline to calculate total years.
+    Time: O(n)
     """
     if not text:
         return 0.0
@@ -685,6 +842,62 @@ def _extract_experience(text: str) -> float:
     return max(years_found)
 
 
+def extract_experience(text: str) -> list[dict]:
+    """
+    Extract work experience timeline from resume.
+
+    Handles pattern:
+        Company Name - Role
+        Month Year - Month Year
+        Description line 1
+        Description line 2
+
+    Time: O(n) where n = number of lines
+    """
+    experiences = []
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+    date_pattern = re.compile(
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\.\-]+\d{4}"
+        r"|(\d{4})\s*[-–]\s*(\d{4}|Present|Current|Now)",
+        re.IGNORECASE,
+    )
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Check if current or next line has a date
+        curr_date = date_pattern.search(line)
+        next_date = date_pattern.search(lines[i + 1]) if i + 1 < len(lines) else None
+
+        if curr_date or next_date:
+            company_line = line if not curr_date else (lines[i - 1] if i > 0 else line)
+            date_str = (curr_date or next_date).group(0)
+
+            # Collect up to 2 description lines after
+            desc_lines = []
+            j = i + (2 if next_date else 1)
+            while j < min(i + 4, len(lines)):
+                if not date_pattern.search(lines[j]):
+                    desc_lines.append(lines[j])
+                j += 1
+
+            company_clean = re.sub(r"[-–|•]", "", company_line).strip()
+            if company_clean and len(company_clean) > 2:
+                experiences.append(
+                    {
+                        "company": company_clean,
+                        "date": date_str,
+                        "description": " ".join(desc_lines[:2]) if desc_lines else "",
+                    }
+                )
+            i = j
+        else:
+            i += 1
+
+    return experiences
+
+
 def _extract_education(text: str) -> str:
     """
     Extract the highest education level from text.
@@ -736,6 +949,9 @@ def _extract_certifications(text: str) -> list[str]:
     Searches for known certification patterns across AWS, GCP, Azure,
     Kubernetes, and other vendors using case-insensitive KMP matching.
 
+    Time Complexity: O(n·p·m) where n = text length, p = # patterns, m = pattern length
+    Space Complexity: O(p) for found certs
+
     Args:
         text: Resume or JD text.
 
@@ -776,6 +992,9 @@ def _extract_required_skills(jd_text: str, all_skills: list[str]) -> list[str]:
 
     Looks for skills mentioned near "required", "must have", "mandatory"
     keywords. Falls back to returning all skills if no such context exists.
+
+    Time Complexity: O(n + k) where n = text length, k = number of skills
+    Space Complexity: O(k) for required skills list
 
     Args:
         jd_text:    Job description text.

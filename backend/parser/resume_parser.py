@@ -111,7 +111,51 @@ def _extract_from_pdf(filepath: Path) -> str:
         return ""
 
     raw_text = "\n".join(pages_text)
+    # Fix words jammed together in PDF text
+    raw_text = _clean_pdf_text(raw_text)
     return _clean_text(raw_text)
+
+
+def _clean_pdf_text(text: str) -> str:
+    """
+    Fix words jammed together in PDF text (camelCase, no spaces between words).
+
+    Applies intelligent spacing rules:
+    - camelCase → camel Case
+    - PDFFile → PDF File
+    - python3 → python 3
+    - 2024Jan → 2024 Jan
+    - .A → . A
+    - ,a → , a
+    - sentence.Next → sentence. Next
+
+    Time: O(n) where n = text length
+    """
+    if not text:
+        return ""
+
+    # Fix camelCase: insert space between lowercase and uppercase
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+
+    # Fix ALLCAPS: insert space before uppercase followed by lowercase
+    text = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", text)
+
+    # Fix letter-digit: insert space between letters and digits
+    text = re.sub(r"([a-zA-Z])(\d)", r"\1 \2", text)
+
+    # Fix digit-letter: insert space between digits and letters
+    text = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", text)
+
+    # Fix period: add space after period before uppercase letter
+    text = re.sub(r"\.(\[A-Z])", r". \1", text)
+
+    # Fix comma: add space after comma if missing
+    text = re.sub(r",([^\s])", r", \1", text)
+
+    # Fix sentence transitions: split on punctuation that acts as newlines
+    text = re.sub(r"([.!?])\s*([A-Z])", r"\1\n\2", text)
+
+    return text.strip()
 
 
 def _extract_from_text(filepath: Path) -> str:
@@ -163,30 +207,30 @@ def _clean_text(text: str) -> str:
 
     # Replace common Unicode artifacts
     replacements = {
-        "\u2018": "'",   # left single quote
-        "\u2019": "'",   # right single quote
-        "\u201c": '"',   # left double quote
-        "\u201d": '"',   # right double quote
-        "\u2013": "-",   # en dash
-        "\u2014": "-",   # em dash
-        "\u2022": " ",   # bullet
-        "\u00b7": " ",   # middle dot
-        "\u00a0": " ",   # non-breaking space
-        "\u200b": "",    # zero-width space
-        "\ufeff": "",    # BOM
-        "\t":     " ",   # tab
+        "\u2018": "'",  # left single quote
+        "\u2019": "'",  # right single quote
+        "\u201c": '"',  # left double quote
+        "\u201d": '"',  # right double quote
+        "\u2013": "-",  # en dash
+        "\u2014": "-",  # em dash
+        "\u2022": " ",  # bullet
+        "\u00b7": " ",  # middle dot
+        "\u00a0": " ",  # non-breaking space
+        "\u200b": "",  # zero-width space
+        "\ufeff": "",  # BOM
+        "\t": " ",  # tab
     }
     for old, new in replacements.items():
         text = text.replace(old, new)
 
     # Remove non-printable control characters (keep newlines temporarily)
-    text = re.sub(r'[^\x20-\x7E\n]', ' ', text)
+    text = re.sub(r"[^\x20-\x7E\n]", " ", text)
 
     # Collapse multiple newlines into a single newline
-    text = re.sub(r'\n+', '\n', text)
+    text = re.sub(r"\n+", "\n", text)
 
     # Collapse multiple spaces into single space
-    text = re.sub(r'[ \t]{2,}', ' ', text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
 
     return text.strip()
 
@@ -225,7 +269,8 @@ def load_all_resumes(folder: str | Path) -> dict[str, str]:
     resumes: dict[str, str] = {}
 
     files = sorted(
-        f for f in folder.iterdir()
+        f
+        for f in folder.iterdir()
         if f.is_file() and f.suffix.lower() in supported_extensions
     )
 
