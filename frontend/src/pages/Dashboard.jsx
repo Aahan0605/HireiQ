@@ -17,13 +17,16 @@ const INITIAL_INTERVIEWS = [
 
 // ── Initial shortlist data ─────────────────────────────────
 const ALL_CANDIDATES = [
-  { id: 1, name: 'Diana Park',    score: 97, cost: 3 },
-  { id: 2, name: 'Charlie Brown', score: 88, cost: 2 },
-  { id: 3, name: 'Bob Martinez',  score: 85, cost: 2 },
-  { id: 4, name: 'Alice Chen',    score: 94, cost: 3 },
-  { id: 5, name: 'Sofia R.',      score: 91, cost: 3 },
-  { id: 6, name: 'Marcus J.',     score: 82, cost: 2 },
+  { id: 1, name: 'Diana Park',    score: 97, cost: 8  },
+  { id: 2, name: 'Charlie Brown', score: 88, cost: 6  },
+  { id: 3, name: 'Bob Martinez',  score: 85, cost: 6  },
+  { id: 4, name: 'Alice Chen',    score: 94, cost: 9  },
+  { id: 5, name: 'Sofia R.',      score: 91, cost: 10 },
+  { id: 6, name: 'Marcus J.',     score: 82, cost: 7  },
 ];
+
+// Format rupees in lakhs — e.g. 8 → "₹8L"
+const fmt = (n) => `₹${n}L`;
 
 // 0/1 Knapsack DP — selects candidates maximising score within budget
 function knapsack(candidates, budget) {
@@ -169,9 +172,9 @@ function InterviewModal({ onClose }) {
 
 // ── Optimal Shortlist Modal ────────────────────────────────
 function ShortlistModal({ onClose }) {
-  const [budget, setBudget]         = useState(6);
+  const [budget, setBudget]         = useState(20);
   const [pool, setPool]             = useState(ALL_CANDIDATES);
-  const [result, setResult]         = useState(() => knapsack(ALL_CANDIDATES, 6));
+  const [result, setResult]         = useState(() => knapsack(ALL_CANDIDATES, 20));
   const [newName, setNewName]       = useState('');
   const [newScore, setNewScore]     = useState('');
   const [newCost, setNewCost]       = useState('');
@@ -180,7 +183,7 @@ function ShortlistModal({ onClose }) {
   const recalculate = (b, p) => setResult(knapsack(p, b));
 
   const handleBudgetChange = (val) => {
-    const b = Math.max(1, Math.min(20, Number(val)));
+    const b = Math.max(1, Math.min(100, Number(val)));
     setBudget(b);
     recalculate(b, pool);
   };
@@ -207,13 +210,17 @@ function ShortlistModal({ onClose }) {
       {/* Budget control */}
       <div className="bg-black/20 dark:bg-black/30 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-theme-2 text-xs font-medium">Hiring Budget</span>
+          <span className="text-theme-2 text-xs font-medium">Hiring Budget (₹ Lakhs)</span>
           <div className="flex items-center gap-2">
             <button onClick={() => handleBudgetChange(budget - 1)}
               className="w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">−</button>
-            <input type="number" min="1" max="20" value={budget}
-              onChange={e => handleBudgetChange(e.target.value)}
-              className="w-12 text-center rounded-lg border border-black/10 dark:border-white/10 bg-card px-1 py-1 text-theme-1 text-sm font-bold outline-none focus:border-emerald-500/40" />
+            <div className="flex items-center gap-0.5">
+              <span className="text-theme-2 text-sm font-bold">₹</span>
+              <input type="number" min="1" max="100" value={budget}
+                onChange={e => handleBudgetChange(e.target.value)}
+                className="w-14 text-center rounded-lg border border-black/10 dark:border-white/10 bg-card px-1 py-1 text-theme-1 text-sm font-bold outline-none focus:border-emerald-500/40" />
+              <span className="text-theme-2 text-sm font-bold">L</span>
+            </div>
             <button onClick={() => handleBudgetChange(budget + 1)}
               className="w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">+</button>
           </div>
@@ -224,17 +231,17 @@ function ShortlistModal({ onClose }) {
             style={{ width: `${Math.min(100, (result.budgetUsed / budget) * 100)}%` }} />
         </div>
         <div className="flex justify-between text-xs text-theme-3 mt-1">
-          <span>Used: {result.budgetUsed}</span>
-          <span>Remaining: {budget - result.budgetUsed}</span>
+          <span>Used: {fmt(result.budgetUsed)}</span>
+          <span>Remaining: {fmt(budget - result.budgetUsed)}</span>
         </div>
       </div>
 
       {/* Result summary */}
       <div className="grid grid-cols-3 gap-2 text-center">
         {[
-          { label: 'Selected', value: result.selected.length, color: 'text-emerald-400' },
-          { label: 'Total Score', value: result.totalScore, color: 'text-cyan-400' },
-          { label: 'Budget Used', value: `${result.budgetUsed}/${budget}`, color: 'text-amber-400' },
+          { label: 'Selected',    value: result.selected.length,              color: 'text-emerald-400' },
+          { label: 'Total Score',  value: result.totalScore,                   color: 'text-cyan-400' },
+          { label: 'Budget Used',  value: `${fmt(result.budgetUsed)} / ${fmt(budget)}`, color: 'text-amber-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-black/20 dark:bg-black/30 rounded-xl p-2">
             <p className={`text-lg font-bold ${color}`}>{value}</p>
@@ -260,7 +267,7 @@ function ShortlistModal({ onClose }) {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-theme-2 text-xs">Score: <b className="text-theme-1">{c.score}</b></span>
-              <span className="text-theme-2 text-xs">Cost: <b className="text-theme-1">{c.cost}</b></span>
+              <span className="text-theme-2 text-xs">CTC: <b className="text-theme-1">{fmt(c.cost)}</b></span>
               <button onClick={() => removeCandidate(c.id)}
                 className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
                 <Trash2 size={11} />
@@ -280,7 +287,7 @@ function ShortlistModal({ onClose }) {
             <input type="number" placeholder="Score (0-100)" value={newScore}
               onChange={e => setNewScore(e.target.value)}
               className="rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
-            <input type="number" placeholder="Cost (1-10)" value={newCost}
+            <input type="number" placeholder="CTC in Lakhs (e.g. 8)" value={newCost}
               onChange={e => setNewCost(e.target.value)}
               className="rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
           </div>
