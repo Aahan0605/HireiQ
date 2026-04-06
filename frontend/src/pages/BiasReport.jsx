@@ -20,7 +20,7 @@ export default function BiasReport() {
   const biasedDash = (biasedPct / 100) * circumference;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -44,7 +44,7 @@ export default function BiasReport() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Comparison Table */}
-          <div className="lg:col-span-2 bg-[#13131f] border border-white/10 rounded-xl p-6">
+          <div className="lg:col-span-2 bg-card border border-black/10 dark:border-white/10 rounded-xl p-6">
             <div className="grid grid-cols-4 text-xs text-gray-500 font-medium mb-4 px-2">
               <span>Candidate</span>
               <span className="text-center">Full Score</span>
@@ -64,11 +64,11 @@ export default function BiasReport() {
                     className={`grid grid-cols-4 items-center rounded-lg px-3 py-3 ${isBiased ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-white/5'}`}
                   >
                     <div>
-                      <p className="text-white text-sm font-medium">{c.name}</p>
+                      <p className="text-theme-1 text-sm font-medium">{c.name}</p>
                       <p className="text-gray-500 text-xs">{c.role}</p>
                     </div>
                     <div className="text-center">
-                      <span className="text-white font-bold">{c.full}</span>
+                      <span className="font-bold text-theme-1">{c.full}</span>
                     </div>
                     <div className="text-center">
                       <span className="text-cyan-400 font-bold">{c.blind}</span>
@@ -94,8 +94,8 @@ export default function BiasReport() {
           {/* Donut + Summary */}
           <div className="flex flex-col gap-4">
             {/* CSS Donut */}
-            <div className="bg-[#13131f] border border-white/10 rounded-xl p-6 flex flex-col items-center">
-              <h3 className="text-white font-semibold mb-4 text-sm">Bias Distribution</h3>
+            <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 flex flex-col items-center">
+              <h3 className="text-theme-1 font-semibold mb-4 text-sm">Bias Distribution</h3>
               <svg viewBox="0 0 100 100" className="w-28 h-28">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
                 {/* Unbiased arc */}
@@ -119,15 +119,15 @@ export default function BiasReport() {
             </div>
 
             {/* Summary Card */}
-            <div className="bg-[#13131f] border border-white/10 rounded-xl p-5">
-              <h3 className="text-white font-semibold text-sm mb-3">Summary</h3>
+            <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-5">
+              <h3 className="text-theme-1 font-semibold text-sm mb-3">Summary</h3>
               <p className="text-gray-400 text-xs leading-relaxed">
-                <span className="text-white font-medium">{biasedCount} out of {BIAS_DATA.length}</span> candidates showed score variance &gt;3 points when anonymized, suggesting possible demographic influence in the original scoring.
+                <span className="text-theme-1 font-medium">{biasedCount} out of {BIAS_DATA.length}</span> candidates showed score variance &gt;3 points when anonymized, suggesting possible demographic influence in the original scoring.
               </p>
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Avg full score</span>
-                  <span className="text-white font-medium">{Math.round(BIAS_DATA.reduce((s, c) => s + c.full, 0) / BIAS_DATA.length)}</span>
+                  <span className="text-theme-1 font-medium">{Math.round(BIAS_DATA.reduce((s, c) => s + c.full, 0) / BIAS_DATA.length)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Avg blind score</span>

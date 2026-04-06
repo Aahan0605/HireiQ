@@ -35,7 +35,7 @@ export default function RecentCandidates() {
 
   return (
     <motion.div variants={fadeUp} initial="initial" animate="animate"
-      className="col-span-1 overflow-hidden lg:col-span-2 rounded-2xl border border-white/10 bg-[#13131f] p-6">
+      className="col-span-1 overflow-hidden lg:col-span-2 rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6">
 
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-white">Recent Analyses</h2>
@@ -53,7 +53,7 @@ export default function RecentCandidates() {
                 className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-emerald-500/30 hover:bg-white/10">
 
                 <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1e1e2e] text-sm font-bold text-emerald-500 group-hover:bg-emerald-500 group-hover:text-bg transition-colors">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-card-2 text-sm font-bold text-emerald-500 group-hover:bg-emerald-500 group-hover:text-bg transition-colors">
                     {c.name?.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>

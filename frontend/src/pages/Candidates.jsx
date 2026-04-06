@@ -79,7 +79,7 @@ export default function Candidates() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+      className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
 
         {/* Header */}
@@ -102,10 +102,10 @@ export default function Candidates() {
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Search by name or role..."
               value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#13131f] py-2.5 pl-11 pr-4 text-white text-sm outline-none focus:border-emerald-500/40 transition-colors" />
+              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
           </div>
           <button onClick={handleSort}
-            className="px-4 py-2.5 rounded-xl border border-white/10 bg-[#13131f] text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
+            className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
             ↓ Sort by Score
           </button>
           <button onClick={handleShortlist}
@@ -118,7 +118,7 @@ export default function Candidates() {
         <div className="flex flex-col gap-2">
           {loading ? (
             Array(4).fill(0).map((_, i) => (
-              <div key={i} className="h-16 rounded-xl border border-white/10 bg-[#13131f] animate-pulse" />
+              <div key={i} className="h-16 rounded-xl border border-black/10 dark:border-white/10 bg-card animate-pulse" />
             ))
           ) : filtered.length === 0 ? (
             <div className="py-20 text-center">
@@ -134,9 +134,9 @@ export default function Candidates() {
 
               return (
                 <motion.div key={c?.id} layout
-                  className={`flex items-center justify-between p-4 bg-[#13131f] border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
+                  className={`flex items-center justify-between p-4 bg-card border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
                     isShortlisted ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0d0d1a] border-yellow-500/30' :
-                    isSelected    ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10'
+                    isSelected    ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-black/10 dark:border-white/10'
                   }`}>
 
                   {/* Left */}
@@ -145,11 +145,11 @@ export default function Candidates() {
                       onChange={() => toggleSelect(c?.id)}
                       onClick={e => e.stopPropagation()}
                       className="w-4 h-4 accent-emerald-500 cursor-pointer" />
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold flex-shrink-0">
                       {c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
                     </div>
                     <div>
-                      <p className="text-white text-sm font-semibold">{c?.name}</p>
+                      <p className="text-theme-1 text-sm font-semibold">{c?.name}</p>
                       <p className="text-gray-400 text-xs">{c?.role}</p>
                     </div>
                   </div>
@@ -173,7 +173,7 @@ export default function Candidates() {
                     }`}>
                       {score >= 85 ? 'Strong Match' : score >= 60 ? 'Match' : 'Weak'}
                     </span>
-                    <span className="text-white font-bold text-xl w-10 text-right">{score}</span>
+                    <span className="font-bold text-theme-1 text-xl w-10 text-right">{score}</span>
                     <button onClick={() => navigate(`/candidate/${c?.id}`)}
                       className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 transition-all active:scale-95">
                       View →
@@ -190,13 +190,13 @@ export default function Candidates() {
       <AnimatePresence>
         {selected.size >= 2 && (
           <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1a1a2e] border border-emerald-500/40 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-2xl">
-            <span className="text-white text-sm">Comparing {selected.size} candidates</span>
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-emerald-500/40 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-2xl">
+            <span className="text-theme-1 text-sm">Comparing {selected.size} candidates</span>
             <button onClick={() => navigate(`/compare?ids=${Array.from(selected).join(',')}`)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-xl transition-all active:scale-95">
+              className="bg-emerald-600 hover:bg-emerald-700 text-theme-1 text-sm px-4 py-2 rounded-xl transition-all active:scale-95">
               Compare Now →
             </button>
-            <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-white text-sm">✕</button>
+            <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-theme-1 text-sm">✕</button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -42,7 +42,7 @@ export default function CandidateProfile() {
 
   if (!candidate) {
     return (
-      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <div className="text-center">
           <p className="text-5xl mb-4">🔍</p>
           <h1 className="text-2xl font-bold text-white mb-3">Candidate Not Found</h1>
@@ -130,7 +130,7 @@ export default function CandidateProfile() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-12">
+      className="min-h-screen bg-page p-6 lg:p-12">
       <div className="mx-auto max-w-6xl">
 
         <div className="mb-8">
@@ -143,7 +143,7 @@ export default function CandidateProfile() {
 
           {/* ── Left Sidebar ── */}
           <motion.div variants={fadeUp} className="flex flex-col gap-6">
-            <MagneticCard className="p-8 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
               <div className="mb-6 flex flex-col items-center">
                 <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-bg shadow-glow-mint">
                   {candidate?.name?.split(' ')?.map(n => n?.[0])?.join('') || 'C'}
@@ -158,7 +158,7 @@ export default function CandidateProfile() {
                 </div>
               </div>
 
-              <div className="space-y-3 border-t border-white/10 pt-5 text-sm">
+              <div className="space-y-3 border-t border-black/10 dark:border-white/10 pt-5 text-sm">
                 {candidate?.location && <div className="flex items-center gap-3 text-gray-300"><MapPin className="h-4 w-4 text-gray-500" />{candidate.location}</div>}
                 {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" />{candidate.email}</div>}
                 {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" />{candidate.github}</div>}
@@ -173,14 +173,14 @@ export default function CandidateProfile() {
                     : <><Calendar className="h-4 w-4" />Schedule Interview</>}
                 </button>
                 <button onClick={handleDownload}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                   <Download className="h-4 w-4" /> Download Report
                 </button>
               </div>
             </MagneticCard>
 
             {/* Skill radar */}
-            <MagneticCard className="p-6 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card">
               <h3 className="mb-4 text-lg font-semibold text-white">Skill Analysis</h3>
               {candidate?.skills?.length > 0 ? (
                 <div className="mb-5 flex flex-wrap gap-2">
@@ -203,7 +203,7 @@ export default function CandidateProfile() {
             </MagneticCard>
 
             {/* GitHub Stats Card */}
-            <MagneticCard className="p-6 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Github className="h-4 w-4" /> GitHub Stats
@@ -245,7 +245,7 @@ export default function CandidateProfile() {
                       <div key={stat.label} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
                         <span className="text-gray-500">{stat.icon}</span>
                         <div>
-                          <p className="text-white text-sm font-semibold">{stat.value ?? '—'}</p>
+                          <p className="text-theme-1 text-sm font-semibold">{stat.value ?? '—'}</p>
                           <p className="text-gray-500 text-xs">{stat.label}</p>
                         </div>
                       </div>
@@ -280,17 +280,17 @@ export default function CandidateProfile() {
           {/* ── Main Content ── */}
           <motion.div variants={fadeUp} className="flex flex-col gap-6 lg:col-span-2">
 
-            <MagneticCard className="p-8 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
               <h3 className="mb-3 text-xl font-semibold text-white">AI Summary</h3>
               <p className="text-gray-400 leading-relaxed text-sm">{candidate?.summary || 'No summary available.'}</p>
             </MagneticCard>
 
-            <MagneticCard className="p-8 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
               <h3 className="mb-6 text-xl font-semibold text-white">Experience Timeline</h3>
-              <div className="relative border-l border-white/10 pl-6 ml-3 space-y-8">
+              <div className="relative border-l border-black/10 dark:border-white/10 pl-6 ml-3 space-y-8">
                 {candidate?.experience?.length > 0 ? candidate.experience.map((exp, i) => (
                   <motion.div variants={listItem} key={i} className="relative">
-                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[#13131f] bg-[#1e1e2e] text-emerald-400">
+                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-card bg-card-2 text-emerald-400">
                       {i === 0 ? <Layout className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
                     </span>
                     <h4 className="text-base font-bold text-white mb-1">{exp?.title}</h4>
@@ -305,7 +305,7 @@ export default function CandidateProfile() {
               </div>
             </MagneticCard>
 
-            <MagneticCard className="p-8 border-white/10 bg-[#13131f]">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
               <h3 className="mb-5 text-xl font-semibold text-white">Top Skills Matched</h3>
               <div className="space-y-3">
                 {(candidate?.skills?.slice(0, 4) || []).map((skill, i) => {
@@ -333,14 +333,14 @@ export default function CandidateProfile() {
 
         {/* ── Recommended Roles ── */}
         <motion.div variants={fadeUp} className="mt-6">
-          <div className="bg-[#13131f] border border-white/10 rounded-2xl p-6">
-            <h3 className="text-white font-semibold text-lg mb-1">Recommended Roles</h3>
+          <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6">
+            <h3 className="text-theme-1 font-semibold text-lg mb-1">Recommended Roles</h3>
             <p className="text-gray-500 text-xs mb-4">Based on skill overlap with open positions</p>
             <div className="space-y-3">
               {topJobs.map(job => (
                 <div key={job.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
                   <div>
-                    <p className="text-white text-sm font-medium">{job.title}</p>
+                    <p className="text-theme-1 text-sm font-medium">{job.title}</p>
                     <p className="text-gray-400 text-xs">{job.department} · {job.location}</p>
                   </div>
                   <div className="flex items-center gap-2">

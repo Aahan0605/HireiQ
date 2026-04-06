@@ -46,14 +46,14 @@ export default function DashboardLayout() {
   const isDark = theme === 'dark';
 
   // Adaptive class helpers
-  const sidebarBg  = isDark ? 'bg-[#13131f] border-white/10' : 'bg-white border-gray-200';
+  const sidebarBg  = isDark ? 'bg-card border-white/10' : 'bg-white border-gray-200';
   const linkActive = isDark
     ? 'bg-emerald-500/15 text-emerald-400 font-medium'
     : 'bg-emerald-50 text-emerald-700 font-medium';
   const linkIdle   = isDark
     ? 'text-gray-400 hover:bg-white/5 hover:text-white'
     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900';
-  const pageBg     = isDark ? 'bg-[#0d0d1a]' : 'bg-[#f0fdf4]';
+  const pageBg     = 'bg-page';
   const topBarBg   = isDark ? 'bg-[#0d0d1a]/90 border-white/10' : 'bg-white/90 border-gray-200';
   const logoAccent = isDark ? 'text-emerald-400' : 'text-emerald-600';
   const logoText   = isDark ? 'text-white' : 'text-gray-900';
@@ -109,7 +109,7 @@ export default function DashboardLayout() {
         {mobileOpen && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            className={`md:hidden fixed inset-0 z-40 ${isDark ? 'bg-[#0d0d1a]' : 'bg-white'} pt-20 px-6 transition-colors duration-300`}>
+            className={`md:hidden fixed inset-0 z-40 bg-page pt-20 px-6 transition-colors duration-300`}>
             <nav className="flex flex-col gap-3">
               {navItems.map(({ path, label, icon: Icon }) => (
                 <Link key={path} to={path} onClick={() => setMobileOpen(false)}

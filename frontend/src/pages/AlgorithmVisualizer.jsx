@@ -48,7 +48,7 @@ function MergeSortViz() {
   };
 
   return (
-    <div className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+    <div className="bg-card border border-white/10 rounded-xl p-6">
       <h2 className="text-white font-semibold text-lg mb-1">Merge Sort — Candidate Ranking</h2>
       <p className="text-gray-400 text-xs mb-5">Sorts candidates by score using divide-and-conquer. Time: O(n log n)</p>
 
@@ -117,7 +117,7 @@ function KnapsackViz() {
   };
 
   return (
-    <div className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+    <div className="bg-card border border-white/10 rounded-xl p-6">
       <h2 className="text-white font-semibold text-lg mb-1">0/1 Knapsack DP — Optimal Shortlist</h2>
       <p className="text-gray-400 text-xs mb-5">Maximises total score within hiring budget. Time: O(n × W)</p>
 
@@ -192,7 +192,7 @@ function BFSViz() {
   };
 
   return (
-    <div className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+    <div className="bg-card border border-white/10 rounded-xl p-6">
       <h2 className="text-white font-semibold text-lg mb-1">BFS — Skill Prerequisite Graph</h2>
       <p className="text-gray-400 text-xs mb-5">Traverses skill dependency graph to find learning path. Time: O(V + E)</p>
 
@@ -271,7 +271,7 @@ function GreedyViz() {
   const hours = ['9AM', '10AM', '11AM', '12PM', '1PM', '2PM'];
 
   return (
-    <div className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+    <div className="bg-card border border-white/10 rounded-xl p-6">
       <h2 className="text-white font-semibold text-lg mb-1">Greedy — Interview Scheduling</h2>
       <p className="text-gray-400 text-xs mb-5">Selects maximum non-overlapping interviews. Time: O(n log n)</p>
 
@@ -308,7 +308,7 @@ function GreedyViz() {
 // ── Main Page ─────────────────────────────────────────────────────────────
 export default function AlgorithmVisualizer() {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">⚡ Algorithm Lab</h1>

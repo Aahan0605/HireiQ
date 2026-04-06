@@ -51,7 +51,7 @@ export default function Dashboard() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] px-6 py-8 sm:px-10 lg:py-12">
+      className="min-h-screen bg-page px-6 py-8 sm:px-10 lg:py-12">
       <div className="mx-auto max-w-5xl">
 
         {/* Header */}
@@ -77,7 +77,7 @@ export default function Dashboard() {
           <motion.div
             initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
             onClick={() => navigate('/jobs')}
-            className="cursor-pointer rounded-2xl border border-white/10 bg-[#13131f] p-6 hover:border-cyan-500/40 transition-all">
+            className="cursor-pointer rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-cyan-500/40 transition-all">
             <div className="flex items-start justify-between">
               <p className="text-sm font-medium text-gray-400">Open Positions</p>
               <div className="rounded-lg bg-cyan-500/10 p-2 text-cyan-400">
@@ -95,7 +95,7 @@ export default function Dashboard() {
         <div className="grid gap-6 sm:grid-cols-2 mb-8">
           <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
             onClick={() => openModal('interviews')}
-            className="rounded-2xl border border-white/10 bg-[#13131f] p-6 hover:border-green-500/40 transition-all cursor-pointer text-left">
+            className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-green-500/40 transition-all cursor-pointer text-left">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-gray-400">Interviews Scheduled Today</p>
@@ -113,7 +113,7 @@ export default function Dashboard() {
 
           <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
             onClick={() => openModal('shortlist')}
-            className="rounded-2xl border border-white/10 bg-[#13131f] p-6 hover:border-emerald-500/40 transition-all cursor-pointer text-left">
+            className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-emerald-500/40 transition-all cursor-pointer text-left">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-gray-400">Optimal Shortlist Size</p>
@@ -144,11 +144,11 @@ export default function Dashboard() {
             onClick={() => setShowModal(false)}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#13131f] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
-              <h3 className="text-white font-semibold text-lg mb-4">{title}</h3>
+              className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+              <h3 className="text-theme-1 font-semibold text-lg mb-4">{title}</h3>
               <div className="mb-6">{content}</div>
               <button onClick={() => setShowModal(false)}
-                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-all active:scale-95">
+                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-theme-1 text-sm font-medium transition-all active:scale-95">
                 Close
               </button>
             </motion.div>

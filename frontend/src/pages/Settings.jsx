@@ -74,7 +74,7 @@ export default function Settings() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+      className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-3xl mx-auto space-y-6">
 
         <div>
@@ -84,7 +84,7 @@ export default function Settings() {
 
         {/* Algorithm Weights */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+          className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-white">Scoring Weights</h2>
             {loading && <RefreshCw className="h-4 w-4 text-gray-500 animate-spin" />}
@@ -94,7 +94,7 @@ export default function Settings() {
             {sliders.map(item => (
               <div key={item.label}>
                 <div className="flex justify-between text-sm mb-2">
-                  <label className="text-white font-medium">{item.label}</label>
+                  <label className="text-theme-1 font-medium">{item.label}</label>
                   <span className="text-emerald-400 font-semibold tabular-nums">{item.value}%</span>
                 </div>
                 <input type="range" min="0" max="100" value={item.value}
@@ -130,11 +130,11 @@ export default function Settings() {
 
         {/* Bias Audit Toggle */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+          className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Bias Audit</h2>
           <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
             <div>
-              <p className="text-white font-medium text-sm">Anonymization Engine</p>
+              <p className="text-theme-1 font-medium text-sm">Anonymization Engine</p>
               <p className="text-gray-400 text-xs mt-0.5">Enable blind scoring to reduce demographic bias in resume evaluation</p>
             </div>
             <button onClick={() => setBlindScoring(!blindScoring)}
@@ -152,7 +152,7 @@ export default function Settings() {
 
         {/* Match Thresholds */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="bg-[#13131f] border border-white/10 rounded-xl p-6">
+          className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Match Thresholds</h2>
           <div className="grid grid-cols-3 gap-4">
             {[
@@ -164,7 +164,7 @@ export default function Settings() {
                 <label className="block text-xs font-medium text-gray-400 mb-1">{item.label}</label>
                 <input type="number" min="0" max="100" value={item.value}
                   onChange={e => item.set(parseInt(e.target.value))}
-                  className={`w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm focus:outline-none ${item.color}`} />
+                  className={`w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-theme-1 text-sm focus:outline-none ${item.color}`} />
               </div>
             ))}
           </div>

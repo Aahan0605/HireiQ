@@ -110,4 +110,21 @@
   }
 
   .text-balance { text-wrap: balance; }
+
+  /* Theme-aware background utilities */
+  .bg-page {
+    background-color: var(--bg);
+  }
+  .bg-card {
+    background-color: var(--surface);
+  }
+  .bg-card-2 {
+    background-color: var(--surface-2);
+  }
+  .border-theme {
+    border-color: var(--border);
+  }
+  .text-theme-1 { color: var(--text-1); }
+  .text-theme-2 { color: var(--text-2); }
+  .text-theme-3 { color: var(--text-3); }
 }
