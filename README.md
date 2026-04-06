@@ -8,7 +8,7 @@
 
   <p>
     <b>A production-ready, AI-powered Applicant Tracking System built with FastAPI + React.<br/>
-    Ranks candidates using TF-IDF, Cosine Similarity, Max-Heap, Merge Sort, 0/1 Knapsack DP, BFS, Greedy, and KMP.</b>
+    Ranks candidates using TF-IDF, Cosine Similarity, Max-Heap, Merge Sort, 0/1 Knapsack DP, BFS, Greedy, KMP, and Rabin-Karp.</b>
   </p>
 
   <p>
@@ -23,7 +23,7 @@
   <p>
     <img src="https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
     <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind" />
-    <img src="https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E" alt="Vite" />
+    <img src="https://img.shields.io/badge/Vite_5-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E" alt="Vite" />
     <img src="https://img.shields.io/badge/Python_3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
     <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
     <img src="https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white" alt="Framer Motion" />
@@ -37,7 +37,7 @@
 
 | Feature | Description |
 | :--- | :--- |
-| **📄 PDF Resume Parsing** | Extracts text from uploaded PDFs using `pdfplumber`, cleans camelCase/ALLCAPS artifacts, and runs KMP pattern matching across 100+ known skills |
+| **📄 PDF Resume Parsing** | Extracts text from uploaded PDFs using `pdfplumber`, cleans camelCase/ALLCAPS artifacts, and runs KMP + Rabin-Karp pattern matching across 100+ known skills |
 | **🧠 TF-IDF Job Matching** | Vectorises resume text and job descriptions using a from-scratch `TFIDFVectorizer`, then ranks candidates per job using cosine similarity + max-heap |
 | **⚖️ Weighted Score Fusion** | User-configurable weights (Resume, GitHub, LeetCode, Portfolio) stored in-memory and applied to every upload — adjustable live from the Settings page |
 | **🐙 Live GitHub Signals** | Fetches real GitHub stats (repos, stars, commit frequency, languages, PRs) via async httpx and computes a 0–100 GitHub score |
@@ -48,6 +48,8 @@
 | **📅 Interview Scheduling** | Greedy activity selection maximises non-overlapping interview slots |
 | **🎯 Optimal Shortlist** | 0/1 Knapsack DP selects the best candidates within a hiring budget |
 | **🗺️ Skill Gap Analysis** | BFS on a skill prerequisite graph finds the shortest learning path from current skills to job requirements |
+| **📈 Algorithm Visualizer** | Interactive step-by-step visualisation of all core algorithms (TF-IDF, Heap, Merge Sort, KMP, BFS, Knapsack, Greedy) |
+| **🏠 Landing Page** | Public-facing marketing page with hero, features, and pricing sections |
 | **⬇️ Download Report** | One-click `.txt` candidate report download from any profile page |
 
 ---
@@ -122,6 +124,13 @@ Searches for 100+ skill keywords in resume text using the Knuth-Morris-Pratt fai
 - **Time:** O(n + m) vs O(n × m) for naive search
 - **Used in:** `feature_extractor.py` for all skill and certification detection
 
+### 8. Rabin-Karp — Multi-Pattern Skill Search
+**File:** `backend/algorithms/rabin_karp.py`
+
+Rolling-hash based multi-pattern search used alongside KMP for compound skill phrases (e.g. "machine learning", "react native").
+
+- **Time:** O(n + m) average · **Why alongside KMP:** Efficient for multi-keyword batch matching
+
 ---
 
 ## 🚀 Tech Stack
@@ -138,13 +147,14 @@ Searches for 100+ skill keywords in resume text using the Knuth-Morris-Pratt fai
 ### Frontend
 | Layer | Technology |
 | :--- | :--- |
-| Core | React 18 + Vite |
+| Core | React 18 + Vite 5 |
 | Styling | Tailwind CSS — dark theme `#0d0d1a` base |
-| Animation | Framer Motion |
+| Animation | Framer Motion 11 |
 | Charts | Recharts (RadarChart, ResponsiveContainer) |
 | Routing | React Router v6 |
 | Notifications | Sonner toast |
 | Icons | Lucide React |
+| File Upload | react-dropzone |
 
 ---
 
@@ -186,7 +196,7 @@ npm install
 npm run dev
 ```
 
-> Frontend runs at **`http://localhost:3000`** (or the port Vite assigns)
+> Frontend runs at **`http://localhost:5173`** (Vite default)
 
 ### 4. Optional — GitHub Token
 For higher GitHub API rate limits (60 → 5000 requests/hour), add a token:
@@ -246,11 +256,12 @@ HireiQ/
 │   │   ├── interview_scheduler.py# Greedy activity selection
 │   │   ├── skill_graph.py        # BFS skill prerequisite graph
 │   │   ├── kmp.py                # KMP string matching
-│   │   └── rabin_karp.py         # Rabin-Karp (multi-pattern search)
+│   │   └── rabin_karp.py         # Rabin-Karp multi-pattern search
 │   ├── api/
 │   │   ├── routes/
 │   │   │   ├── candidates.py     # Upload, GitHub, rank, shortlist, schedule
 │   │   │   ├── jobs.py           # CRUD + TF-IDF job matching
+│   │   │   ├── reports.py        # Report generation endpoints
 │   │   │   └── settings.py       # Weights + thresholds (active_weights store)
 │   │   ├── main.py               # FastAPI app + CORS + router registration
 │   │   └── models.py             # Pydantic request/response models
@@ -266,6 +277,7 @@ HireiQ/
 │   │   ├── github_signal.py      # Async GitHub API + score_github()
 │   │   ├── coding_signal.py      # Codeforces / LeetCode / CodeChef
 │   │   ├── linkedin_signal.py    # LinkedIn signal extraction
+│   │   ├── cert_verifier.py      # Certification verification
 │   │   └── portfolio_crawler.py  # Portfolio URL analysis
 │   ├── config.py                 # Scoring weights, role profiles, thresholds
 │   └── requirements.txt
@@ -278,8 +290,13 @@ HireiQ/
 │       │   ├── StatCard.jsx         # Animated metric card
 │       │   ├── RecentCandidates.jsx # Dashboard recent analyses list
 │       │   ├── SkillGapCard.jsx     # Skill gap + learning path display
-│       │   └── AlgorithmLegend.jsx  # Floating algorithm reference button
+│       │   ├── AlgorithmLegend.jsx  # Floating algorithm reference button
+│       │   ├── HeroSection.jsx      # Landing page hero
+│       │   ├── FeaturesSection.jsx  # Landing page features grid
+│       │   ├── PricingSection.jsx   # Landing page pricing tiers
+│       │   └── GrainOverlay.jsx     # CSS grain texture overlay
 │       ├── pages/
+│       │   ├── Landing.jsx          # Public marketing landing page
 │       │   ├── Dashboard.jsx        # Overview + 4 metric cards + modals
 │       │   ├── Candidates.jsx       # List + merge sort + compare bar
 │       │   ├── CandidateProfile.jsx # Full profile + GitHub stats + recommended roles
@@ -288,6 +305,7 @@ HireiQ/
 │       │   ├── JobMatches.jsx       # TF-IDF ranked candidates per job
 │       │   ├── CompareView.jsx      # Side-by-side radar + category scores
 │       │   ├── BiasReport.jsx       # Bias audit + donut chart
+│       │   ├── AlgorithmVisualizer.jsx # Step-by-step algorithm visualisation
 │       │   ├── Settings.jsx         # Live weight sliders + threshold config
 │       │   └── SignIn.jsx           # Auth page
 │       ├── data/
@@ -296,6 +314,7 @@ HireiQ/
 │           ├── animations.js        # Framer Motion variants
 │           └── hooks.js             # useMagneticTilt, useCountUp, useIntersection
 │
+├── docker-compose.yml
 └── README.md
 ```
 
