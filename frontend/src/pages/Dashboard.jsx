@@ -62,7 +62,7 @@ export default function Dashboard() {
             <p className="text-gray-400 mt-1">Here's what's happening today.</p>
           </div>
           <Link to="/analyze"
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-violet px-5 font-semibold text-bg transition-transform hover:scale-105 shadow-glow-violet">
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-500 px-5 font-semibold text-bg transition-transform hover:scale-105 shadow-glow-mint">
             <Sparkles className="mr-2 h-4 w-4" /> Analyze Candidate
           </Link>
         </motion.header>
@@ -113,19 +113,19 @@ export default function Dashboard() {
 
           <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
             onClick={() => openModal('shortlist')}
-            className="rounded-2xl border border-white/10 bg-[#13131f] p-6 hover:border-purple-500/40 transition-all cursor-pointer text-left">
+            className="rounded-2xl border border-white/10 bg-[#13131f] p-6 hover:border-emerald-500/40 transition-all cursor-pointer text-left">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-gray-400">Optimal Shortlist Size</p>
                 <p className="text-3xl font-bold text-white mt-2">3</p>
                 <p className="text-xs text-gray-500 mt-1">Click to view shortlist</p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/15 text-purple-400">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
                 <Target className="h-6 w-6" />
               </div>
             </div>
             <div className="h-1 w-full rounded-full bg-white/5">
-              <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-purple-400 to-violet" />
+              <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
             </div>
           </motion.button>
         </div>
@@ -148,7 +148,7 @@ export default function Dashboard() {
               <h3 className="text-white font-semibold text-lg mb-4">{title}</h3>
               <div className="mb-6">{content}</div>
               <button onClick={() => setShowModal(false)}
-                className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-all active:scale-95">
+                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-all active:scale-95">
                 Close
               </button>
             </motion.div>

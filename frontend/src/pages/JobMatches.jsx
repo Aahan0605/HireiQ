@@ -85,7 +85,7 @@ export default function JobMatches() {
             {matches.map((c, i) => (
               <motion.div key={c.id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
-                className="bg-[#13131f] border border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-purple-500/30 transition-all">
+                className="bg-[#13131f] border border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
 
                 {/* Rank badge */}
                 <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
@@ -93,7 +93,7 @@ export default function JobMatches() {
                 </div>
 
                 {/* Avatar */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold">
                   {c.name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </div>
 
@@ -128,7 +128,7 @@ export default function JobMatches() {
 
                 {/* View profile */}
                 <button onClick={() => navigate(`/candidate/${c.id}`)}
-                  className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-purple-600/25 hover:bg-purple-600/45 text-purple-300 transition-all">
+                  className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/45 text-emerald-300 transition-all">
                   View Profile →
                 </button>
               </motion.div>

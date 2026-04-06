@@ -89,7 +89,7 @@ export default function Jobs() {
             <p className="text-gray-400 text-sm mt-1">Manage open positions and find the best candidates</p>
           </div>
           <button onClick={() => setShowModal(true)}
-            className="flex-shrink-0 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-xl transition-all active:scale-95">
+            className="flex-shrink-0 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-all active:scale-95">
             + Post New Job
           </button>
         </div>
@@ -106,14 +106,14 @@ export default function Jobs() {
           <input
             type="text" placeholder="Search by title or department..."
             value={search} onChange={e => setSearch(e.target.value)}
-            className="flex-1 rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-4 text-white text-sm outline-none focus:border-purple-500/40 transition-colors"
+            className="flex-1 rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-4 text-white text-sm outline-none focus:border-emerald-500/40 transition-colors"
           />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-3 text-gray-300 text-sm outline-none focus:border-purple-500/40">
+            className="rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-3 text-gray-300 text-sm outline-none focus:border-emerald-500/40">
             {['All', 'Open', 'Closed', 'Draft'].map(s => <option key={s}>{s}</option>)}
           </select>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-3 text-gray-300 text-sm outline-none focus:border-purple-500/40">
+            className="rounded-xl border border-white/10 bg-[#13131f] py-2.5 px-3 text-gray-300 text-sm outline-none focus:border-emerald-500/40">
             {['All', 'Full-time', 'Part-time', 'Contract'].map(t => <option key={t}>{t}</option>)}
           </select>
         </div>
@@ -130,7 +130,7 @@ export default function Jobs() {
             <p className="text-5xl mb-4">💼</p>
             <p className="text-white font-semibold text-lg mb-2">No job listings yet</p>
             <button onClick={() => setShowModal(true)}
-              className="mt-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-xl transition-all">
+              className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl transition-all">
               Post Your First Job
             </button>
           </div>
@@ -143,7 +143,7 @@ export default function Jobs() {
               return (
                 <motion.div key={job.id}
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }}
-                  className="bg-[#13131f] border border-white/10 rounded-2xl p-5 hover:border-purple-500/30 transition-all flex flex-col gap-3">
+                  className="bg-[#13131f] border border-white/10 rounded-2xl p-5 hover:border-emerald-500/30 transition-all flex flex-col gap-3">
 
                   {/* Title + status */}
                   <div className="flex items-start justify-between gap-2">
@@ -165,7 +165,7 @@ export default function Jobs() {
                   {/* Skills */}
                   <div className="flex flex-wrap gap-1.5">
                     {visibleSkills.map(s => (
-                      <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300">{s}</span>
+                      <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{s}</span>
                     ))}
                     {extra > 0 && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-gray-400">+{extra} more</span>
@@ -175,7 +175,7 @@ export default function Jobs() {
                   {/* Actions */}
                   <div className="flex items-center justify-between pt-1 border-t border-white/5 mt-auto">
                     <button onClick={() => navigate(`/jobs/${job.id}/matches`)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-purple-600/25 hover:bg-purple-600/45 text-purple-300 transition-all font-medium">
+                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/45 text-emerald-300 transition-all font-medium">
                       View Matches →
                     </button>
                     <div className="flex gap-2">
@@ -220,7 +220,7 @@ export default function Jobs() {
                     <label className="block text-xs text-gray-400 mb-1">{label}</label>
                     <input type={type} required value={form[key]}
                       onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40" />
                   </div>
                 ))}
 
@@ -228,7 +228,7 @@ export default function Jobs() {
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">Employment Type</label>
                     <select value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40">
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40">
                       {['Full-time', 'Part-time', 'Contract'].map(t => <option key={t}>{t}</option>)}
                     </select>
                   </div>
@@ -236,7 +236,7 @@ export default function Jobs() {
                     <label className="block text-xs text-gray-400 mb-1">Experience (years)</label>
                     <input type="number" min="0" max="20" required value={form.experience_required}
                       onChange={e => setForm(f => ({ ...f, experience_required: e.target.value }))}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40" />
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40" />
                   </div>
                 </div>
 
@@ -244,20 +244,20 @@ export default function Jobs() {
                   <label className="block text-xs text-gray-400 mb-1">Job Description</label>
                   <textarea rows={4} required value={form.description}
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40 resize-none" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40 resize-none" />
                 </div>
 
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Required Skills</label>
                   <input type="text" placeholder="e.g. React, Python, Docker" required value={form.required_skills}
                     onChange={e => setForm(f => ({ ...f, required_skills: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40" />
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40" />
                 </div>
 
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">Status</label>
                   <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-purple-500/40">
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white text-sm outline-none focus:border-emerald-500/40">
                     {['Open', 'Draft'].map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
@@ -268,7 +268,7 @@ export default function Jobs() {
                     Cancel
                   </button>
                   <button type="submit" disabled={submitting}
-                    className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold transition-all disabled:opacity-50">
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all disabled:opacity-50">
                     {submitting ? 'Posting...' : 'Post Job'}
                   </button>
                 </div>

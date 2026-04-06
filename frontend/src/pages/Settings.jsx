@@ -66,7 +66,7 @@ export default function Settings() {
   };
 
   const sliders = [
-    { label: 'Resume Matching (TF-IDF + Cosine Similarity)', value: resume,    set: setResume,    color: 'accent-purple-500' },
+    { label: 'Resume Matching (TF-IDF + Cosine Similarity)', value: resume,    set: setResume,    color: 'accent-emerald-500' },
     { label: 'GitHub Analysis (Commit Frequency + Stars)',   value: github,    set: setGithub,    color: 'accent-cyan-500' },
     { label: 'LeetCode / Competitive Coding Score',          value: leetcode,  set: setLeetcode,  color: 'accent-green-500' },
     { label: 'Portfolio Review',                             value: portfolio, set: setPortfolio, color: 'accent-amber-500' },
@@ -95,7 +95,7 @@ export default function Settings() {
               <div key={item.label}>
                 <div className="flex justify-between text-sm mb-2">
                   <label className="text-white font-medium">{item.label}</label>
-                  <span className="text-purple-400 font-semibold tabular-nums">{item.value}%</span>
+                  <span className="text-emerald-400 font-semibold tabular-nums">{item.value}%</span>
                 </div>
                 <input type="range" min="0" max="100" value={item.value}
                   onChange={e => item.set(parseInt(e.target.value))}
@@ -121,7 +121,7 @@ export default function Settings() {
 
           <button onClick={handleSaveWeights} disabled={!isValid}
             className={`mt-5 px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all text-sm ${
-              isValid ? 'bg-purple-600 hover:bg-purple-700 text-white active:scale-95' : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              isValid ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95' : 'bg-gray-700 text-gray-500 cursor-not-allowed'
             }`}>
             <Save className="h-4 w-4" /> Save Weights
           </button>
@@ -169,7 +169,7 @@ export default function Settings() {
             ))}
           </div>
           <button onClick={handleSaveThresholds}
-            className="mt-5 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium flex items-center gap-2 text-sm transition-all active:scale-95">
+            className="mt-5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium flex items-center gap-2 text-sm transition-all active:scale-95">
             <Save className="h-4 w-4" /> Save Thresholds
           </button>
         </motion.div>

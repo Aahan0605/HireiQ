@@ -46,7 +46,7 @@ export default function CandidateProfile() {
         <div className="text-center">
           <p className="text-5xl mb-4">🔍</p>
           <h1 className="text-2xl font-bold text-white mb-3">Candidate Not Found</h1>
-          <Link to="/candidates" className="text-purple-400 hover:text-purple-300 text-sm">← Back to Candidates</Link>
+          <Link to="/candidates" className="text-emerald-400 hover:text-emerald-300 text-sm">← Back to Candidates</Link>
         </div>
       </div>
     );
@@ -145,12 +145,12 @@ export default function CandidateProfile() {
           <motion.div variants={fadeUp} className="flex flex-col gap-6">
             <MagneticCard className="p-8 border-white/10 bg-[#13131f]">
               <div className="mb-6 flex flex-col items-center">
-                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-violet to-mint text-3xl font-bold text-bg shadow-glow-violet">
+                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-bg shadow-glow-mint">
                   {candidate?.name?.split(' ')?.map(n => n?.[0])?.join('') || 'C'}
                 </div>
                 <h1 className="text-2xl font-bold text-white text-center">{candidate?.name}</h1>
                 <p className="text-gray-400 text-sm">{candidate?.role}</p>
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-mint/10 px-3 py-1 text-sm font-medium text-mint">
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-400">
                   <Award className="h-4 w-4" /> {candidate?.score}% Match
                 </div>
                 <div className={`mt-2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${trustColor}`}>
@@ -230,7 +230,7 @@ export default function CandidateProfile() {
                     }`}>{github.score}/100</span>
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-1.5">
-                    <div className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all"
+                    <div className="h-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all"
                       style={{ width: `${github.score}%` }} />
                   </div>
 
@@ -290,12 +290,12 @@ export default function CandidateProfile() {
               <div className="relative border-l border-white/10 pl-6 ml-3 space-y-8">
                 {candidate?.experience?.length > 0 ? candidate.experience.map((exp, i) => (
                   <motion.div variants={listItem} key={i} className="relative">
-                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[#13131f] bg-[#1e1e2e] text-mint">
+                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[#13131f] bg-[#1e1e2e] text-emerald-400">
                       {i === 0 ? <Layout className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
                     </span>
                     <h4 className="text-base font-bold text-white mb-1">{exp?.title}</h4>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-medium text-violet">{exp?.company}</span>
+                      <span className="text-sm font-medium text-emerald-500">{exp?.company}</span>
                       <span className="text-gray-600">•</span>
                       <span className="text-sm text-gray-400">{exp?.date}</span>
                     </div>
@@ -352,7 +352,7 @@ export default function CandidateProfile() {
                       {job.matchScore}% match
                     </span>
                     <button onClick={() => navigate(`/jobs/${job.id}/matches`)}
-                      className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
                       View Job →
                     </button>
                   </div>
