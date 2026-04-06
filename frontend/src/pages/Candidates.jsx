@@ -102,10 +102,10 @@ export default function Candidates() {
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Search by name or role..."
               value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#13131f] py-2.5 pl-11 pr-4 text-white text-sm outline-none focus:border-purple-500/40 transition-colors" />
+              className="w-full rounded-xl border border-white/10 bg-[#13131f] py-2.5 pl-11 pr-4 text-white text-sm outline-none focus:border-emerald-500/40 transition-colors" />
           </div>
           <button onClick={handleSort}
-            className="px-4 py-2.5 rounded-xl border border-white/10 bg-[#13131f] text-sm font-medium text-gray-300 hover:border-purple-500/40 transition-all">
+            className="px-4 py-2.5 rounded-xl border border-white/10 bg-[#13131f] text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
             ↓ Sort by Score
           </button>
           <button onClick={handleShortlist}
@@ -134,9 +134,9 @@ export default function Candidates() {
 
               return (
                 <motion.div key={c?.id} layout
-                  className={`flex items-center justify-between p-4 bg-[#13131f] border rounded-xl hover:border-purple-500/30 transition-all cursor-pointer ${
+                  className={`flex items-center justify-between p-4 bg-[#13131f] border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
                     isShortlisted ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0d0d1a] border-yellow-500/30' :
-                    isSelected    ? 'border-purple-500/50 bg-purple-500/5' : 'border-white/10'
+                    isSelected    ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10'
                   }`}>
 
                   {/* Left */}
@@ -144,8 +144,8 @@ export default function Candidates() {
                     <input type="checkbox" checked={isSelected}
                       onChange={() => toggleSelect(c?.id)}
                       onClick={e => e.stopPropagation()}
-                      className="w-4 h-4 accent-purple-500 cursor-pointer" />
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                      className="w-4 h-4 accent-emerald-500 cursor-pointer" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                       {c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
                     </div>
                     <div>
@@ -175,7 +175,7 @@ export default function Candidates() {
                     </span>
                     <span className="text-white font-bold text-xl w-10 text-right">{score}</span>
                     <button onClick={() => navigate(`/candidate/${c?.id}`)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 transition-all active:scale-95">
+                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 transition-all active:scale-95">
                       View →
                     </button>
                   </div>
@@ -190,10 +190,10 @@ export default function Candidates() {
       <AnimatePresence>
         {selected.size >= 2 && (
           <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1a1a2e] border border-purple-500/40 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-2xl">
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1a1a2e] border border-emerald-500/40 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-2xl">
             <span className="text-white text-sm">Comparing {selected.size} candidates</span>
             <button onClick={() => navigate(`/compare?ids=${Array.from(selected).join(',')}`)}
-              className="bg-purple-600 hover:bg-purple-700 text-white text-sm px-4 py-2 rounded-xl transition-all active:scale-95">
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-xl transition-all active:scale-95">
               Compare Now →
             </button>
             <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-white text-sm">✕</button>

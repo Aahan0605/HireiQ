@@ -39,7 +39,7 @@ export default function RecentCandidates() {
 
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-white">Recent Analyses</h2>
-        <Link to="/candidates" className="text-sm font-medium text-violet transition-colors hover:text-mint">
+        <Link to="/candidates" className="text-sm font-medium text-emerald-500 transition-colors hover:text-emerald-400">
           View all
         </Link>
       </div>
@@ -50,10 +50,10 @@ export default function RecentCandidates() {
           return (
             <motion.div key={c.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.08 } }}>
               <Link to={`/candidate/${c.id}`}
-                className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-violet/30 hover:bg-white/10">
+                className="group flex items-center justify-between rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-emerald-500/30 hover:bg-white/10">
 
                 <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1e1e2e] text-sm font-bold text-violet group-hover:bg-violet group-hover:text-bg transition-colors">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1e1e2e] text-sm font-bold text-emerald-500 group-hover:bg-emerald-500 group-hover:text-bg transition-colors">
                     {c.name?.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
@@ -69,7 +69,7 @@ export default function RecentCandidates() {
                 <div className="flex items-center gap-3 text-right">
                   <span className={`hidden sm:inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     c.score >= 90 ? 'bg-green-500/15 text-green-400' :
-                    c.score >= 80 ? 'bg-violet/15 text-violet' :
+                    c.score >= 80 ? 'bg-emerald-500/15 text-emerald-500' :
                                     'bg-amber-500/15 text-amber-400'
                   }`}>
                     {c.status}

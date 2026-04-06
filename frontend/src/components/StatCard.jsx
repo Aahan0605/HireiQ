@@ -10,7 +10,7 @@ export default function StatCard({ title, value, icon, trend, trendLabel, delay 
   const countRef = useCountUp(value, 1.8, inView);
 
   const isPositive = trend > 0;
-  const trendColor = isPositive ? 'text-mint' : 'text-amber';
+  const trendColor = isPositive ? 'text-emerald-400' : 'text-amber';
 
   return (
     <motion.div
@@ -24,7 +24,7 @@ export default function StatCard({ title, value, icon, trend, trendLabel, delay 
         <MagneticCard className="flex h-full flex-col justify-between p-6 transition-all group-hover:border-violet/40 group-hover:bg-surface-3">
           <div className="flex items-start justify-between">
             <h3 className="text-sm font-medium text-text-2 group-hover:text-text-1 transition-colors">{title}</h3>
-            <div className="rounded-lg bg-surface-3 p-2 text-violet group-hover:bg-violet group-hover:text-bg transition-all">
+            <div className="rounded-lg bg-surface-3 p-2 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-bg transition-all">
               {icon}
             </div>
           </div>

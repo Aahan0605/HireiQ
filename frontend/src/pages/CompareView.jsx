@@ -47,7 +47,7 @@ export default function CompareView() {
         <div className="text-center">
           <p className="text-4xl mb-3">🔍</p>
           <p className="text-white font-semibold mb-2">Select 2 candidates to compare</p>
-          <Link to="/candidates" className="text-purple-400 hover:text-purple-300 text-sm">← Back to Candidates</Link>
+          <Link to="/candidates" className="text-emerald-400 hover:text-emerald-300 text-sm">← Back to Candidates</Link>
         </div>
       </div>
     );
@@ -75,14 +75,14 @@ export default function CompareView() {
   const bLeads = Object.keys(SKILL_CATEGORIES).filter(c => scoresB[c] > scoresA[c]);
 
   const CandidateCard = ({ candidate, isWinner, categoryScores }) => (
-    <div className={`bg-[#13131f] border rounded-xl p-5 flex-1 ${isWinner ? 'border-purple-500/50' : 'border-white/10'}`}>
+    <div className={`bg-[#13131f] border rounded-xl p-5 flex-1 ${isWinner ? 'border-emerald-500/50' : 'border-white/10'}`}>
       {isWinner && (
-        <div className="mb-3 inline-flex items-center gap-1.5 bg-purple-500/20 text-purple-300 text-xs font-semibold px-3 py-1 rounded-full">
+        <div className="mb-3 inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 text-xs font-semibold px-3 py-1 rounded-full">
           🏆 Winner
         </div>
       )}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold flex-shrink-0">
           {candidate.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
         </div>
         <div>
@@ -102,7 +102,7 @@ export default function CompareView() {
             <div key={cat} className="flex items-center gap-2">
               <span className="text-gray-400 text-xs w-16 flex-shrink-0">{cat}</span>
               <div className="flex-1 bg-white/5 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-cyan-400"
+                <div className="h-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400"
                   style={{ width: `${score}%` }} />
               </div>
               <span className="text-gray-400 text-xs w-8 text-right">{score}%</span>
@@ -161,10 +161,10 @@ export default function CompareView() {
         {/* Category dominance */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="grid grid-cols-2 gap-4 mb-4">
-          <div className="bg-[#13131f] border border-purple-500/20 rounded-xl p-4">
-            <h4 className="text-purple-300 font-medium text-sm mb-2">{a.name} leads in</h4>
+          <div className="bg-[#13131f] border border-emerald-500/20 rounded-xl p-4">
+            <h4 className="text-emerald-300 font-medium text-sm mb-2">{a.name} leads in</h4>
             {aLeads.length > 0
-              ? <div className="flex flex-wrap gap-1.5">{aLeads.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300">{c}</span>)}</div>
+              ? <div className="flex flex-wrap gap-1.5">{aLeads.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{c}</span>)}</div>
               : <p className="text-gray-500 text-xs">No category advantage</p>}
           </div>
           <div className="bg-[#13131f] border border-cyan-500/20 rounded-xl p-4">
@@ -181,7 +181,7 @@ export default function CompareView() {
           <div className="bg-[#13131f] border border-white/10 rounded-xl p-5">
             <h4 className="text-white font-medium text-sm mb-3">Only {a.name} has</h4>
             {onlyA.length > 0
-              ? <div className="flex flex-wrap gap-1.5">{onlyA.map(s => <span key={s} className="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">{s}</span>)}</div>
+              ? <div className="flex flex-wrap gap-1.5">{onlyA.map(s => <span key={s} className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300">{s}</span>)}</div>
               : <p className="text-gray-500 text-xs">No unique skills</p>}
           </div>
           <div className="bg-[#13131f] border border-white/10 rounded-xl p-5">
