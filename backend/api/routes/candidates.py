@@ -15,6 +15,7 @@ import logging
 import time
 from typing import Any
 
+import uuid
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -235,12 +236,153 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
 
 
 # ─────────────────────────────────────────────────────────────
-# POST /candidates/upload-resume
+# POST /candidates/upload-resume  (single)
+# POST /candidates/upload-bulk    (multiple — up to 1000)
 # ─────────────────────────────────────────────────────────────
+
+
+async def _process_resume(file: UploadFile) -> dict:
+    """Shared processing logic for a single resume file."""
+    import tempfile, os, heapq
+    from algorithms.tfidf import TFIDFVectorizer
+    from algorithms.cosine_similarity import cosine_similarity
+    from .jobs import jobs_db
+    from .settings import active_weights
+    from db.supabase_client import save_candidate
+
+    ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    allowed_ext = {".pdf", ".txt", ".md", ".docx"}
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'.")
+
+    content = await file.read()
+
+    if ext == ".pdf":
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+        try:
+            text = await parse_resume_text(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+    else:
+        text = content.decode("utf-8", errors="replace")
+
+    if not text or not text.strip():
+        raise HTTPException(status_code=422, detail="Could not extract text from file.")
+
+    features = extract_features(text)
+
+    job_texts = [
+        f"{j['description']} {j['required_skills'].replace(',', ' ')}"
+        for j in jobs_db
+    ]
+
+    job_matches = []
+    final_score = max(55, min(99, len(features.get("skills", [])) * 6))
+
+    if job_texts:
+        corpus = [text] + job_texts
+        vectorizer = TFIDFVectorizer()
+        vectors = vectorizer.fit_transform(corpus)
+        resume_vec = vectors[0]
+
+        heap = []
+        for i, job_vec in enumerate(vectors[1:]):
+            sim = cosine_similarity(resume_vec, job_vec)
+            score = round(sim * 100, 1)
+            job = jobs_db[i]
+            job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
+            resume_skills = {s.lower() for s in features.get("skills", [])}
+            heapq.heappush(heap, (-score, i, {
+                "job_id": job["id"],
+                "job_title": job["title"],
+                "tfidf_score": score,
+                "matched_skills": sorted(job_skills & resume_skills),
+                "missing_skills": sorted(job_skills - resume_skills),
+            }))
+        job_matches = [heapq.heappop(heap)[2] for _ in range(len(heap))]
+
+        w = active_weights
+        total_w = sum(w.get(k, 0) for k in ("resume", "github", "leetcode", "portfolio"))
+        eff_w = w.get("resume", 0.4) / total_w if total_w > 0 else 1.0
+        best = job_matches[0]["tfidf_score"] if job_matches else 0
+        skill_density = min(100, len(features.get("skills", [])) * 6)
+        final_score = max(55, min(99, round((0.6 * best + 0.4 * skill_density) * eff_w)))
+
+    # Build candidate record and persist to Supabase
+    raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+    name = " ".join(w.capitalize() for w in raw_name.split())
+    email_m = __import__("re").search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+    github_m = __import__("re").search(r"github\.com/[\w-]+", text, __import__("re").I)
+    linkedin_m = __import__("re").search(r"linkedin\.com/in/[\w-]+", text, __import__("re").I)
+
+    candidate = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "role": "Software Engineer",
+        "email": email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com",
+        "github": github_m.group() if github_m else "",
+        "linkedin": linkedin_m.group() if linkedin_m else "",
+        "location": "Remote",
+        "score": final_score,
+        "status": "Strong Match" if final_score > 90 else "Match",
+        "summary": text[:400].strip(),
+        "skills": features.get("skills", []),
+        "experience": [],
+        "jobMatches": job_matches,
+        "radarData": [],
+    }
+
+    try:
+        await save_candidate(candidate)
+    except Exception as e:
+        logger.warning("Supabase save failed: %s", e)
+
+    return {
+        "filename": file.filename,
+        "text_length": len(text),
+        "extracted_text": text[:5000],
+        "features": features,
+        "tfidf_score": final_score,
+        "job_matches": job_matches,
+        "candidate_id": candidate["id"],
+    }
 
 
 @router.post("/upload-resume")
 async def upload_resume(file: UploadFile = File(...)):
+    return await _process_resume(file)
+
+
+@router.post("/upload-bulk")
+async def upload_bulk(files: list[UploadFile] = File(...)):
+    """
+    Bulk upload up to 1000 resumes concurrently.
+    Returns a list of results (success or error) per file.
+    """
+    if len(files) > 1000:
+        raise HTTPException(status_code=400, detail="Maximum 1000 files per batch.")
+
+    async def safe_process(f: UploadFile) -> dict:
+        try:
+            return await _process_resume(f)
+        except Exception as e:
+            return {"filename": f.filename, "error": str(e)}
+
+    results = await asyncio.gather(*[safe_process(f) for f in files])
+    succeeded = [r for r in results if "error" not in r]
+    failed    = [r for r in results if "error" in r]
+    return {
+        "total": len(files),
+        "succeeded": len(succeeded),
+        "failed": len(failed),
+        "results": list(results),
+    }
+
+
+@router.post("/upload-resume-legacy")
+async def upload_resume_legacy(file: UploadFile = File(...)):
     """
     Upload a resume (PDF/TXT), extract text via PyMuPDF/pdfplumber,
     run TF-IDF + cosine similarity against all seeded jobs, and return
@@ -258,117 +400,7 @@ async def upload_resume(file: UploadFile = File(...)):
     from algorithms.cosine_similarity import cosine_similarity
     from .jobs import jobs_db  # import seeded jobs
 
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided.")
-
-    allowed_ext = {".pdf", ".txt", ".md", ".docx"}
-    ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    if ext not in allowed_ext:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(allowed_ext)}",
-        )
-
-    content = await file.read()
-
-    # ── Step 1: Extract raw text ──────────────────────────────
-    if ext == ".pdf":
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-        try:
-            text = await parse_resume_text(tmp_path)  # uses pdfplumber
-        finally:
-            os.unlink(tmp_path)
-    else:
-        text = content.decode("utf-8", errors="replace")
-
-    if not text or not text.strip():
-        raise HTTPException(status_code=422, detail="Could not extract text from file.")
-
-    # ── Step 2: KMP-based skill + feature extraction ──────────
-    # Time Complexity: O(n * k) — KMP for each of k known skills
-    features = extract_features(text)
-
-    # ── Step 3 & 4: TF-IDF + Cosine Similarity against jobs ──
-    # Build corpus: resume text + all job description texts
-    # Time Complexity: O(N * L * V) for fit, O(min|A|,|B|) per similarity
-    job_texts = [
-        f"{j['description']} {j['required_skills'].replace(',', ' ')}"
-        for j in jobs_db
-    ]
-
-    if job_texts:
-        corpus = [text] + job_texts  # resume is index 0
-        vectorizer = TFIDFVectorizer()
-        vectors = vectorizer.fit_transform(corpus)  # list of sparse dicts
-
-        resume_vec = vectors[0]
-        job_vecs   = vectors[1:]
-
-        # ── Step 5: Max-heap to rank jobs by similarity ───────
-        # Time Complexity: O(j log j) where j = number of jobs
-        heap = []  # min-heap with negated scores for max-heap behaviour
-        for i, job_vec in enumerate(job_vecs):
-            sim = cosine_similarity(resume_vec, job_vec)  # 0.0 – 1.0
-            score = round(sim * 100, 1)                   # convert to 0–100
-            job = jobs_db[i]
-            job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
-            resume_skills = {s.lower() for s in features.get("skills", [])}
-            heapq.heappush(heap, (
-                -score,
-                i,
-                {
-                    "job_id":        job["id"],
-                    "job_title":     job["title"],
-                    "tfidf_score":   score,
-                    "matched_skills": sorted(job_skills & resume_skills),
-                    "missing_skills": sorted(job_skills - resume_skills),
-                }
-            ))
-
-        # Pop all to get descending order
-        job_matches = [heapq.heappop(heap)[2] for _ in range(len(heap))]
-
-        # ── Weighted score fusion using user-configured weights ──
-        # Import active weights set by the Settings page
-        from .settings import active_weights
-        w_resume    = active_weights.get("resume",    0.4)
-        w_github    = active_weights.get("github",    0.3)
-        w_leetcode  = active_weights.get("leetcode",  0.2)
-        w_portfolio = active_weights.get("portfolio", 0.1)
-
-        best_tfidf   = job_matches[0]["tfidf_score"] if job_matches else 0
-        skill_density = min(100, len(features.get("skills", [])) * 6)
-
-        # resume component = blend of TF-IDF match + skill density
-        resume_component = 0.6 * best_tfidf + 0.4 * skill_density
-
-        # github/leetcode/portfolio components are 0 until those signals
-        # are provided — they scale the resume component proportionally
-        # so the total always stays in [55, 99]
-        total_w = w_resume + w_github + w_leetcode + w_portfolio
-        effective_resume_weight = w_resume / total_w if total_w > 0 else 1.0
-
-        final_score = round(resume_component * effective_resume_weight
-                            + 0 * (w_github / total_w)      # GitHub: 0 until fetched
-                            + 0 * (w_leetcode / total_w)    # LeetCode: 0 until fetched
-                            + 0 * (w_portfolio / total_w))  # Portfolio: 0 until fetched
-        final_score = max(55, min(99, final_score))
-    else:
-        # No jobs seeded yet — fall back to skill density only
-        job_matches = []
-        skill_density = min(100, len(features.get("skills", [])) * 6)
-        final_score = max(55, min(99, skill_density))
-
-    return {
-        "filename":       file.filename,
-        "text_length":    len(text),
-        "extracted_text": text[:5000],   # cap response size
-        "features":       features,
-        "tfidf_score":    final_score,    # used by frontend for candidate score
-        "job_matches":    job_matches,    # ranked list of job similarities
-    }
+    raise HTTPException(status_code=410, detail="Use /upload-resume instead.")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -596,7 +628,31 @@ candidates_db = [
 @router.get("")
 async def get_all_candidates() -> list[dict]:
     """
-    GET /candidates — return all candidates.
-    Time Complexity: O(1)
+    GET /candidates — returns Supabase candidates merged with seeded defaults.
     """
-    return candidates_db
+    from db.supabase_client import fetch_all_candidates
+    try:
+        db_candidates = await fetch_all_candidates()
+        # Merge: DB rows take priority; append seeded ones not already in DB
+        db_ids = {c["id"] for c in db_candidates}
+        merged = db_candidates + [c for c in candidates_db if c["id"] not in db_ids]
+        return merged
+    except Exception as e:
+        logger.warning("Supabase fetch failed, falling back to in-memory: %s", e)
+        return candidates_db
+
+
+@router.get("/{candidate_id}")
+async def get_candidate(candidate_id: str) -> dict:
+    from db.supabase_client import fetch_candidate_by_id
+    try:
+        candidate = await fetch_candidate_by_id(candidate_id)
+        if candidate:
+            return candidate
+    except Exception as e:
+        logger.warning("Supabase fetch failed: %s", e)
+    # fallback to in-memory
+    match = next((c for c in candidates_db if c["id"] == candidate_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    return match
