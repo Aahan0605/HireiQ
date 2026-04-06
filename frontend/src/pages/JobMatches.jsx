@@ -10,7 +10,7 @@ const rankStyle = (i) => {
   if (i === 0) return 'bg-yellow-400/20 text-yellow-300 border-yellow-400/30';
   if (i === 1) return 'bg-gray-300/20 text-gray-300 border-gray-300/30';
   if (i === 2) return 'bg-amber-600/20 text-amber-400 border-amber-600/30';
-  return 'bg-white/5 text-gray-500 border-white/10';
+  return 'bg-white/5 text-gray-500 border-black/10 dark:border-white/10';
 };
 
 const scoreStyle = (s) =>
@@ -38,11 +38,11 @@ export default function JobMatches() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+      className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
 
         {/* Back */}
-        <Link to="/jobs" className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-6 transition-colors">
+        <Link to="/jobs" className="inline-flex items-center gap-2 text-gray-400 hover:text-theme-1 text-sm mb-6 transition-colors">
           <ArrowLeft size={16} /> Back to Jobs
         </Link>
 
@@ -66,7 +66,7 @@ export default function JobMatches() {
         {loading && (
           <div className="space-y-3">
             {Array(5).fill(0).map((_, i) => (
-              <div key={i} className="h-20 rounded-xl border border-white/10 bg-[#13131f] animate-pulse" />
+              <div key={i} className="h-20 rounded-xl border border-black/10 dark:border-white/10 bg-card animate-pulse" />
             ))}
           </div>
         )}
@@ -85,7 +85,7 @@ export default function JobMatches() {
             {matches.map((c, i) => (
               <motion.div key={c.id}
                 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
-                className="bg-[#13131f] border border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
+                className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
 
                 {/* Rank badge */}
                 <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
@@ -93,14 +93,14 @@ export default function JobMatches() {
                 </div>
 
                 {/* Avatar */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold">
                   {c.name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-white font-semibold text-sm">{c.name}</p>
+                    <p className="text-theme-1 font-semibold text-sm">{c.name}</p>
                     <p className="text-gray-400 text-xs">{c.role}</p>
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${scoreStyle(c.match_score)}`}>
                       {c.match_score}% match

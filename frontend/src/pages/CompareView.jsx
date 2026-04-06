@@ -43,10 +43,10 @@ export default function CompareView() {
 
   if (!a || !b) {
     return (
-      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
+      <div className="min-h-screen bg-page flex items-center justify-center">
         <div className="text-center">
           <p className="text-4xl mb-3">🔍</p>
-          <p className="text-white font-semibold mb-2">Select 2 candidates to compare</p>
+          <p className="text-theme-1 font-semibold mb-2">Select 2 candidates to compare</p>
           <Link to="/candidates" className="text-emerald-400 hover:text-emerald-300 text-sm">← Back to Candidates</Link>
         </div>
       </div>
@@ -75,18 +75,18 @@ export default function CompareView() {
   const bLeads = Object.keys(SKILL_CATEGORIES).filter(c => scoresB[c] > scoresA[c]);
 
   const CandidateCard = ({ candidate, isWinner, categoryScores }) => (
-    <div className={`bg-[#13131f] border rounded-xl p-5 flex-1 ${isWinner ? 'border-emerald-500/50' : 'border-white/10'}`}>
+    <div className={`bg-card border rounded-xl p-5 flex-1 ${isWinner ? 'border-emerald-500/50' : 'border-black/10 dark:border-white/10'}`}>
       {isWinner && (
         <div className="mb-3 inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-300 text-xs font-semibold px-3 py-1 rounded-full">
           🏆 Winner
         </div>
       )}
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-theme-1 flex-shrink-0">
           {candidate.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
         </div>
         <div>
-          <h3 className="text-white font-semibold text-sm">{candidate.name}</h3>
+          <h3 className="text-theme-1 font-semibold text-sm">{candidate.name}</h3>
           <p className="text-gray-400 text-xs">{candidate.role}</p>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function CompareView() {
 
       <div className="flex flex-wrap gap-1.5 mt-4">
         {(candidate.skills || []).slice(0, 5).map(s => (
-          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/10">{s}</span>
+          <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-gray-300 border border-black/10 dark:border-white/10">{s}</span>
         ))}
       </div>
     </div>
@@ -120,7 +120,7 @@ export default function CompareView() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-10">
+      className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
 
         <div className="mb-6 flex items-center justify-between">
@@ -140,8 +140,8 @@ export default function CompareView() {
 
         {/* Radar Chart — real TF-IDF category scores */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="bg-[#13131f] border border-white/10 rounded-xl p-6 mb-6">
-          <h3 className="text-white font-semibold mb-1">Skill Category Radar</h3>
+          className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 mb-6">
+          <h3 className="text-theme-1 font-semibold mb-1">Skill Category Radar</h3>
           <p className="text-gray-500 text-xs mb-4">
             Scores computed via keyword overlap per category — not synthetic offsets
           </p>
@@ -161,13 +161,13 @@ export default function CompareView() {
         {/* Category dominance */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="grid grid-cols-2 gap-4 mb-4">
-          <div className="bg-[#13131f] border border-emerald-500/20 rounded-xl p-4">
+          <div className="bg-card border border-emerald-500/20 rounded-xl p-4">
             <h4 className="text-emerald-300 font-medium text-sm mb-2">{a.name} leads in</h4>
             {aLeads.length > 0
               ? <div className="flex flex-wrap gap-1.5">{aLeads.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{c}</span>)}</div>
               : <p className="text-gray-500 text-xs">No category advantage</p>}
           </div>
-          <div className="bg-[#13131f] border border-cyan-500/20 rounded-xl p-4">
+          <div className="bg-card border border-cyan-500/20 rounded-xl p-4">
             <h4 className="text-cyan-300 font-medium text-sm mb-2">{b.name} leads in</h4>
             {bLeads.length > 0
               ? <div className="flex flex-wrap gap-1.5">{bLeads.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300">{c}</span>)}</div>
@@ -178,14 +178,14 @@ export default function CompareView() {
         {/* Unique skills diff */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="grid grid-cols-2 gap-4">
-          <div className="bg-[#13131f] border border-white/10 rounded-xl p-5">
-            <h4 className="text-white font-medium text-sm mb-3">Only {a.name} has</h4>
+          <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-5">
+            <h4 className="text-theme-1 font-medium text-sm mb-3">Only {a.name} has</h4>
             {onlyA.length > 0
               ? <div className="flex flex-wrap gap-1.5">{onlyA.map(s => <span key={s} className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300">{s}</span>)}</div>
               : <p className="text-gray-500 text-xs">No unique skills</p>}
           </div>
-          <div className="bg-[#13131f] border border-white/10 rounded-xl p-5">
-            <h4 className="text-white font-medium text-sm mb-3">Only {b.name} has</h4>
+          <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-5">
+            <h4 className="text-theme-1 font-medium text-sm mb-3">Only {b.name} has</h4>
             {onlyB.length > 0
               ? <div className="flex flex-wrap gap-1.5">{onlyB.map(s => <span key={s} className="text-xs px-2 py-1 rounded-full bg-cyan-500/20 text-cyan-300">{s}</span>)}</div>
               : <p className="text-gray-500 text-xs">No unique skills</p>}

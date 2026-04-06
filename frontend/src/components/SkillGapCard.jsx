@@ -24,7 +24,7 @@ const SkillGapCard = ({ candidateSkills = [], role = '' }) => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }}>
-      <MagneticCard className="p-8 border-border bg-[#13131f]">
+      <MagneticCard className="p-8 border-border bg-card">
         <h3 className="text-xl font-semibold text-white mb-6">Skill Gap Analysis</h3>
 
         {missing.length === 0 ? (
