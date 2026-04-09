@@ -49,19 +49,22 @@ export function useCountUp(end, duration = 1.4, inView = true) {
 
   useEffect(() => {
     if (!ref.current) return;
+
+    // Parse end value — guard against non-numeric strings like '—'
+    const numericEnd = typeof end === 'number' ? end : parseFloat(end);
+    const safeEnd = isNaN(numericEnd) ? 0 : numericEnd;
+
     if (inView) {
-      if (!countUpRef.current) {
-        countUpRef.current = new CountUp(ref.current, end, {
-          duration,
-          useEasing: true,
-          useGrouping: true,
-          separator: ',',
-        });
-      }
+      // Re-create CountUp when target value changes
+      countUpRef.current = new CountUp(ref.current, safeEnd, {
+        duration,
+        useEasing: true,
+        useGrouping: true,
+        separator: ',',
+        decimalPlaces: safeEnd % 1 !== 0 ? 1 : 0,
+      });
       if (!countUpRef.current.error) {
         countUpRef.current.start();
-      } else {
-        console.error(countUpRef.current.error);
       }
     }
   }, [end, duration, inView]);

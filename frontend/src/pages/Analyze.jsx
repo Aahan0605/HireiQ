@@ -6,7 +6,7 @@ import { UploadCloud, FileText, Loader2, Sparkles, CheckCircle2, XCircle, Files 
 import MagneticCard from '../components/MagneticCard';
 import { addCandidateFromCV } from '../data/candidates';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 export default function Analyze() {
   const navigate = useNavigate();

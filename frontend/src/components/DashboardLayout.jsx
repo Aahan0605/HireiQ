@@ -5,15 +5,16 @@ import {
   Menu, X, Sun, Moon,
   LayoutDashboard, FileSearch, Users,
   Briefcase, ShieldAlert, Settings,
+  Cpu, FileDown,
 } from 'lucide-react';
 
 const navItems = [
-  { label: 'Overview',     path: '/dashboard',   icon: LayoutDashboard },
-  { label: 'New Analysis', path: '/analyze',     icon: FileSearch },
-  { label: 'Candidates',   path: '/candidates',  icon: Users },
-  { label: 'Jobs',         path: '/jobs',        icon: Briefcase },
-  { label: 'Bias Report',  path: '/bias-report', icon: ShieldAlert },
-  { label: 'Settings',     path: '/settings',    icon: Settings },
+  { label: 'Overview',      path: '/dashboard',   icon: LayoutDashboard },
+  { label: 'New Analysis',  path: '/analyze',     icon: FileSearch },
+  { label: 'Candidates',    path: '/candidates',  icon: Users },
+  { label: 'Jobs',          path: '/jobs',        icon: Briefcase },
+  { label: 'Bias Report',   path: '/bias-report', icon: ShieldAlert },
+  { label: 'Settings',      path: '/settings',    icon: Settings },
 ];
 
 // Read saved preference, default to dark

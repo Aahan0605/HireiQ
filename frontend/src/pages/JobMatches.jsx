@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 // Gold / silver / bronze / gray rank colours
 const rankStyle = (i) => {

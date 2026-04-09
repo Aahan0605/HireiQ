@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, MapPin, Clock, Trash2, Edit2, X } from 'lucide-react';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 const statusStyle = {
   Open:   'bg-green-500/20 text-green-400',

@@ -60,3 +60,42 @@ def get_weights():
 def get_thresholds():
     # Time Complexity: O(1)
     return active_thresholds
+
+
+@router.get("/analytics")
+async def get_analytics():
+    """Return analytics summary from database + in-memory seeded data."""
+    from db.supabase_client import get_analytics_summary
+    from api.routes.candidates import candidates_db
+
+    db_analytics = await get_analytics_summary()
+
+    # Merge seeded in-memory candidates into the analytics when DB is sparse
+    seeded_count = len(candidates_db)
+    if seeded_count > 0:
+        seeded_strong = sum(1 for c in candidates_db if c.get("score", 0) >= 85)
+        seeded_match  = sum(1 for c in candidates_db if 60 <= c.get("score", 0) < 85)
+        seeded_avg    = sum(c.get("score", 0) for c in candidates_db) / seeded_count
+
+        db_total = db_analytics.get("total_candidates", 0)
+        combined_total = db_total + seeded_count
+        combined_strong = db_analytics.get("strong_matches", 0) + seeded_strong
+        combined_match  = db_analytics.get("matches", 0) + seeded_match
+
+        # Weighted average score
+        db_avg = db_analytics.get("average_score", 0)
+        combined_avg = ((db_avg * db_total) + (seeded_avg * seeded_count)) / combined_total if combined_total > 0 else 0
+
+        db_analytics["total_candidates"] = combined_total
+        db_analytics["strong_matches"]   = combined_strong
+        db_analytics["matches"]          = combined_match
+        db_analytics["average_score"]    = round(combined_avg, 1)
+
+    return db_analytics
+
+
+@router.get("/db-status")
+def get_db_status():
+    """Return database connection status."""
+    from db.supabase_client import get_db_status as _status
+    return _status()

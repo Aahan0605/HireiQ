@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, Save, RefreshCw } from 'lucide-react';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 export default function Settings() {
   const [resume,    setResume]    = useState(40);

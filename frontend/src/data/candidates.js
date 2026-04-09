@@ -118,7 +118,7 @@ export const addCandidateFromCV = async (file) => {
   let jobMatches   = [];     // ranked job matches from backend
 
   try {
-    const res = await fetch("http://localhost:8000/api/v1/candidates/upload-resume", {
+    const res = await fetch("/api/v1/candidates/upload-resume", {
       method: "POST",
       body: formData
     });

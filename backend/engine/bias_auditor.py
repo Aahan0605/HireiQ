@@ -86,6 +86,59 @@ _IDENTITY_FIELDS: set[str] = {
 }
 
 
+def redact_resume_text(resume_text: str) -> str:
+    """
+    Fully redact raw resume text for blind evaluation mode.
+    Redacts names, gender indicators, emails, phone numbers, and URLs.
+    """
+    if not resume_text:
+        return resume_text
+    
+    text = _redact_gender_indicators(resume_text)
+    text = _redact_names(text)
+    
+    # Redact email addresses
+    text = re.sub(r'[\w\.-]+@[\w\.-]+\.\w+', '[EMAIL REDACTED]', text)
+    # Redact phone numbers
+    text = re.sub(r'\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}', '[PHONE REDACTED]', text)
+    # Redact common URLs (LinkedIn, GitHub, etc)
+    text = re.sub(r'https?://[^\s]+', '[URL REDACTED]', text)
+    text = re.sub(r'(?:www\.)?[a-zA-Z0-9-]+\.(?:com|org|net|io|me)[/\w-]*', '[URL REDACTED]', text)
+    
+    return text
+
+
+async def compute_blind_score(
+    candidate_name: str,
+    resume_text: str,
+    jd_features: dict[str, Any],
+    role_type: str = "backend_engineer",
+) -> dict[str, Any]:
+    """
+    Computes a fully blind score by redacting the raw text up front,
+    parsing the redacted text into features, and preventing any signaling
+    from external integrations like GitHub.
+    """
+    from engine.score_fusion import compute_full_candidate_score
+    
+    blind_text = redact_resume_text(resume_text)
+    
+    # Run the standard scoring engine with the redacted text
+    # Exclude all external handles so they don't leak identity or bias
+    result = await compute_full_candidate_score(
+        candidate_name="[REDACTED]",
+        resume_text=blind_text,
+        jd_features=jd_features,
+        github_username="",
+        cf_handle="",
+        cc_username="",
+        lc_username="",
+        portfolio_url="",
+        role_type=role_type,
+    )
+    return result
+
+
 def create_blind_features(
     resume_features: dict[str, Any],
 ) -> dict[str, Any]:
