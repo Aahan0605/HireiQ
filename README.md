@@ -37,7 +37,7 @@
 
 | Feature | Description |
 | :--- | :--- |
-| **📄 PDF Resume Parsing** | Extracts text from uploaded PDFs using `pdfplumber`, cleans camelCase/ALLCAPS artifacts, and runs KMP + Rabin-Karp pattern matching across 100+ known skills |
+| **📄 Professional PDF Export**| Generates formal, color-coded candidate reports with match categories, scores, and timestamps using `fpdf2` logic |
 | **🧠 TF-IDF Job Matching** | Vectorises resume text and job descriptions using a from-scratch `TFIDFVectorizer`, then ranks candidates per job using cosine similarity + max-heap |
 | **⚖️ Weighted Score Fusion** | User-configurable weights (Resume, GitHub, LeetCode, Portfolio) stored in-memory and applied to every upload — adjustable live from the Settings page |
 | **🐙 Live GitHub Signals** | Fetches real GitHub stats (repos, stars, commit frequency, languages, PRs) via async httpx and computes a 0–100 GitHub score |
@@ -50,7 +50,7 @@
 | **🗺️ Skill Gap Analysis** | BFS on a skill prerequisite graph finds the shortest learning path from current skills to job requirements |
 | **📈 Algorithm Visualizer** | Interactive step-by-step visualisation of all core algorithms (TF-IDF, Heap, Merge Sort, KMP, BFS, Knapsack, Greedy) |
 | **🏠 Landing Page** | Public-facing marketing page with hero, features, and pricing sections |
-| **⬇️ Download Report** | One-click `.txt` candidate report download from any profile page |
+
 
 ---
 
@@ -139,7 +139,7 @@ Rolling-hash based multi-pattern search used alongside KMP for compound skill ph
 | Layer | Technology |
 | :--- | :--- |
 | API Framework | FastAPI (async, auto-docs at `/docs`) |
-| PDF Parsing | pdfplumber |
+| PDF Processing | pdfplumber, fpdf2 (for exports) |
 | HTTP Client | httpx (async GitHub API calls) |
 | Algorithms | Pure Python stdlib — no sklearn |
 | Server | Uvicorn with `--reload` |
@@ -221,6 +221,8 @@ Base URL: `http://localhost:8000/api/v1`
 | `POST` | `/candidates/shortlist` | 0/1 Knapsack optimal shortlist |
 | `POST` | `/candidates/schedule` | Greedy interview scheduling |
 | `POST` | `/candidates/skill-gap` | BFS skill learning path |
+| `GET` | `/reports/candidates/pdf` | Generate professional PDF candidate report |
+| `GET` | `/reports/candidates/csv` | Legacy CSV candidate export |
 
 ### Jobs
 | Method | Endpoint | Description |
