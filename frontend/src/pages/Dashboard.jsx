@@ -5,7 +5,7 @@ import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, C
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 // ── Initial interview data ─────────────────────────────────
 const INITIAL_INTERVIEWS = [
@@ -320,6 +320,7 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState(null);
   const [openJobs, setOpenJobs]   = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -327,6 +328,11 @@ export default function Dashboard() {
       .then(r => r.ok ? r.json() : [])
       .then(data => setOpenJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open').length : 0))
       .catch(() => setOpenJobs(0));
+
+    fetch(`${API}/settings/analytics`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setAnalytics(data))
+      .catch(() => setAnalytics(null));
   }, []);
 
   const openModal = (type) => { setModalType(type); setShowModal(true); };
@@ -354,9 +360,9 @@ export default function Dashboard() {
 
         {/* 4 Stat Cards */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <StatCard title="Total Candidates" value={1284} icon={<Users className="h-5 w-5" />}    trend={12}  trendLabel="vs last month" delay={0.1} />
-          <StatCard title="Resumes Parsed"   value={459}  icon={<FileSearch className="h-5 w-5" />} trend={8}   trendLabel="vs last month" delay={0.2} />
-          <StatCard title="Avg Match Rate"   value={78}   icon={<TrendingUp className="h-5 w-5" />} trend={-2}  trendLabel="vs last month" delay={0.3} />
+          <StatCard title="Total Candidates" value={analytics?.total_candidates ?? 0} icon={<Users className="h-5 w-5" />}    trend={analytics?.recent_uploads_7d ?? 0}  trendLabel="this week" delay={0.1} />
+          <StatCard title="Strong Matches"   value={analytics?.strong_matches ?? 0}  icon={<FileSearch className="h-5 w-5" />} trend={analytics?.matches ?? 0}   trendLabel="good matches" delay={0.2} />
+          <StatCard title="Avg Match Score"   value={analytics?.average_score ?? 0}   icon={<TrendingUp className="h-5 w-5" />} trend={0}  trendLabel="overall" delay={0.3} />
           <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
             onClick={() => navigate('/jobs')}
             className="cursor-pointer rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-cyan-500/40 transition-all">

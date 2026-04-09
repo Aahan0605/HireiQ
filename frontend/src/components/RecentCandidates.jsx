@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { fadeUp } from '../lib/animations';
 import { getAllCandidates } from '../data/candidates';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 // Find the job whose required_skills has the most keyword overlap with the candidate's role
 function getBestJobMatch(candidate, jobs) {

@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 // Client-side merge sort — returns sorted array + rank delta map
 function mergeSort(arr) {
@@ -77,6 +78,50 @@ export default function Candidates() {
     setSelected(next);
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API}/candidates/upload-csv`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Failed to upload CSV');
+      
+      const data = await response.json();
+      toast.success(data.message || 'CSV imported successfully!');
+      
+      // Refresh candidates list
+      fetch(`${API}/candidates`)
+        .then(r => r.json())
+        .then(data => setCandidates(Array.isArray(data) ? data : getAllCandidates()))
+        .catch(console.error);
+        
+    } catch (err) {
+      toast.error(err.message || 'Error uploading CSV');
+    } finally {
+      setLoading(false);
+      e.target.value = null; // reset input
+    }
+  };
+
+  const handleExport = () => {
+    if (filtered.length === 0) {
+      toast.error('No candidates to export');
+      return;
+    }
+
+    // We use the backend URL directly which provides proper Content-Disposition headers.
+    // This is much more reliable for preserving file names and extensions.
+    window.location.href = `${API}/reports/candidates/pdf`;
+    toast.success('ATS PDF Export started!');
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
       className="min-h-screen bg-page p-6 lg:p-10">
@@ -112,6 +157,22 @@ export default function Candidates() {
             className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
             ⭐ Optimal Shortlist
           </button>
+          <div className="flex items-center gap-3 ml-auto">
+            <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+              Import CSV
+              <input 
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                onChange={handleFileUpload} 
+                disabled={loading}
+              />
+            </label>
+            <button onClick={handleExport}
+              className="px-4 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition-all">
+              Export (PDF)
+            </button>
+          </div>
         </div>
 
         {/* List */}

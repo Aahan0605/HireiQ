@@ -9,7 +9,7 @@ import SkillGapCard from '../components/SkillGapCard';
 import { fadeUp, staggerContainer, listItem } from '../lib/animations';
 import { getCandidateById } from '../data/candidates';
 
-const API = 'http://localhost:8000/api/v1';
+const API = '/api/v1';
 
 export default function CandidateProfile() {
   const { id } = useParams();

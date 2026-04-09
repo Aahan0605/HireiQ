@@ -70,6 +70,7 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
 
     # Score all candidates concurrently
     tasks = []
+    blind_tasks = []
     for candidate in request.candidates:
         resume_text = candidate.resume_text or ""
         if not resume_text and candidate.resume_file_path:
@@ -92,8 +93,22 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
                 role_type=job.role_type,
             )
         )
+        
+        if request.enable_bias_audit:
+            from engine.bias_auditor import compute_blind_score
+            blind_tasks.append(
+                compute_blind_score(
+                    candidate_name=candidate.name,
+                    resume_text=resume_text,
+                    jd_features=jd_features,
+                    role_type=job.role_type,
+                )
+            )
 
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+    blind_results = []
+    if request.enable_bias_audit and blind_tasks:
+        blind_results = await asyncio.gather(*blind_tasks, return_exceptions=True)
 
     # Build heap for ranking
     heap = CandidateHeap(capacity=request.top_k)
@@ -107,6 +122,12 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
                 str(result),
             )
             continue
+            
+        if request.enable_bias_audit and blind_results and not isinstance(blind_results[i], Exception):
+            result["blind_score_value"] = blind_results[i].get("final_score", result.get("final_score", 0.0))
+        else:
+            result["blind_score_value"] = result.get("final_score", 0.0)
+
         scored_results.append(result)
         heap.push(
             candidate_id=result.get("candidate_name", f"candidate_{i}"),
@@ -145,9 +166,7 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
         bias_audits = []
         for sr in scored_results:
             full_score = sr.get("final_score", 0.0)
-            # Simulate blind score by removing identity-linked small variance
-            # In production, you'd re-score with create_blind_features()
-            blind_score = full_score  # Blind = same since our engine is skill-based
+            blind_score = sr.get("blind_score_value", full_score)
             ba = audit_bias(
                 full_score=full_score,
                 blind_score=blind_score,
@@ -378,6 +397,58 @@ async def upload_bulk(files: list[UploadFile] = File(...)):
         "succeeded": len(succeeded),
         "failed": len(failed),
         "results": list(results),
+    }
+
+
+@router.post("/upload-csv")
+async def upload_csv(file: UploadFile = File(...)):
+    """
+    Upload a CSV of candidates, parse it, and store into Supabase.
+    """
+    import csv
+    import io
+    from db.supabase_client import save_candidate
+
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+    
+    reader = csv.DictReader(io.StringIO(text))
+    results = []
+    for row in reader:
+        # Expected CSV columns from Export ATS:
+        # Name,Role,Score,Status,Match Percentage,Skills,Location,Experience (Years)
+        skills_str = row.get("Skills", "")
+        skills = [s.strip() for s in skills_str.split(",") if s.strip()]
+        
+        try:
+            score = int(row.get("Score", 0))
+        except ValueError:
+            score = 0
+            
+        candidate = {
+            "id": str(uuid.uuid4()),
+            "name": row.get("Name", "Unknown"),
+            "role": row.get("Role", "Candidate"),
+            "score": score,
+            "status": row.get("Status", "Match"),
+            "skills": skills,
+            "location": row.get("Location", "Remote"),
+            "email": f"{row.get('Name', 'unknown').lower().replace(' ', '.')}@example.com",
+            "experience": [],
+            "jobMatches": [],
+            "radarData": []
+        }
+        
+        try:
+            await save_candidate(candidate)
+            results.append({"name": candidate["name"], "status": "success"})
+        except Exception as e:
+            logger.warning("Supabase save failed for %s: %s", candidate["name"], e)
+            results.append({"name": candidate["name"], "status": "error", "error": str(e)})
+            
+    return {
+        "message": f"Processed {len(results)} rows",
+        "results": results
     }
 
 

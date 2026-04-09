@@ -12,3 +12,4 @@ sqlalchemy
 aiosqlite
 python-multipart
 supabase
+fpdf2
