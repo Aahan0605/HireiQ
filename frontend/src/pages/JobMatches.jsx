@@ -26,6 +26,10 @@ export default function JobMatches() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
 
+  const [blindReview] = useState(() => {
+    return localStorage.getItem('hireiq_blind_review') === 'true';
+  });
+
   useEffect(() => {
     Promise.all([
       fetch(`${API}/jobs/${id}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
@@ -82,30 +86,36 @@ export default function JobMatches() {
         {/* Ranked list */}
         {!loading && matches.length > 0 && (
           <div className="space-y-3 mb-6">
-            {matches.map((c, i) => (
-              <motion.div key={c.id}
-                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
-                className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
+            {matches.map((c, i) => {
+              const displayName = blindReview 
+                ? `Candidate ${c.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
+                : c.name;
+              const displayInitials = blindReview ? '🕵️' : c.name?.split(' ').map(n => n[0]).join('').slice(0, 2);
 
-                {/* Rank badge */}
-                <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
-                  #{i + 1}
-                </div>
+              return (
+                <motion.div key={c.id}
+                  initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+                  className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
 
-                {/* Avatar */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold">
-                  {c.name?.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-theme-1 font-semibold text-sm">{c.name}</p>
-                    <p className="text-gray-400 text-xs">{c.role}</p>
-                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${scoreStyle(c.match_score)}`}>
-                      {c.match_score}% match
-                    </span>
+                  {/* Rank badge */}
+                  <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
+                    #{i + 1}
                   </div>
+
+                  {/* Avatar */}
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold">
+                    {displayInitials}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-theme-1 font-semibold text-sm">{displayName}</p>
+                      <p className="text-gray-400 text-xs">{c.role}</p>
+                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${scoreStyle(c.match_score)}`}>
+                        {c.match_score}% match
+                      </span>
+                    </div>
 
                   {/* Matched skills */}
                   {c.matched_skills?.length > 0 && (
