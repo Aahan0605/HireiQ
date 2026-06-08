@@ -1210,3 +1210,95 @@ def get_skill_categories(skills: list[str]) -> dict[str, list[str]]:
 
     # Remove empty categories
     return {k: v for k, v in categories.items() if v}
+
+
+def generate_resume_insights(features: dict, text: str) -> dict:
+    """Generate detailed candidate insights and scores from extracted features."""
+    import re
+    skills = features.get("skills", [])
+    experience = features.get("experience", 0.0)
+    education = features.get("education", "unknown")
+    certs = features.get("certifications", [])
+
+    # 1. Completeness Score
+    score_parts = 0
+    if len(skills) >= 5: score_parts += 20
+    elif len(skills) >= 1: score_parts += 10
+    
+    if experience > 0: score_parts += 20
+    
+    if education != "unknown": score_parts += 20
+    
+    email_m = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+    github_m = re.search(r"github\.com/[\w-]+", text, re.I)
+    linkedin_m = re.search(r"linkedin\.com/in/[\w-]+", text, re.I)
+    
+    if email_m: score_parts += 15
+    if github_m: score_parts += 12
+    if linkedin_m: score_parts += 13
+    
+    completeness = min(100, max(20, score_parts))
+
+    # 2. ATS Score
+    ats_points = 30
+    if "experience" in text.lower(): ats_points += 15
+    if "education" in text.lower(): ats_points += 15
+    if "skills" in text.lower() or "technologies" in text.lower(): ats_points += 15
+    if len(skills) >= 8: ats_points += 15
+    if len(skills) > 20: ats_points -= 5
+    
+    ats_score = min(100, max(30, ats_points))
+
+    # 3. Career Progression
+    if experience >= 8.0:
+        progression = "Senior Leadership / Principal Tier"
+    elif experience >= 4.0:
+        progression = "Mid-Senior Level Specialist"
+    elif experience >= 1.5:
+        progression = "Independent Professional / Mid-Level"
+    else:
+        progression = "Early Career / Associate Level"
+
+    # 4. Strengths, Weaknesses, and Concerns
+    strengths = []
+    weaknesses = []
+    concerns = []
+
+    if len(skills) >= 10:
+        strengths.append("Broad technical skillset with over 10+ core technologies.")
+    if experience >= 5:
+        strengths.append("Established track record with 5+ years in engineering.")
+    if certs:
+        strengths.append(f"Validated industry competence with {len(certs)} certifications (e.g. {certs[0]}).")
+    if github_m:
+        strengths.append("Active open source developer footprint detected via GitHub.")
+    if len(strengths) == 0:
+        strengths.append("Possesses core fundamental engineering skills.")
+
+    if len(skills) < 5:
+        weaknesses.append("Narrow technical stack listing. Recommend expanding core skills.")
+    if experience < 1.0:
+        weaknesses.append("Limited commercial experience listed on profile.")
+    if education == "unknown":
+        weaknesses.append("No formal degree program detected on resume.")
+    if not certs:
+        weaknesses.append("No cloud or vendor certifications listed to validate domain competence.")
+    if len(weaknesses) == 0:
+        weaknesses.append("None identified. High compatibility across standard criteria.")
+
+    if not linkedin_m and not github_m:
+        concerns.append("Minimal online portfolio presence (missing both LinkedIn and GitHub links).")
+    if experience > 10.0 and len(skills) < 6:
+        concerns.append("Experience/Skill set mismatch: long tenure but very few modern skills listed.")
+    if len(concerns) == 0:
+        concerns.append("Resume structures align with industry best practices.")
+
+    return {
+        "completeness_score": completeness,
+        "ats_score": ats_score,
+        "career_progression": progression,
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "concerns": concerns,
+    }
+

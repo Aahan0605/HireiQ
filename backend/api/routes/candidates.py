@@ -365,6 +365,9 @@ async def _process_resume(file: UploadFile) -> dict:
     except Exception as e:
         logger.warning("Failed to compute blind score for candidate %s: %s", name, e)
 
+    from parser.feature_extractor import generate_resume_insights
+    insights = generate_resume_insights(features, text)
+
     candidate = {
         "id": str(uuid.uuid4()),
         "name": name,
@@ -381,6 +384,7 @@ async def _process_resume(file: UploadFile) -> dict:
         "experience": [],
         "jobMatches": job_matches,
         "radarData": [],
+        "insights": insights,
     }
 
     try:
@@ -499,6 +503,9 @@ async def background_process_resume_task(candidate_id: str, filename: str, conte
         except Exception as e:
             logger.warning("Failed to compute blind score for candidate %s: %s", name, e)
 
+        from parser.feature_extractor import generate_resume_insights
+        insights = generate_resume_insights(features, text)
+
         candidate = {
             "id": candidate_id,
             "name": name,
@@ -515,6 +522,7 @@ async def background_process_resume_task(candidate_id: str, filename: str, conte
             "experience": [],
             "jobMatches": job_matches,
             "radarData": [],
+            "insights": insights,
         }
         await save_candidate(candidate)
         
@@ -1013,6 +1021,37 @@ async def get_candidate(candidate_id: str) -> dict:
     if not match:
         raise HTTPException(status_code=404, detail="Candidate not found.")
     return match
+
+
+@router.patch("/{candidate_id}")
+async def update_candidate(candidate_id: str, payload: dict) -> dict:
+    from db.supabase_client import fetch_candidate_by_id, save_candidate
+    candidate = None
+    try:
+        candidate = await fetch_candidate_by_id(candidate_id)
+    except Exception as e:
+        logger.warning("Supabase fetch failed during patch: %s", e)
+    
+    in_memory = False
+    if not candidate:
+        # Check in-memory database
+        match = next((c for c in candidates_db if c["id"] == candidate_id), None)
+        if not match:
+            raise HTTPException(status_code=404, detail="Candidate not found.")
+        candidate = match
+        in_memory = True
+
+    # Update candidate fields
+    for k, v in payload.items():
+        candidate[k] = v
+
+    # Save to SQLite database or Supabase database if possible
+    try:
+        await save_candidate(candidate)
+    except Exception as e:
+        logger.warning("Failed to save patched candidate in database: %s", e)
+            
+    return {"status": "success", "candidate": candidate}
 
 
 # ── FEATURE B: AI-Driven Q&A Generator ──────────────────────────

@@ -143,6 +143,7 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             job_matches TEXT,
             radar_data  TEXT,
             qa          TEXT,
+            insights    TEXT,
             analyzed_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS jobs (
@@ -195,6 +196,12 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
         conn.commit()
     except sqlite3.OperationalError:
         pass  # Column already exists
+    # Migration: Ensure insights exists in older databases
+    try:
+        conn.execute("ALTER TABLE candidates ADD COLUMN insights TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
 
 # ─── Helper Serializers ────────────────────────────────────────
@@ -214,7 +221,7 @@ def _json_loads(v: str | None) -> Any:
 def _row_to_dict(row: sqlite3.Row) -> dict:
     """Convert an sqlite3.Row to a regular dict, deserializing JSON columns."""
     d = dict(row)
-    for col in ("skills", "experience", "job_matches", "radar_data", "qa"):
+    for col in ("skills", "experience", "job_matches", "radar_data", "qa", "insights"):
         if col in d:
             d[col] = _json_loads(d[col])
     return d
@@ -247,6 +254,7 @@ async def save_candidate(candidate: dict) -> dict:
                 "job_matches": candidate.get("jobMatches", candidate.get("job_matches", [])),
                 "radar_data":  candidate.get("radarData", candidate.get("radar_data", [])),
                 "qa":          candidate.get("qa", []),
+                "insights":    candidate.get("insights", {}),
             }
             result = sb.table("candidates").upsert(row).execute()
             return result.data[0] if result.data else row
@@ -258,8 +266,8 @@ async def save_candidate(candidate: dict) -> dict:
     conn.execute("""
         INSERT OR REPLACE INTO candidates
             (id, name, role, email, github, linkedin, location, score, status,
-             summary, skills, experience, job_matches, radar_data, qa, blind_score)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             summary, skills, experience, job_matches, radar_data, qa, blind_score, insights)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         candidate.get("id"),
         candidate.get("name"),
@@ -277,6 +285,7 @@ async def save_candidate(candidate: dict) -> dict:
         _json_dumps(candidate.get("radarData", candidate.get("radar_data", []))),
         _json_dumps(candidate.get("qa", [])),
         candidate.get("blind_score", candidate.get("score", 0)),
+        _json_dumps(candidate.get("insights", {})),
     ))
     conn.commit()
     return candidate

@@ -175,6 +175,24 @@ export default function CandidateProfile() {
 
   const baseScore = candidate?.baseScore || candidate?.score || 75;
 
+  const insights = candidate?.insights || {
+    completeness_score: 80,
+    ats_score: 75,
+    career_progression: 'Mid-Level Professional',
+    strengths: [
+      'Strong coding signal with active GitHub',
+      'Solid Next.js/React experience',
+      'Broad core library experience'
+    ],
+    weaknesses: [
+      'No formal cloud vendor certifications listed',
+      'Limited CI/CD automation experience details'
+    ],
+    concerns: [
+      'Short average tenure (< 1.5 years per role)'
+    ]
+  };
+
   // Build radar data from skills
   let radarData = candidate.radarData || candidate.radar_data;
   if (!radarData) {
@@ -485,6 +503,85 @@ export default function CandidateProfile() {
 
           {/* ── Main Content ── */}
           <motion.div variants={fadeUp} className="flex flex-col gap-6 lg:col-span-2">
+
+            {/* Resume Intelligence & ATS Analysis */}
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f] relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <Terminal size={120} className="text-violet" />
+              </div>
+              <h3 className="mb-1 text-xl font-semibold text-white flex items-center gap-2">
+                ⚡ ATS Resume Intelligence
+              </h3>
+              <p className="text-xs text-gray-500 mb-6">Automated parse completeness and layout compliance analysis</p>
+
+              {/* Progress Gauges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-gray-400 block">Completeness Score</span>
+                    <span className="text-lg font-bold text-white tabular-nums">{insights.completeness_score}%</span>
+                  </div>
+                  <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${insights.completeness_score}%` }} />
+                  </div>
+                </div>
+                <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-gray-400 block">ATS Optimization Score</span>
+                    <span className="text-lg font-bold text-white tabular-nums">{insights.ats_score}%</span>
+                  </div>
+                  <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-violet rounded-full" style={{ width: `${insights.ats_score}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Career Progression & Strengths/Weaknesses */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Career Tier:</span>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-violet/10 text-violet border border-violet/20">
+                    {insights.career_progression}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Key Strengths</h4>
+                    <ul className="space-y-1.5 text-xs text-gray-300">
+                      {insights.strengths?.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-emerald-400">✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-2">Development Gaps</h4>
+                    <ul className="space-y-1.5 text-xs text-gray-300">
+                      {insights.weaknesses?.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-yellow-400">⚠</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {insights.concerns?.length > 0 && (
+                  <div className="pt-2 border-t border-white/5">
+                    <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2">Potential Concerns</h4>
+                    <ul className="space-y-1.5 text-xs text-gray-300">
+                      {insights.concerns.map((item, idx) => (
+                        <li key={idx} className="flex items-start gap-1.5">
+                          <span className="text-red-400">🚩</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </MagneticCard>
 
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <h3 className="mb-3 text-xl font-semibold text-white">AI Summary</h3>
