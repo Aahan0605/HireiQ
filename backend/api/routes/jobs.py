@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -7,8 +7,13 @@ import heapq
 import uuid
 from collections import Counter
 from db.supabase_client import save_job, fetch_all_jobs, fetch_job_by_id, delete_job as delete_job_db
+from api.core.dependencies import get_current_user
 
-router = APIRouter(prefix="/jobs", tags=["Jobs"])
+router = APIRouter(
+    prefix="/jobs",
+    tags=["Jobs"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 class JobCreate(BaseModel):

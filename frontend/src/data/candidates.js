@@ -124,21 +124,17 @@ export const addCandidateFromCV = async (file) => {
     });
     if (res.ok) {
       const data = await res.json();
-      extractedText = data.extracted_text || "";
-      if (data.features) {
-        features = data.features;
-      }
-      // Use real TF-IDF score from backend if available
-      if (typeof data.tfidf_score === 'number') {
-        backendScore = data.tfidf_score;
-      }
-      // Store ranked job matches for the profile page
-      if (data.job_matches) {
-        jobMatches = data.job_matches;
-      }
+      return {
+        id: data.candidate_id,
+        name: data.name,
+        status: data.status,
+        score: 0,
+        role: "Software Engineer",
+      };
     }
   } catch (e) {
     console.error("Failed to upload resume to backend:", e);
+    throw e;
   }
 
   // Extract Email

@@ -16,8 +16,9 @@ import time
 from typing import Any
 
 import uuid
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
+from api.core.dependencies import get_current_user
 
 from api.models import (
     CandidateResult,
@@ -42,7 +43,11 @@ from signals.coding_signal import fetch_codeforces, fetch_codechef, fetch_leetco
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/candidates", tags=["candidates"])
+router = APIRouter(
+    prefix="/candidates",
+    tags=["candidates"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -394,34 +399,232 @@ async def _process_resume(file: UploadFile) -> dict:
     }
 
 
-@router.post("/upload-resume")
-async def upload_resume(file: UploadFile = File(...)):
-    return await _process_resume(file)
+async def background_process_resume_task(candidate_id: str, filename: str, content: bytes):
+    """Run in BackgroundTasks: Parse resume, match, compute blind score, save."""
+    import tempfile, os, heapq, uuid
+    from algorithms.tfidf import TFIDFVectorizer
+    from algorithms.cosine_similarity import cosine_similarity
+    from .settings import active_weights
+    from db.supabase_client import save_candidate, fetch_all_jobs
+    
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    text = ""
+    try:
+        if ext == ".pdf":
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                text = await parse_resume_text(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+        else:
+            text = content.decode("utf-8", errors="replace")
+            
+        if not text or not text.strip():
+            logger.warning("No text extracted from %s", filename)
+            # Update status to failed
+            candidate = {
+                "id": candidate_id,
+                "name": filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title(),
+                "status": "Extraction Failed",
+                "summary": "Error: Could not extract text from the upload file."
+            }
+            await save_candidate(candidate)
+            return
+
+        features = extract_features(text)
+        jobs_list = await fetch_all_jobs()
+        job_texts = [
+            f"{j['description']} {j['required_skills'].replace(',', ' ')}"
+            for j in jobs_list
+        ]
+
+        job_matches = []
+        final_score = max(55, min(99, len(features.get("skills", [])) * 6))
+
+        if job_texts:
+            corpus = [text] + job_texts
+            vectorizer = TFIDFVectorizer()
+            vectors = vectorizer.fit_transform(corpus)
+            resume_vec = vectors[0]
+
+            heap = []
+            for i, job_vec in enumerate(vectors[1:]):
+                sim = cosine_similarity(resume_vec, job_vec)
+                score = round(sim * 100, 1)
+                job = jobs_list[i]
+                job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
+                resume_skills = {s.lower() for s in features.get("skills", [])}
+                heapq.heappush(heap, (-score, i, {
+                    "job_id": job["id"],
+                    "job_title": job["title"],
+                    "tfidf_score": score,
+                    "matched_skills": sorted(job_skills & resume_skills),
+                    "missing_skills": sorted(job_skills - resume_skills),
+                }))
+            job_matches = [heapq.heappop(heap)[2] for _ in range(len(heap))]
+
+            w = active_weights
+            total_w = sum(w.get(k, 0) for k in ("resume", "github", "leetcode", "portfolio"))
+            eff_w = w.get("resume", 0.4) / total_w if total_w > 0 else 1.0
+            best = job_matches[0]["tfidf_score"] if job_matches else 0
+            skill_density = min(100, len(features.get("skills", [])) * 6)
+            final_score = max(55, min(99, round((0.6 * best + 0.4 * skill_density) * eff_w)))
+
+        raw_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+        name = " ".join(w.capitalize() for w in raw_name.split())
+        email_m = __import__("re").search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+        github_m = __import__("re").search(r"github\.com/[\w-]+", text, __import__("re").I)
+        linkedin_m = __import__("re").search(r"linkedin\.com/in/[\w-]+", text, __import__("re").I)
+
+        blind_score = final_score
+        try:
+            from engine.bias_auditor import compute_blind_score
+            if jobs_list:
+                best_job = jobs_list[0]
+                jd_features = {
+                    "required_skills": best_job["required_skills"],
+                    "preferred_skills": best_job.get("preferred_skills", ""),
+                    "min_experience": best_job.get("experience_required", 0),
+                    "max_experience": best_job.get("max_experience", 99),
+                }
+                blind_res = await compute_blind_score(
+                    candidate_name=name,
+                    resume_text=text,
+                    jd_features=jd_features,
+                    role_type="backend_engineer" if "backend" in best_job.get("title", "").lower() else "frontend_engineer"
+                )
+                blind_score = round(blind_res.get("final_score", final_score))
+        except Exception as e:
+            logger.warning("Failed to compute blind score for candidate %s: %s", name, e)
+
+        candidate = {
+            "id": candidate_id,
+            "name": name,
+            "role": "Software Engineer",
+            "email": email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com",
+            "github": github_m.group() if github_m else "",
+            "linkedin": linkedin_m.group() if linkedin_m else "",
+            "location": "Remote",
+            "score": final_score,
+            "blind_score": blind_score,
+            "status": "Strong Match" if final_score > 90 else "Match",
+            "summary": text[:400].strip(),
+            "skills": features.get("skills", []),
+            "experience": [],
+            "jobMatches": job_matches,
+            "radarData": [],
+        }
+        await save_candidate(candidate)
+        
+    except Exception as e:
+        logger.error("Error processing resume in background: %s", e)
+        # Update record with failure
+        try:
+            err_candidate = {
+                "id": candidate_id,
+                "name": filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title(),
+                "status": "Failed",
+                "summary": f"Error during processing: {str(e)}"
+            }
+            await save_candidate(err_candidate)
+        except Exception:
+            pass
 
 
-@router.post("/upload-bulk")
-async def upload_bulk(files: list[UploadFile] = File(...)):
+@router.post("/upload-resume", status_code=202)
+async def upload_resume(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    from db.supabase_client import save_candidate
+    
+    # 1. Create a unique candidate ID
+    candidate_id = str(uuid.uuid4())
+    
+    # 2. Setup a placeholder candidate record
+    raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+    name = " ".join(w.capitalize() for w in raw_name.split())
+    placeholder = {
+        "id": candidate_id,
+        "name": name,
+        "role": "Software Engineer",
+        "email": f"{raw_name.lower().replace(' ', '.')}@example.com",
+        "github": "",
+        "linkedin": "",
+        "location": "Remote",
+        "score": 0,
+        "blind_score": 0,
+        "status": "Analyzing",
+        "summary": "Analyzing resume, please wait...",
+        "skills": [],
+        "experience": [],
+        "jobMatches": [],
+        "radarData": [],
+    }
+    
+    # Save placeholder to DB
+    await save_candidate(placeholder)
+    
+    # 3. Read file content
+    content = await file.read()
+    
+    # 4. Enqueue background process task
+    background_tasks.add_task(background_process_resume_task, candidate_id, file.filename, content)
+    
+    return {
+        "candidate_id": candidate_id,
+        "name": name,
+        "status": "Analyzing",
+        "message": "Resume uploaded successfully and analysis is running in the background."
+    }
+
+
+@router.post("/upload-bulk", status_code=202)
+async def upload_bulk(background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)):
     """
-    Bulk upload up to 1000 resumes concurrently.
-    Returns a list of results (success or error) per file.
+    Bulk upload up to 1000 resumes concurrently in the background.
     """
     if len(files) > 1000:
         raise HTTPException(status_code=400, detail="Maximum 1000 files per batch.")
 
-    async def safe_process(f: UploadFile) -> dict:
-        try:
-            return await _process_resume(f)
-        except Exception as e:
-            return {"filename": f.filename, "error": str(e)}
+    from db.supabase_client import save_candidate
+    results = []
 
-    results = await asyncio.gather(*[safe_process(f) for f in files])
-    succeeded = [r for r in results if "error" not in r]
-    failed    = [r for r in results if "error" in r]
+    for file in files:
+        candidate_id = str(uuid.uuid4())
+        raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
+        name = " ".join(w.capitalize() for w in raw_name.split())
+        
+        placeholder = {
+            "id": candidate_id,
+            "name": name,
+            "role": "Software Engineer",
+            "email": f"{raw_name.lower().replace(' ', '.')}@example.com",
+            "github": "",
+            "linkedin": "",
+            "location": "Remote",
+            "score": 0,
+            "blind_score": 0,
+            "status": "Analyzing",
+            "summary": "Analyzing resume, please wait...",
+            "skills": [],
+            "experience": [],
+            "jobMatches": [],
+            "radarData": [],
+        }
+        await save_candidate(placeholder)
+        
+        content = await file.read()
+        background_tasks.add_task(background_process_resume_task, candidate_id, file.filename, content)
+        
+        results.append({
+            "candidate_id": candidate_id,
+            "name": name,
+            "status": "Analyzing"
+        })
+
     return {
         "total": len(files),
-        "succeeded": len(succeeded),
-        "failed": len(failed),
-        "results": list(results),
+        "results": results
     }
 
 

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
 import {
   Menu, X, Sun, Moon,
   LayoutDashboard, FileSearch, Users,
   Briefcase, ShieldAlert, Settings,
-  Cpu, FileDown,
+  Cpu, FileDown, LogOut
 } from 'lucide-react';
 
 const navItems = [
@@ -24,9 +25,14 @@ function getInitialTheme() {
 }
 
 export default function DashboardLayout() {
+  const { isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(getInitialTheme);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/signin" replace />;
+  }
 
   // Apply / remove .dark class on <html> whenever theme changes
   useEffect(() => {
@@ -88,6 +94,16 @@ export default function DashboardLayout() {
             </Link>
           ))}
         </nav>
+
+        <div className="mt-auto pt-6 border-t border-white/10">
+          <button
+            onClick={logout}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all ${linkIdle}`}
+          >
+            <LogOut className="h-4 w-4 flex-shrink-0" />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* ── Mobile Top Bar ── */}
@@ -118,6 +134,15 @@ export default function DashboardLayout() {
                   <Icon className="h-5 w-5" /> {label}
                 </Link>
               ))}
+              <button
+                onClick={() => {
+                  setMobileOpen(false);
+                  logout();
+                }}
+                className={`flex items-center gap-3 text-lg font-bold py-2 text-red-500`}
+              >
+                <LogOut className="h-5 w-5" /> Sign Out
+              </button>
             </nav>
           </motion.div>
         )}

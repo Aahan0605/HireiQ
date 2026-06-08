@@ -161,6 +161,13 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             status      TEXT DEFAULT 'Open',
             created_at  TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS users (
+            id          TEXT PRIMARY KEY,
+            email       TEXT UNIQUE,
+            hashed_password TEXT,
+            role        TEXT DEFAULT 'Recruiter',
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS analytics (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             event_type  TEXT,
@@ -168,6 +175,20 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             created_at  TEXT DEFAULT (datetime('now'))
         );
     """)
+    # Bootstrap default admin user if not exists
+    try:
+        conn.execute("""
+            INSERT OR IGNORE INTO users (id, email, hashed_password, role)
+            VALUES (?, ?, ?, ?)
+        """, (
+            "admin-uuid-1111",
+            "admin@hireiq.demo",
+            "$2b$12$EixZaYVK1fsAH1NCxT75SO.B569GqA/rUvXk.e.K/a0sUny4qQ0ty", # bcrypt hash of 'password123'
+            "Admin"
+        ))
+        conn.commit()
+    except Exception as e:
+        logger.warning("Failed to bootstrap default admin user: %s", e)
     # Migration: Ensure blind_score exists in older databases
     try:
         conn.execute("ALTER TABLE candidates ADD COLUMN blind_score INTEGER DEFAULT 0")
@@ -476,3 +497,66 @@ async def delete_job(job_id: str) -> bool:
     conn.execute("DELETE FROM jobs WHERE id = ?", (str(job_id),))
     conn.commit()
     return True
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#   PUBLIC API — users
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def save_user(user: dict) -> dict:
+    """Upsert a user into database."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            row = {
+                "id": user.get("id"),
+                "email": user.get("email"),
+                "hashed_password": user.get("hashed_password"),
+                "role": user.get("role", "Recruiter"),
+            }
+            result = sb.table("users").upsert(row).execute()
+            return result.data[0] if result.data else row
+        except Exception as e:
+            logger.warning("Supabase user upsert failed (%s) — falling back to SQLite", e)
+
+    conn = _get_sqlite()
+    conn.execute("""
+        INSERT OR REPLACE INTO users (id, email, hashed_password, role)
+        VALUES (?, ?, ?, ?)
+    """, (
+        user.get("id"),
+        user.get("email"),
+        user.get("hashed_password"),
+        user.get("role", "Recruiter"),
+    ))
+    conn.commit()
+    return user
+
+async def fetch_user_by_email(email: str) -> dict | None:
+    """Fetch user by email."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            result = sb.table("users").select("*").eq("email", email).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.warning("Supabase fetch user failed (%s) — falling back to SQLite", e)
+
+    conn = _get_sqlite()
+    row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    return dict(row) if row else None
+
+async def fetch_user_by_id(user_id: str) -> dict | None:
+    """Fetch user by ID."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            result = sb.table("users").select("*").eq("id", user_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.warning("Supabase fetch user failed (%s) — falling back to SQLite", e)
+
+    conn = _get_sqlite()
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+

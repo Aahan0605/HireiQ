@@ -2,13 +2,18 @@ import io
 import logging
 from fpdf import FPDF
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from api.core.dependencies import get_current_user
 from .candidates import candidates_db as SEEDED_CANDIDATES
 from db.supabase_client import fetch_all_candidates
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(
+    prefix="/reports",
+    tags=["reports"],
+    dependencies=[Depends(get_current_user)]
+)
 
 class CandidateReport(FPDF):
     def header(self):

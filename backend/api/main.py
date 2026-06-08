@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import jobs, candidates, settings, reports
+from .routes import jobs, candidates, settings, reports, auth
 
 app = FastAPI(title="HireIQ API", version="1.0.0")
 
@@ -15,6 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router,       prefix="/api/v1")
 app.include_router(candidates.router, prefix="/api/v1")
 app.include_router(jobs.router,       prefix="/api/v1")
 app.include_router(settings.router,   prefix="/api/v1")

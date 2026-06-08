@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
 import { useNavigate } from 'react-router-dom';
 import { UploadCloud, FileText, Loader2, Sparkles, CheckCircle2, XCircle, Files } from 'lucide-react';
+import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import { addCandidateFromCV } from '../data/candidates';
 
@@ -15,7 +16,6 @@ export default function Analyze() {
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
-  const [bulkResults, setBulkResults] = useState(null); // { succeeded, failed, results }
 
   const analysisSteps = [
     'Scanning semantic structure...',
@@ -32,7 +32,6 @@ export default function Analyze() {
     } else {
       setFiles(accepted.slice(0, 1000));
     }
-    setBulkResults(null);
   }, [mode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -57,11 +56,18 @@ export default function Analyze() {
       setCurrentStep(Math.min(Math.floor((p / 100) * analysisSteps.length), analysisSteps.length - 1));
     }, 200);
 
-    const newCandidate = await addCandidateFromCV(files[0]);
-    clearInterval(iv);
-    setProgress(100);
-    setCurrentStep(analysisSteps.length - 1);
-    setTimeout(() => navigate(`/candidate/${newCandidate.id}`), 800);
+    try {
+      const newCandidate = await addCandidateFromCV(files[0]);
+      clearInterval(iv);
+      setProgress(100);
+      setCurrentStep(analysisSteps.length - 1);
+      setTimeout(() => navigate('/candidates'), 800);
+    } catch (e) {
+      clearInterval(iv);
+      setAnalyzing(false);
+      setProgress(0);
+      toast.error('Failed to start candidate analysis.');
+    }
   };
 
   // ── Bulk upload ───────────────────────────────────────────────
@@ -78,11 +84,13 @@ export default function Analyze() {
         method: 'POST',
         body: formData,
       });
+      if (!res.ok) throw new Error('Bulk upload failed');
       const data = await res.json();
       setProgress(100);
-      setBulkResults(data);
+      toast.success(`Successfully enqueued ${files.length} resumes for background analysis!`);
+      setTimeout(() => navigate('/candidates'), 800);
     } catch (e) {
-      setBulkResults({ total: files.length, succeeded: 0, failed: files.length, error: e.message });
+      toast.error(e.message || 'Error uploading batch.');
     } finally {
       setAnalyzing(false);
     }
@@ -113,7 +121,7 @@ export default function Analyze() {
           {['single', 'bulk'].map((m) => (
             <button
               key={m}
-              onClick={() => { setMode(m); setFiles([]); setBulkResults(null); }}
+              onClick={() => { setMode(m); setFiles([]); }}
               className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-all ${
                 mode === m ? 'bg-violet text-white' : 'bg-surface-2 text-text-2 hover:text-white'
               }`}
@@ -126,55 +134,7 @@ export default function Analyze() {
 
         <MagneticCard className="p-8 border-border bg-surface-2/60 backdrop-blur-xl" maxTilt={3}>
           <AnimatePresence mode="wait">
-            {/* ── Bulk results view ── */}
-            {bulkResults ? (
-              <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                <div className="flex gap-6 justify-center text-center mb-4">
-                  <div>
-                    <p className="text-3xl font-bold text-white">{bulkResults.total}</p>
-                    <p className="text-text-2 text-sm">Total</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-green-400">{bulkResults.succeeded}</p>
-                    <p className="text-text-2 text-sm">Succeeded</p>
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold text-red-400">{bulkResults.failed}</p>
-                    <p className="text-text-2 text-sm">Failed</p>
-                  </div>
-                </div>
-
-                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                  {(bulkResults.results || []).map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-surface-3 rounded-lg px-3 py-2 text-sm">
-                      {r.error
-                        ? <XCircle size={15} className="text-red-400 shrink-0" />
-                        : <CheckCircle2 size={15} className="text-green-400 shrink-0" />}
-                      <span className="text-white truncate flex-1">{r.filename}</span>
-                      {r.error
-                        ? <span className="text-red-400 text-xs truncate max-w-[140px]">{r.error}</span>
-                        : <span className="text-mint text-xs">{r.tfidf_score}%</span>}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => { setFiles([]); setBulkResults(null); setAnalyzing(false); }}
-                    className="flex-1 h-10 rounded-xl bg-surface-3 text-text-2 hover:text-white text-sm transition-colors"
-                  >
-                    Upload More
-                  </button>
-                  <button
-                    onClick={() => navigate('/candidates')}
-                    className="flex-1 h-10 rounded-xl bg-violet text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                  >
-                    View All Candidates →
-                  </button>
-                </div>
-              </motion.div>
-
-            ) : !analyzing ? (
+            {!analyzing ? (
               /* ── Upload view ── */
               <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="flex flex-col items-center">
                 <div

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { AuthProvider } from './context/AuthContext';
 import GrainOverlay from './components/GrainOverlay';
 import AlgorithmLegend from './components/AlgorithmLegend';
 import DashboardLayout from './components/DashboardLayout';
@@ -72,7 +73,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <Router>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </Router>
   );
 }

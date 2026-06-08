@@ -1,14 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import MagneticCard from '../components/MagneticCard';
+import { useAuth } from '../context/AuthContext';
 
 export default function SignIn() {
   const navigate = useNavigate();
+  const { login, loading } = useAuth();
+  const [email, setEmail] = useState('admin@hireiq.demo');
+  const [password, setPassword] = useState('password123');
 
-  const handleAuth = (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -47,7 +56,8 @@ export default function SignIn() {
                 type="email"
                 id="email"
                 required
-                defaultValue="admin@hireiq.demo"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-xl border border-border bg-surface-3 p-3 text-white placeholder-text-3 outline-none transition-colors focus:border-violet focus:ring-1 focus:ring-violet"
               />
             </div>
@@ -60,17 +70,21 @@ export default function SignIn() {
                 type="password"
                 id="password"
                 required
-                defaultValue="password123"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-xl border border-border bg-surface-3 p-3 text-white placeholder-text-3 outline-none transition-colors focus:border-violet focus:ring-1 focus:ring-violet"
               />
             </div>
 
             <button
               type="submit"
-              className="group relative mt-2 flex w-full h-12 items-center justify-center overflow-hidden rounded-xl bg-white font-medium text-bg transition-transform hover:scale-[1.02]"
+              disabled={loading}
+              className="group relative mt-2 flex w-full h-12 items-center justify-center overflow-hidden rounded-xl bg-white font-medium text-bg transition-transform hover:scale-[1.02] disabled:opacity-50 disabled:pointer-events-none"
             >
               <span className="absolute inset-0 bg-gradient-to-r from-mint to-sky opacity-0 transition-opacity group-hover:opacity-100" />
-              <span className="relative z-10 group-hover:text-bg">Sign In</span>
+              <span className="relative z-10 group-hover:text-bg">
+                {loading ? 'Signing In...' : 'Sign In'}
+              </span>
             </button>
           </form>
 

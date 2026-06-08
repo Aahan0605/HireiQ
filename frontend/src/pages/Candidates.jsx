@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2 } from 'lucide-react';
+import { Search, Trash2, Cpu, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
@@ -36,11 +36,39 @@ export default function Candidates() {
   const deltaTimer = useRef(null);
 
   useEffect(() => {
-    fetch(`${API}/candidates`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(data => setCandidates(Array.isArray(data) ? data : getAllCandidates()))
-      .catch(() => { setCandidates(getAllCandidates()); setError('Backend offline — showing local data.'); })
-      .finally(() => setLoading(false));
+    let intervalId = null;
+
+    const fetchCandidates = () => {
+      fetch(`${API}/candidates`)
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(data => {
+          if (Array.isArray(data)) {
+            setCandidates(data);
+            
+            // Check if any candidate is still analyzing
+            const isAnyAnalyzing = data.some(c => c.status === 'Analyzing');
+            if (isAnyAnalyzing && !intervalId) {
+              intervalId = setInterval(fetchCandidates, 3000);
+            } else if (!isAnyAnalyzing && intervalId) {
+              clearInterval(intervalId);
+              intervalId = null;
+            }
+          } else {
+            setCandidates(getAllCandidates());
+          }
+        })
+        .catch(() => { 
+          setCandidates(getAllCandidates()); 
+          setError('Backend offline — showing local data.'); 
+        })
+        .finally(() => setLoading(false));
+    };
+
+    fetchCandidates();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   const filtered = candidates.filter(c =>
@@ -263,16 +291,30 @@ export default function Candidates() {
                       )}
                     </AnimatePresence>
 
-                    <span className={`text-xs px-3 py-1 rounded-full font-medium hidden sm:inline ${
-                      score >= 85 ? 'bg-green-500/20 text-green-400' :
-                      score >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
-                                    'bg-red-500/20 text-red-400'
-                    }`}>
-                      {score >= 85 ? 'Strong Match' : score >= 60 ? 'Match' : 'Weak'}
+                    {c?.status === 'Analyzing' ? (
+                      <span className="text-xs px-3 py-1 rounded-full font-medium bg-blue-500/20 text-blue-400 animate-pulse flex items-center gap-1.5">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Analyzing...
+                      </span>
+                    ) : (
+                      <span className={`text-xs px-3 py-1 rounded-full font-medium hidden sm:inline ${
+                        score >= 85 ? 'bg-green-500/20 text-green-400' :
+                        score >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
+                                      'bg-red-500/20 text-red-400'
+                      }`}>
+                        {score >= 85 ? 'Strong Match' : score >= 60 ? 'Match' : 'Weak'}
+                      </span>
+                    )}
+
+                    <span className="font-bold text-theme-1 text-xl w-10 text-right">
+                      {c?.status === 'Analyzing' ? '—' : score}
                     </span>
-                    <span className="font-bold text-theme-1 text-xl w-10 text-right">{score}</span>
-                    <button onClick={() => navigate(`/candidate/${c?.id}`)}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 transition-all active:scale-95">
+                    
+                    <button 
+                      onClick={() => navigate(`/candidate/${c?.id}`)}
+                      disabled={c?.status === 'Analyzing'}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                    >
                       View →
                     </button>
                     <button 
