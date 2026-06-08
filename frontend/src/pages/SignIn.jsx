@@ -7,8 +7,8 @@ import { useAuth } from '../context/AuthContext';
 export default function SignIn() {
   const navigate = useNavigate();
   const { login, loading } = useAuth();
-  const [email, setEmail] = useState('admin@hireiq.demo');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('REDACTED_EMAIL@example.com');
+  const [password, setPassword] = useState('REDACTED_PASSWORD');
 
   const handleAuth = async (e) => {
     e.preventDefault();

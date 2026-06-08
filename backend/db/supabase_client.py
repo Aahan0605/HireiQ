@@ -182,8 +182,8 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             VALUES (?, ?, ?, ?)
         """, (
             "admin-uuid-1111",
-            "admin@hireiq.demo",
-            "$2b$12$EixZaYVK1fsAH1NCxT75SO.B569GqA/rUvXk.e.K/a0sUny4qQ0ty", # bcrypt hash of 'password123'
+            "REDACTED_EMAIL@example.com",
+            "$2b$12$YxERqJmLZG7SO.yp/6u04eLU8K9NyXHRGcUV72AUkIAUKj7HN9e6W", # bcrypt hash of 'REDACTED_PASSWORD'
             "Admin"
         ))
         conn.commit()
