@@ -11,13 +11,53 @@ import { getCandidateById } from '../data/candidates';
 
 const API = '/api/v1';
 
+function QACard({ qa, index }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+  return (
+    <div className="p-4 bg-white/5 rounded-xl border border-white/10 flex flex-col gap-3 transition-colors hover:border-violet/40">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet/10 text-violet border border-violet/20 font-mono">
+          Skill: {qa.skill}
+        </span>
+        <span className="text-xs text-gray-500">Question #{index + 1}</span>
+      </div>
+      <p className="text-theme-1 text-sm font-medium leading-relaxed font-sans text-white">
+        {qa.question}
+      </p>
+      <div>
+        <button 
+          onClick={() => setShowAnswer(!showAnswer)}
+          className="text-xs font-semibold text-violet hover:text-fuchsia-400 transition-colors flex items-center gap-1"
+        >
+          {showAnswer ? "Hide Answer Blueprint" : "Show Answer Blueprint"}
+        </button>
+        {showAnswer && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-3 p-3.5 bg-black/40 border border-white/10 rounded-lg text-xs text-gray-300 leading-relaxed font-mono"
+          >
+            <span className="text-emerald-400 font-bold block mb-1">Expected Answer Concept:</span>
+            {qa.answer}
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CandidateProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [candidate, setCandidate] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [github, setGithub] = useState(null);   // live GitHub stats
   const [githubLoading, setGithubLoading] = useState(false);
+  const [qaList, setQaList] = useState([]);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
 
   // Fetch open jobs for Recommended Roles section
   useEffect(() => {
@@ -27,7 +67,30 @@ export default function CandidateProfile() {
       .catch(() => {});
   }, []);
 
-  const candidate = getCandidateById(id) || getCandidateById('1');
+  // Fetch candidate details dynamically
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API}/candidates/${id}`)
+      .then(r => {
+        if (!r.ok) throw new Error("Not found");
+        return r.json();
+      })
+      .then(data => {
+        setCandidate(data);
+        if (data.qa) {
+          setQaList(data.qa);
+        }
+      })
+      .catch(() => {
+        // fallback to local data
+        const localCand = getCandidateById(id) || getCandidateById('1');
+        setCandidate(localCand);
+        if (localCand?.qa) {
+          setQaList(localCand.qa);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
 
   // Fetch GitHub stats once we know the candidate's github handle
   useEffect(() => {
@@ -40,9 +103,20 @@ export default function CandidateProfile() {
       .finally(() => setGithubLoading(false));
   }, [candidate?.github]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 text-sm">Loading candidate profile data...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!candidate) {
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center">
+      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
         <div className="text-center">
           <p className="text-5xl mb-4">🔍</p>
           <h1 className="text-2xl font-bold text-white mb-3">Candidate Not Found</h1>
@@ -55,7 +129,7 @@ export default function CandidateProfile() {
   const baseScore = candidate?.baseScore || candidate?.score || 75;
 
   // Build radar data from skills
-  let radarData = candidate.radarData;
+  let radarData = candidate.radarData || candidate.radar_data;
   if (!radarData) {
     const topSkills = (candidate?.skills || []).slice(0, 6);
     radarData = topSkills.map(skill => ({
@@ -128,9 +202,75 @@ export default function CandidateProfile() {
     URL.revokeObjectURL(url);
   };
 
+  // Feature B Q&A trigger
+  const handleGenerateQA = async () => {
+    setQaLoading(true);
+    try {
+      const res = await fetch(`${API}/candidates/${id}/generate-qa`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      setQaList(data.qa);
+      toast.success('Interview Q&A generated successfully!');
+    } catch (e) {
+      toast.error('Failed to generate interview Q&A. Using mock questions.');
+      setQaList([
+        {
+          skill: "System Design",
+          question: "How would you design a scalable B2B SaaS architecture using Node.js/Python and PostgreSQL?",
+          answer: "You would use database partitioning/sharding, connection pooling with PgBouncer, caching with Redis, asynchronous worker queues (Celery/BullMQ) for heavy operations, and keep routes modular with clean APIs."
+        },
+        {
+          skill: "Security",
+          question: "How do you implement secure multi-tenant isolation in a SaaS application?",
+          answer: "Use Row Level Security (RLS) on PostgreSQL tables with a tenant_id context set per request, or separate schemas/databases depending on the enterprise compliance needs, combined with JWT token claims verification."
+        }
+      ]);
+    } finally {
+      setQaLoading(false);
+    }
+  };
+
+  // Feature D Webhook Sync
+  const handleGithubSync = async () => {
+    setSyncLoading(true);
+    try {
+      const res = await fetch(`${API}/candidates/${id}/webhook/github-sync`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Sync failed');
+      }
+      const data = await res.json();
+      toast.success(data.message || 'Profile synced via Webhook!');
+      
+      setCandidate(prev => ({
+        ...prev,
+        score: data.overall_score,
+        status: data.overall_score > 90 ? 'Strong Match' : 'Match',
+      }));
+
+      if (data.signals) {
+        setGithub(prev => ({
+          ...prev,
+          total_repos: data.signals.public_repos,
+          total_stars: data.signals.stars,
+          commit_frequency_per_week: data.signals.commit_frequency,
+          score: data.github_score,
+        }));
+      }
+    } catch (e) {
+      toast.error(e.message || 'Failed to sync GitHub profile via webhook.');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="min-h-screen bg-page p-6 lg:p-12">
+      className="min-h-screen bg-[#0d0d1a] p-6 lg:p-12">
       <div className="mx-auto max-w-6xl">
 
         <div className="mb-8">
@@ -143,13 +283,13 @@ export default function CandidateProfile() {
 
           {/* ── Left Sidebar ── */}
           <motion.div variants={fadeUp} className="flex flex-col gap-6">
-            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <div className="mb-6 flex flex-col items-center">
-                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-bg shadow-glow-mint">
+                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-[#0d0d1a] shadow-glow-mint">
                   {candidate?.name?.split(' ')?.map(n => n?.[0])?.join('') || 'C'}
                 </div>
                 <h1 className="text-2xl font-bold text-white text-center">{candidate?.name}</h1>
-                <p className="text-gray-400 text-sm">{candidate?.role}</p>
+                <p className="text-gray-400 text-sm text-center">{candidate?.role}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-400">
                   <Award className="h-4 w-4" /> {candidate?.score}% Match
                 </div>
@@ -167,7 +307,7 @@ export default function CandidateProfile() {
 
               <div className="mt-6 flex flex-col gap-2">
                 <button onClick={handleSchedule} disabled={isScheduling}
-                  className="w-full rounded-xl bg-white px-4 py-3 font-semibold text-bg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
+                  className="w-full rounded-xl bg-white px-4 py-3 font-semibold text-[#0d0d1a] transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
                   {isScheduling
                     ? <><Loader2 className="h-4 w-4 animate-spin" />Scheduling...</>
                     : <><Calendar className="h-4 w-4" />Schedule Interview</>}
@@ -180,7 +320,7 @@ export default function CandidateProfile() {
             </MagneticCard>
 
             {/* Skill radar */}
-            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card">
+            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-[#13131f]">
               <h3 className="mb-4 text-lg font-semibold text-white">Skill Analysis</h3>
               {candidate?.skills?.length > 0 ? (
                 <div className="mb-5 flex flex-wrap gap-2">
@@ -203,12 +343,19 @@ export default function CandidateProfile() {
             </MagneticCard>
 
             {/* GitHub Stats Card */}
-            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Github className="h-4 w-4" /> GitHub Stats
+            <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-[#13131f]">
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <h3 className="text-base font-semibold text-white flex items-center gap-1.5">
+                  <Github className="h-4 w-4 text-cyan-400 animate-pulse" /> Webhook Sync
                 </h3>
-                {githubLoading && <Loader2 className="h-4 w-4 text-gray-500 animate-spin" />}
+                <button 
+                  onClick={handleGithubSync}
+                  disabled={syncLoading || !candidate?.github}
+                  className="text-[10px] px-2 py-1 rounded bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                >
+                  {syncLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
+                  Sync Live
+                </button>
               </div>
 
               {!candidate?.github ? (
@@ -245,7 +392,7 @@ export default function CandidateProfile() {
                       <div key={stat.label} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
                         <span className="text-gray-500">{stat.icon}</span>
                         <div>
-                          <p className="text-theme-1 text-sm font-semibold">{stat.value ?? '—'}</p>
+                          <p className="text-[#9D74FF] text-sm font-semibold">{stat.value ?? '—'}</p>
                           <p className="text-gray-500 text-xs">{stat.label}</p>
                         </div>
                       </div>
@@ -280,17 +427,53 @@ export default function CandidateProfile() {
           {/* ── Main Content ── */}
           <motion.div variants={fadeUp} className="flex flex-col gap-6 lg:col-span-2">
 
-            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <h3 className="mb-3 text-xl font-semibold text-white">AI Summary</h3>
               <p className="text-gray-400 leading-relaxed text-sm">{candidate?.summary || 'No summary available.'}</p>
             </MagneticCard>
 
-            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
+            {/* Feature B: AI-Driven Technical Interview Q&A */}
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                    🧠 AI Technical Q&A Generator
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">Generates customized, deep technical interview questions testing skill gaps</p>
+                </div>
+                <button 
+                  onClick={handleGenerateQA} 
+                  disabled={qaLoading}
+                  className="rounded-xl bg-gradient-to-r from-violet to-fuchsia-600 hover:from-violet/90 hover:to-fuchsia-600/90 text-white font-semibold px-4 py-2.5 text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-violet/20"
+                >
+                  {qaLoading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing Gaps...</>
+                  ) : (
+                    <>Run AI Assessment</>
+                  )}
+                </button>
+              </div>
+
+              {qaList.length > 0 ? (
+                <div className="space-y-4">
+                  {qaList.map((qa, index) => (
+                    <QACard key={index} qa={qa} index={index} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 border border-dashed border-white/10 rounded-xl bg-white/5">
+                  <p className="text-2xl mb-2">📋</p>
+                  <p className="text-gray-400 text-sm">No Q&A generated yet. Click above to run the AI skill gap interview generator.</p>
+                </div>
+              )}
+            </MagneticCard>
+
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <h3 className="mb-6 text-xl font-semibold text-white">Experience Timeline</h3>
               <div className="relative border-l border-black/10 dark:border-white/10 pl-6 ml-3 space-y-8">
                 {candidate?.experience?.length > 0 ? candidate.experience.map((exp, i) => (
                   <motion.div variants={listItem} key={i} className="relative">
-                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-card bg-card-2 text-emerald-400">
+                    <span className="absolute -left-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-[#13131f] bg-[#1e1e2f] text-emerald-400">
                       {i === 0 ? <Layout className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
                     </span>
                     <h4 className="text-base font-bold text-white mb-1">{exp?.title}</h4>
@@ -305,7 +488,7 @@ export default function CandidateProfile() {
               </div>
             </MagneticCard>
 
-            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-card">
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <h3 className="mb-5 text-xl font-semibold text-white">Top Skills Matched</h3>
               <div className="space-y-3">
                 {(candidate?.skills?.slice(0, 4) || []).map((skill, i) => {
@@ -333,14 +516,14 @@ export default function CandidateProfile() {
 
         {/* ── Recommended Roles ── */}
         <motion.div variants={fadeUp} className="mt-6">
-          <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6">
-            <h3 className="text-theme-1 font-semibold text-lg mb-1">Recommended Roles</h3>
+          <div className="bg-[#13131f] border border-black/10 dark:border-white/10 rounded-2xl p-6">
+            <h3 className="text-white font-semibold text-lg mb-1">Recommended Roles</h3>
             <p className="text-gray-500 text-xs mb-4">Based on skill overlap with open positions</p>
             <div className="space-y-3">
               {topJobs.map(job => (
                 <div key={job.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl">
                   <div>
-                    <p className="text-theme-1 text-sm font-medium">{job.title}</p>
+                    <p className="text-white text-sm font-medium">{job.title}</p>
                     <p className="text-gray-400 text-xs">{job.department} · {job.location}</p>
                   </div>
                   <div className="flex items-center gap-2">

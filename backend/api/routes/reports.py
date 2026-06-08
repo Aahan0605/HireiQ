@@ -90,8 +90,49 @@ async def export_candidates_pdf():
 
 @router.get("/candidates/csv")
 async def export_candidates_csv():
-    # Keeping CSV for fallback if needed, but the primary is now PDF
+    """
+    Generate and stream a CSV report of all candidates.
+    """
     import csv
     import io
-    # ... existing implementation ...
+    from fastapi.responses import StreamingResponse
+    from db.supabase_client import fetch_all_candidates
+    from .candidates import candidates_db as SEEDED_CANDIDATES
+
+    try:
+        db_candidates = await fetch_all_candidates()
+        db_ids = {c["id"] for c in db_candidates}
+        all_candidates = db_candidates + [c for c in SEEDED_CANDIDATES if c["id"] not in db_ids]
+    except Exception as e:
+        logger.warning("Supabase fetch failed during CSV export: %s", e)
+        all_candidates = SEEDED_CANDIDATES
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write CSV Header
+    writer.writerow(["Name", "Role", "Score", "Status", "Skills", "Location", "Experience (Years)"])
+    
+    for c in all_candidates:
+        score = c.get("final_score") or c.get("score") or 0
+        status = c.get("status", "Match")
+        skills_str = ", ".join(c.get("skills", []))
+        experience_years = len(c.get("experience", []))
+        
+        writer.writerow([
+            c.get("name", "N/A"),
+            c.get("role", "N/A"),
+            score,
+            status,
+            skills_str,
+            c.get("location", "Remote"),
+            experience_years
+        ])
+        
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=HireIQ_Candidates_Report.csv"}
+    )
 

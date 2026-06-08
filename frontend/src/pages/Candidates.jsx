@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
@@ -76,6 +76,38 @@ export default function Candidates() {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     setSelected(next);
+  };
+
+  const handleDeleteCandidate = async (id, name) => {
+    if (!window.confirm(`Delete candidate "${name}"? This action cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API}/candidates/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success(`Candidate "${name}" deleted.`);
+      setCandidates(prev => prev.filter(c => c.id !== id));
+      setSelected(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      // Also remove from localStorage dynamically to maintain consistency if offline
+      const STORAGE_KEY = 'hireiq_dynamic_candidates';
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored.filter(c => c.id !== id)));
+    } catch (err) {
+      toast.error(`Failed to delete candidate: ${err.message}`);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      toast.error('No candidates to export');
+      return;
+    }
+    window.location.href = `${API}/reports/candidates/csv`;
+    toast.success('ATS CSV Export started!');
   };
 
   const handleFileUpload = async (e) => {
@@ -172,6 +204,10 @@ export default function Candidates() {
               className="px-4 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition-all">
               Export (PDF)
             </button>
+            <button onClick={handleExportCSV}
+              className="px-4 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm font-medium text-cyan-300 hover:bg-cyan-500/20 transition-all">
+              Export (CSV)
+            </button>
           </div>
         </div>
 
@@ -238,6 +274,16 @@ export default function Candidates() {
                     <button onClick={() => navigate(`/candidate/${c?.id}`)}
                       className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 transition-all active:scale-95">
                       View →
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCandidate(c?.id, c?.name);
+                      }}
+                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all active:scale-95"
+                      title="Delete Candidate"
+                    >
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </motion.div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, Clock, Edit2, Check, X, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
 
@@ -28,111 +29,242 @@ const ALL_CANDIDATES = [
 // Format rupees in lakhs — e.g. 8 → "₹8L"
 const fmt = (n) => `₹${n}L`;
 
-// 0/1 Knapsack DP — selects candidates maximising score within budget
-function knapsack(candidates, budget) {
-  const n = candidates.length;
-  const dp = Array(n + 1).fill(null).map(() => Array(budget + 1).fill(0));
-  for (let i = 1; i <= n; i++) {
-    const { score, cost } = candidates[i - 1];
-    for (let w = 0; w <= budget; w++) {
-      dp[i][w] = dp[i - 1][w];
-      if (w >= cost) dp[i][w] = Math.max(dp[i][w], dp[i - 1][w - cost] + score);
-    }
-  }
-  // Backtrack
-  const selected = [];
-  let w = budget;
-  for (let i = n; i > 0; i--) {
-    if (dp[i][w] !== dp[i - 1][w]) { selected.push(candidates[i - 1]); w -= candidates[i - 1].cost; }
-  }
-  return { selected, totalScore: dp[n][budget], budgetUsed: budget - w };
-}
-
 // ── Interview Schedule Modal ───────────────────────────────
-function InterviewModal({ onClose }) {
-  const [interviews, setInterviews] = useState(INITIAL_INTERVIEWS);
-  const [editingId, setEditingId]   = useState(null);
-  const [editForm, setEditForm]     = useState({});
-  const [showAdd, setShowAdd]       = useState(false);
-  const [newForm, setNewForm]       = useState({ name: '', role: '', start: '', end: '' });
+function InterviewModal({ onClose, onUpdateCount }) {
+  const [interviews, setInterviews] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [optimizing, setOptimizing] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newForm, setNewForm] = useState({ name: '', role: '', start: '09:00', end: '10:00' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
-  const startEdit = (iv) => { setEditingId(iv.id); setEditForm({ start: iv.start, end: iv.end }); };
-  const saveEdit  = (id) => {
-    setInterviews(prev => prev.map(iv => iv.id === id ? { ...iv, ...editForm, status: 'rescheduled' } : iv));
-    setEditingId(null);
+  useEffect(() => {
+    // Load from localStorage or default seed
+    const stored = localStorage.getItem('hireiq_interviews');
+    if (stored) {
+      setInterviews(JSON.parse(stored));
+    } else {
+      setInterviews(INITIAL_INTERVIEWS);
+      localStorage.setItem('hireiq_interviews', JSON.stringify(INITIAL_INTERVIEWS));
+    }
+
+    // Fetch candidates from DB to populate autocomplete/dropdown
+    fetch(`${API}/candidates`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setCandidates(data))
+      .catch(console.error);
+  }, []);
+
+  const saveInterviews = (updated) => {
+    setInterviews(updated);
+    localStorage.setItem('hireiq_interviews', JSON.stringify(updated));
+    if (onUpdateCount) {
+      const active = updated.filter(i => i.status === 'confirmed' || i.status === 'rescheduled').length;
+      onUpdateCount(active);
+    }
   };
+
+  const startEdit = (iv) => {
+    setEditingId(iv.id);
+    setEditForm({ start: iv.start, end: iv.end });
+  };
+
+  const saveEdit = (id) => {
+    if (editForm.start >= editForm.end) {
+      toast.error("Start time must be before end time");
+      return;
+    }
+    const updated = interviews.map(iv => iv.id === id ? { ...iv, ...editForm, status: 'rescheduled' } : iv);
+    saveInterviews(updated);
+    setEditingId(null);
+    toast.success("Time slot updated! Click 'Optimize Schedule' to resolve conflicts.");
+  };
+
   const cancelEdit = () => setEditingId(null);
-  const removeInterview = (id) => setInterviews(prev => prev.filter(iv => iv.id !== id));
+
+  const removeInterview = (id) => {
+    const updated = interviews.filter(iv => iv.id !== id);
+    saveInterviews(updated);
+    toast.success("Slot removed");
+  };
 
   const addInterview = () => {
-    if (!newForm.name || !newForm.start || !newForm.end) return;
-    setInterviews(prev => [...prev, { id: Date.now(), ...newForm, status: 'confirmed' }]);
-    setNewForm({ name: '', role: '', start: '', end: '' });
+    if (!newForm.name) {
+      toast.error("Please enter candidate name");
+      return;
+    }
+    if (newForm.start >= newForm.end) {
+      toast.error("Start time must be before end time");
+      return;
+    }
+    const newIv = {
+      id: Date.now(),
+      name: newForm.name,
+      role: newForm.role || 'Software Engineer',
+      start: newForm.start,
+      end: newForm.end,
+      status: 'pending'
+    };
+    const updated = [...interviews, newIv];
+    saveInterviews(updated);
+    setNewForm({ name: '', role: '', start: '09:00', end: '10:00' });
     setShowAdd(false);
+    toast.success("Interview slot added. Optimize schedule to verify conflict resolution!");
   };
 
-  const statusBadge = (s) => s === 'rescheduled'
-    ? 'bg-amber-500/20 text-amber-400'
-    : 'bg-green-500/20 text-green-400';
+  const parseTimeToFloat = (timeStr) => {
+    const [h, m] = timeStr.split(':').map(Number);
+    return h + m / 60;
+  };
+
+  const runGreedyOptimization = async () => {
+    if (interviews.length === 0) {
+      toast.error("No interview slots to optimize.");
+      return;
+    }
+    setOptimizing(true);
+    try {
+      const payload = interviews.map(iv => ({
+        id: iv.id,
+        name: iv.name,
+        role: iv.role,
+        start_time: parseTimeToFloat(iv.start),
+        end_time: parseTimeToFloat(iv.end)
+      }));
+
+      const res = await fetch(`${API}/candidates/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: payload })
+      });
+
+      if (!res.ok) throw new Error("Backend optimization failed.");
+      const result = await res.json();
+      
+      const selectedIds = new Set(result.selected_interviews.map(c => c.id));
+      const updated = interviews.map(iv => ({
+        ...iv,
+        status: selectedIds.has(iv.id) ? 'confirmed' : 'conflict'
+      }));
+
+      saveInterviews(updated);
+      toast.success(`Schedule optimized: ${result.total_slots} slots confirmed!`);
+    } catch (err) {
+      console.warn("Backend offline or error:", err);
+      toast.error("Backend error: Running local greedy scheduler.");
+      
+      const sorted = [...interviews].map(iv => ({
+        ...iv,
+        start_time: parseTimeToFloat(iv.start),
+        end_time: parseTimeToFloat(iv.end)
+      })).sort((a, b) => a.end_time - b.end_time);
+
+      const selectedIds = [];
+      let lastEnd = -1;
+      for (const iv of sorted) {
+        if (iv.start_time >= lastEnd) {
+          selectedIds.push(iv.id);
+          lastEnd = iv.end_time;
+        }
+      }
+
+      const updated = interviews.map(iv => ({
+        ...iv,
+        status: selectedIds.includes(iv.id) ? 'confirmed' : 'conflict'
+      }));
+      saveInterviews(updated);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const statusBadge = (s) => {
+    if (s === 'confirmed') return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+    if (s === 'rescheduled') return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+    if (s === 'conflict') return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+    return 'bg-gray-500/10 text-gray-400 border border-gray-500/20';
+  };
 
   return (
-    <div className="space-y-3">
-      {/* Interview rows */}
-      {interviews.map(iv => (
-        <div key={iv.id} className="bg-black/20 dark:bg-black/30 rounded-xl p-3">
-          {editingId === iv.id ? (
-            // ── Edit row ──
-            <div className="space-y-2">
-              <p className="text-theme-1 text-sm font-medium">{iv.name} <span className="text-theme-3 text-xs">— {iv.role}</span></p>
-              <div className="flex gap-2 items-center">
-                <input type="time" value={editForm.start}
-                  onChange={e => setEditForm(f => ({ ...f, start: e.target.value }))}
-                  className="flex-1 rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
-                <span className="text-theme-3 text-xs">to</span>
-                <input type="time" value={editForm.end}
-                  onChange={e => setEditForm(f => ({ ...f, end: e.target.value }))}
-                  className="flex-1 rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
-                <button onClick={() => saveEdit(iv.id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all"><Check size={13} /></button>
-                <button onClick={cancelEdit} className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"><X size={13} /></button>
-              </div>
+    <div className="space-y-4">
+      {/* Scrollable List of Interviews */}
+      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+        {interviews.length === 0 ? (
+          <div className="text-center py-6 text-theme-3 text-xs">
+            No interview slots added yet.
+          </div>
+        ) : (
+          interviews.map(iv => (
+            <div key={iv.id} className="bg-white/[0.03] dark:bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl p-3">
+              {editingId === iv.id ? (
+                <div className="space-y-2">
+                  <p className="text-theme-1 text-sm font-medium">{iv.name} <span className="text-theme-3 text-xs">— {iv.role}</span></p>
+                  <div className="flex gap-2 items-center">
+                    <input type="time" value={editForm.start}
+                      onChange={e => setEditForm(f => ({ ...f, start: e.target.value }))}
+                      className="flex-1 rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
+                    <span className="text-theme-3 text-xs">to</span>
+                    <input type="time" value={editForm.end}
+                      onChange={e => setEditForm(f => ({ ...f, end: e.target.value }))}
+                      className="flex-1 rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
+                    <button onClick={() => saveEdit(iv.id)} className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all"><Check size={13} /></button>
+                    <button onClick={cancelEdit} className="p-1.5 rounded-lg bg-red-500/10 text-rose-400 hover:bg-red-500/20 transition-all"><X size={13} /></button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-theme-1 text-sm font-medium truncate">{iv.name}</p>
+                    <p className="text-theme-3 text-xs">{iv.role}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-theme-2 text-xs font-mono bg-black/20 px-2 py-0.5 rounded border border-white/5">{iv.start} – {iv.end}</span>
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${statusBadge(iv.status)}`}>
+                      {iv.status}
+                    </span>
+                    <button onClick={() => startEdit(iv)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                      title="Reschedule">
+                      <Clock size={13} />
+                    </button>
+                    <button onClick={() => removeInterview(iv.id)}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      title="Remove">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          ) : (
-            // ── Display row ──
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-theme-1 text-sm font-medium truncate">{iv.name}</p>
-                <p className="text-theme-3 text-xs">{iv.role}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-theme-2 text-xs font-mono">{iv.start} – {iv.end}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(iv.status)}`}>
-                  {iv.status}
-                </span>
-                {/* Reschedule */}
-                <button onClick={() => startEdit(iv)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-                  title="Reschedule">
-                  <Clock size={13} />
-                </button>
-                {/* Remove */}
-                <button onClick={() => removeInterview(iv.id)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  title="Remove">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
+          ))
+        )}
+      </div>
 
       {/* Add new interview */}
       {showAdd ? (
-        <div className="bg-black/20 dark:bg-black/30 rounded-xl p-3 space-y-2">
+        <div className="bg-white/[0.03] dark:bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <input placeholder="Candidate name" value={newForm.name}
-              onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))}
-              className="rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
+            <div className="relative">
+              <input 
+                placeholder="Candidate name" 
+                value={newForm.name}
+                list="dashboard-candidates-list"
+                onChange={e => {
+                  const val = e.target.value;
+                  const cand = candidates.find(c => c.name === val);
+                  setNewForm(f => ({ 
+                    ...f, 
+                    name: val,
+                    role: cand ? cand.role : f.role
+                  }));
+                }}
+                className="w-full rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" 
+              />
+              <datalist id="dashboard-candidates-list">
+                {candidates.map(c => <option key={c.id} value={c.name} />)}
+              </datalist>
+            </div>
             <input placeholder="Role" value={newForm.role}
               onChange={e => setNewForm(f => ({ ...f, role: e.target.value }))}
               className="rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
@@ -147,73 +279,187 @@ function InterviewModal({ onClose }) {
               className="flex-1 rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
           </div>
           <div className="flex gap-2">
-            <button onClick={addInterview} className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-all">Add</button>
+            <button onClick={addInterview} className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all">Add Slot</button>
             <button onClick={() => setShowAdd(false)} className="flex-1 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-theme-2 text-xs hover:bg-black/5 dark:hover:bg-white/5 transition-all">Cancel</button>
           </div>
         </div>
       ) : (
         <button onClick={() => setShowAdd(true)}
-          className="w-full py-2 rounded-xl border border-dashed border-emerald-500/30 text-emerald-500 text-xs hover:bg-emerald-500/5 transition-all flex items-center justify-center gap-1.5">
+          className="w-full py-2.5 rounded-xl border border-dashed border-emerald-500/30 text-emerald-500 text-xs hover:bg-emerald-500/5 transition-all flex items-center justify-center gap-1.5">
           <Plus size={13} /> Add Interview Slot
         </button>
       )}
 
-      <div className="flex items-center justify-between pt-1 text-xs text-theme-3">
-        <span>{interviews.length} interview{interviews.length !== 1 ? 's' : ''} scheduled</span>
-        <span>{interviews.filter(i => i.status === 'rescheduled').length} rescheduled</span>
-      </div>
-
-      <button onClick={onClose} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-all active:scale-95">
-        Done
+      {/* Optimise Button */}
+      <button 
+        onClick={runGreedyOptimization} 
+        disabled={optimizing}
+        className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+      >
+        {optimizing ? (
+          <>
+            <RefreshCw className="h-4 w-4 animate-spin" /> Resolving Scheduling Conflicts...
+          </>
+        ) : (
+          <>
+            📅 Optimize Schedule (Greedy Selection)
+          </>
+        )}
       </button>
+
+      <div className="flex items-center justify-between pt-1 text-[11px] text-theme-3">
+        <span>{interviews.length} slots entered</span>
+        <span>{interviews.filter(i => i.status === 'confirmed' || i.status === 'rescheduled').length} active optimized slots</span>
+      </div>
     </div>
   );
 }
 
 // ── Optimal Shortlist Modal ────────────────────────────────
-function ShortlistModal({ onClose }) {
+function ShortlistModal({ onClose, onUpdateCount }) {
   const [budget, setBudget]         = useState(20);
-  const [pool, setPool]             = useState(ALL_CANDIDATES);
-  const [result, setResult]         = useState(() => knapsack(ALL_CANDIDATES, 20));
+  const [pool, setPool]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [calculating, setCalculating] = useState(false);
+  const [result, setResult]         = useState({ selected_candidates: [], total_score: 0, budget_used: 0, budget_remaining: 0 });
+  const [showAdd, setShowAdd]       = useState(false);
   const [newName, setNewName]       = useState('');
   const [newScore, setNewScore]     = useState('');
   const [newCost, setNewCost]       = useState('');
-  const [showAdd, setShowAdd]       = useState(false);
 
-  const recalculate = (b, p) => setResult(knapsack(p, b));
+  // 0/1 Knapsack DP local fallback
+  const knapsackLocal = (candidates, budget) => {
+    const n = candidates.length;
+    const dp = Array(n + 1).fill(null).map(() => Array(budget + 1).fill(0));
+    for (let i = 1; i <= n; i++) {
+      const { score, cost } = candidates[i - 1];
+      for (let w = 0; w <= budget; w++) {
+        dp[i][w] = dp[i - 1][w];
+        if (w >= cost) dp[i][w] = Math.max(dp[i][w], dp[i - 1][w - cost] + score);
+      }
+    }
+    const selected = [];
+    let w = budget;
+    for (let i = n; i > 0; i--) {
+      if (dp[i][w] !== dp[i - 1][w]) {
+        selected.push(candidates[i - 1]);
+        w -= candidates[i - 1].cost;
+      }
+    }
+    return { selected_candidates: selected, total_score: dp[n][budget], budget_used: budget - w, budget_remaining: w };
+  };
+
+  const runKnapsack = async (currentPool, currentBudget) => {
+    setCalculating(true);
+    try {
+      const payload = currentPool.map(c => ({
+        id: c.id,
+        name: c.name,
+        score: c.score,
+        cost: c.cost
+      }));
+
+      const res = await fetch(`${API}/candidates/shortlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidates: payload, budget: currentBudget })
+      });
+
+      if (!res.ok) throw new Error("Shortlisting backend request failed.");
+      const data = await res.json();
+      setResult(data);
+      localStorage.setItem('hireiq_shortlist_result', JSON.stringify(data));
+      if (onUpdateCount) onUpdateCount(data.selected_candidates.length);
+    } catch (err) {
+      console.warn("Backend shortlist error:", err);
+      const localResult = knapsackLocal(currentPool, currentBudget);
+      setResult(localResult);
+      localStorage.setItem('hireiq_shortlist_result', JSON.stringify(localResult));
+      if (onUpdateCount) onUpdateCount(localResult.selected_candidates.length);
+    } finally {
+      setCalculating(false);
+    }
+  };
+
+  useEffect(() => {
+    const savedBudget = localStorage.getItem('hireiq_shortlist_budget');
+    const initialBudget = savedBudget ? Number(savedBudget) : 20;
+    setBudget(initialBudget);
+
+    setLoading(true);
+    fetch(`${API}/candidates`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        let list = data;
+        if (list.length === 0) {
+          list = ALL_CANDIDATES;
+        }
+
+        const mapped = list.map(c => ({
+          id: c.id,
+          name: c.name,
+          score: Math.round(c.final_score || c.score || 0),
+          cost: c.cost || Math.max(2, Math.min(25, Math.round(((c.final_score || c.score || 70) / 10) + (c.experience?.length || 2) * 1.5)))
+        }));
+
+        setPool(mapped);
+        localStorage.setItem('hireiq_shortlist_pool', JSON.stringify(mapped));
+        runKnapsack(mapped, initialBudget);
+      })
+      .catch(() => {
+        setPool(ALL_CANDIDATES);
+        localStorage.setItem('hireiq_shortlist_pool', JSON.stringify(ALL_CANDIDATES));
+        runKnapsack(ALL_CANDIDATES, initialBudget);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleBudgetChange = (val) => {
     const b = Math.max(1, Math.min(100, Number(val)));
     setBudget(b);
-    recalculate(b, pool);
+    localStorage.setItem('hireiq_shortlist_budget', String(b));
+    runKnapsack(pool, b);
   };
 
   const removeCandidate = (id) => {
     const next = pool.filter(c => c.id !== id);
     setPool(next);
-    recalculate(budget, next);
+    localStorage.setItem('hireiq_shortlist_pool', JSON.stringify(next));
+    runKnapsack(next, budget);
+    toast.success("Candidate removed from pool");
   };
 
   const addCandidate = () => {
-    if (!newName || !newScore || !newCost) return;
-    const next = [...pool, { id: Date.now(), name: newName, score: Number(newScore), cost: Number(newCost) }];
+    if (!newName || !newScore || !newCost) {
+      toast.error("Please fill in candidate details");
+      return;
+    }
+    const newCand = {
+      id: Date.now(),
+      name: newName,
+      score: Number(newScore),
+      cost: Number(newCost)
+    };
+    const next = [...pool, newCand];
     setPool(next);
-    recalculate(budget, next);
+    localStorage.setItem('hireiq_shortlist_pool', JSON.stringify(next));
+    runKnapsack(next, budget);
     setNewName(''); setNewScore(''); setNewCost('');
     setShowAdd(false);
+    toast.success("Candidate added & shortlist re-calculated!");
   };
 
-  const isSelected = (id) => result.selected.some(c => c.id === id);
+  const isSelected = (id) => result.selected_candidates?.some(c => c.id === id);
 
   return (
     <div className="space-y-4">
       {/* Budget control */}
-      <div className="bg-black/20 dark:bg-black/30 rounded-xl p-3">
+      <div className="bg-white/[0.03] dark:bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
           <span className="text-theme-2 text-xs font-medium">Hiring Budget (₹ Lakhs)</span>
           <div className="flex items-center gap-2">
             <button onClick={() => handleBudgetChange(budget - 1)}
-              className="w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">−</button>
+              className="w-6 h-6 rounded-md bg-white/5 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">−</button>
             <div className="flex items-center gap-0.5">
               <span className="text-theme-2 text-sm font-bold">₹</span>
               <input type="number" min="1" max="100" value={budget}
@@ -222,64 +468,76 @@ function ShortlistModal({ onClose }) {
               <span className="text-theme-2 text-sm font-bold">L</span>
             </div>
             <button onClick={() => handleBudgetChange(budget + 1)}
-              className="w-6 h-6 rounded-md bg-black/10 dark:bg-white/10 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">+</button>
+              className="w-6 h-6 rounded-md bg-white/5 text-theme-1 text-sm flex items-center justify-center hover:bg-emerald-500/20 transition-all">+</button>
           </div>
         </div>
         {/* Budget bar */}
-        <div className="h-1.5 w-full rounded-full bg-black/10 dark:bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all"
-            style={{ width: `${Math.min(100, (result.budgetUsed / budget) * 100)}%` }} />
+        <div className="h-1.5 w-full rounded-full bg-white/5">
+          <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-300"
+            style={{ width: `${Math.min(100, ((result.budget_used || 0) / budget) * 100)}%` }} />
         </div>
-        <div className="flex justify-between text-xs text-theme-3 mt-1">
-          <span>Used: {fmt(result.budgetUsed)}</span>
-          <span>Remaining: {fmt(budget - result.budgetUsed)}</span>
+        <div className="flex justify-between text-[11px] text-theme-3 mt-1.5">
+          <span>Used: {fmt(result.budget_used || 0)}</span>
+          <span>Remaining: {fmt(Math.max(0, budget - (result.budget_used || 0)))}</span>
         </div>
       </div>
 
       {/* Result summary */}
       <div className="grid grid-cols-3 gap-2 text-center">
         {[
-          { label: 'Selected',    value: result.selected.length,              color: 'text-emerald-400' },
-          { label: 'Total Score',  value: result.totalScore,                   color: 'text-cyan-400' },
-          { label: 'Budget Used',  value: `${fmt(result.budgetUsed)} / ${fmt(budget)}`, color: 'text-amber-400' },
+          { label: 'Selected Candidates',    value: result.selected_candidates?.length || 0,              color: 'text-emerald-400' },
+          { label: 'Cumulative Score',  value: result.total_score || 0,                   color: 'text-cyan-400' },
+          { label: 'Budget Allocation',  value: `${fmt(result.budget_used || 0)} / ${fmt(budget)}`, color: 'text-amber-400' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-black/20 dark:bg-black/30 rounded-xl p-2">
-            <p className={`text-lg font-bold ${color}`}>{value}</p>
-            <p className="text-theme-3 text-xs">{label}</p>
+          <div key={label} className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 backdrop-blur-sm">
+            <p className={`text-base font-bold ${color}`}>{value}</p>
+            <p className="text-theme-3 text-[10px] leading-tight mt-0.5">{label}</p>
           </div>
         ))}
       </div>
 
       {/* Candidate pool */}
-      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-        {pool.map(c => (
-          <div key={c.id}
-            className={`flex items-center justify-between rounded-lg px-3 py-2 transition-all ${
-              isSelected(c.id)
-                ? 'bg-emerald-500/15 border border-emerald-500/30'
-                : 'bg-black/10 dark:bg-white/5 border border-transparent'
-            }`}>
-            <div className="flex items-center gap-2">
-              {isSelected(c.id)
-                ? <Check size={13} className="text-emerald-400 flex-shrink-0" />
-                : <div className="w-3.5 h-3.5 rounded-full border border-gray-500 flex-shrink-0" />}
-              <span className="text-theme-1 text-xs font-medium">{c.name}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-theme-2 text-xs">Score: <b className="text-theme-1">{c.score}</b></span>
-              <span className="text-theme-2 text-xs">CTC: <b className="text-theme-1">{fmt(c.cost)}</b></span>
-              <button onClick={() => removeCandidate(c.id)}
-                className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all">
-                <Trash2 size={11} />
-              </button>
-            </div>
+      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <RefreshCw className="h-5 w-5 text-emerald-400 animate-spin" />
+            <span className="text-xs text-theme-3 ml-2">Loading candidates...</span>
           </div>
-        ))}
+        ) : pool.length === 0 ? (
+          <div className="text-center py-6 text-theme-3 text-xs">No candidates available.</div>
+        ) : (
+          pool.map(c => {
+            const selected = isSelected(c.id);
+            return (
+              <div key={c.id}
+                className={`flex items-center justify-between rounded-lg px-3 py-2 transition-all border ${
+                  selected
+                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                    : 'bg-white/[0.01] border-white/5'
+                }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  {selected
+                    ? <Check size={13} className="text-emerald-400 flex-shrink-0" />
+                    : <div className="w-3.5 h-3.5 rounded-full border border-gray-500 flex-shrink-0" />}
+                  <span className="text-theme-1 text-xs font-medium truncate">{c.name}</span>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-theme-2 text-[10px]">Score: <b className="text-theme-1">{c.score}</b></span>
+                  <span className="text-theme-2 text-[10px]">CTC: <b className="text-theme-1">{fmt(c.cost)}</b></span>
+                  <button onClick={() => removeCandidate(c.id)}
+                    className="p-1 rounded text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Add candidate */}
       {showAdd ? (
-        <div className="bg-black/20 dark:bg-black/30 rounded-xl p-3 space-y-2">
+        <div className="bg-white/[0.03] dark:bg-white/[0.02] border border-white/5 backdrop-blur-md rounded-xl p-3 space-y-2">
           <input placeholder="Candidate name" value={newName}
             onChange={e => setNewName(e.target.value)}
             className="w-full rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
@@ -292,7 +550,7 @@ function ShortlistModal({ onClose }) {
               className="rounded-lg border border-black/10 dark:border-white/10 bg-card px-2 py-1.5 text-theme-1 text-xs outline-none focus:border-emerald-500/40" />
           </div>
           <div className="flex gap-2">
-            <button onClick={addCandidate} className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition-all">Add & Recalculate</button>
+            <button onClick={addCandidate} className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all">Add Candidate</button>
             <button onClick={() => setShowAdd(false)} className="flex-1 py-1.5 rounded-lg border border-black/10 dark:border-white/10 text-theme-2 text-xs hover:bg-black/5 dark:hover:bg-white/5 transition-all">Cancel</button>
           </div>
         </div>
@@ -303,13 +561,17 @@ function ShortlistModal({ onClose }) {
         </button>
       )}
 
-      <button onClick={() => recalculate(budget, pool)}
-        className="w-full py-2 rounded-xl border border-black/10 dark:border-white/10 text-theme-2 text-xs hover:bg-black/5 dark:hover:bg-white/5 transition-all flex items-center justify-center gap-1.5">
-        <RefreshCw size={12} /> Recalculate Shortlist
+      {/* Recalculate */}
+      <button 
+        onClick={() => runKnapsack(pool, budget)} 
+        disabled={calculating}
+        className="w-full py-2.5 rounded-xl border border-white/5 text-theme-2 text-xs bg-white/5 hover:bg-white/10 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+      >
+        <RefreshCw size={12} className={calculating ? "animate-spin" : ""} /> Recalculate Shortlist
       </button>
 
-      <button onClick={onClose} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-all active:scale-95">
-        Done
+      <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all active:scale-95">
+        Close
       </button>
     </div>
   );
@@ -321,24 +583,42 @@ export default function Dashboard() {
   const [modalType, setModalType] = useState(null);
   const [openJobs, setOpenJobs]   = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [scheduledCount, setScheduledCount] = useState(4);
+  const [shortlistCount, setShortlistCount] = useState(3);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Initial fetch of jobs count
     fetch(`${API}/jobs`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setOpenJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open').length : 0))
       .catch(() => setOpenJobs(0));
 
+    // Fetch analytics stats
     fetch(`${API}/settings/analytics`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setAnalytics(data))
       .catch(() => setAnalytics(null));
+
+    // Load active schedule count from localStorage
+    const storedIvs = JSON.parse(localStorage.getItem('hireiq_interviews') || '[]');
+    const confirmedCount = storedIvs.filter(i => i.status === 'confirmed' || i.status === 'rescheduled').length;
+    setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
+
+    // Load shortlist count from localStorage
+    const storedShortlist = JSON.parse(localStorage.getItem('hireiq_shortlist_result') || 'null');
+    if (storedShortlist && storedShortlist.selected_candidates) {
+      setShortlistCount(storedShortlist.selected_candidates.length);
+    } else {
+      setShortlistCount(3);
+    }
   }, []);
 
   const openModal = (type) => { setModalType(type); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setModalType(null); };
 
   const modalTitle = modalType === 'interviews' ? '📅 Interview Schedule' : '🎯 Optimal Shortlist';
+  const isLoading = analytics === null;
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
@@ -358,23 +638,39 @@ export default function Dashboard() {
           </Link>
         </motion.header>
 
-        {/* 4 Stat Cards */}
+        {/* 4 Stat Cards / Skeletons */}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <StatCard title="Total Candidates" value={analytics?.total_candidates ?? 0} icon={<Users className="h-5 w-5" />}    trend={analytics?.recent_uploads_7d ?? 0}  trendLabel="this week" delay={0.1} />
-          <StatCard title="Strong Matches"   value={analytics?.strong_matches ?? 0}  icon={<FileSearch className="h-5 w-5" />} trend={analytics?.matches ?? 0}   trendLabel="good matches" delay={0.2} />
-          <StatCard title="Avg Match Score"   value={analytics?.average_score ?? 0}   icon={<TrendingUp className="h-5 w-5" />} trend={0}  trendLabel="overall" delay={0.3} />
-          <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
-            onClick={() => navigate('/jobs')}
-            className="cursor-pointer rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-cyan-500/40 transition-all">
-            <div className="flex items-start justify-between">
-              <p className="text-sm font-medium text-theme-2">Open Positions</p>
-              <div className="rounded-lg bg-cyan-500/10 p-2 text-cyan-400"><Briefcase className="h-5 w-5" /></div>
-            </div>
-            <p className="font-display text-4xl font-bold text-theme-1 mt-4 tracking-tight">
-              {openJobs === null ? '—' : openJobs}
-            </p>
-            <p className="text-xs text-theme-3 mt-2">Active job listings</p>
-          </motion.div>
+          {isLoading ? (
+            Array(4).fill(0).map((_, idx) => (
+              <div key={idx} className="h-32 rounded-2xl border border-black/10 dark:border-white/10 bg-card animate-pulse flex flex-col justify-between p-6">
+                <div className="flex justify-between items-center">
+                  <div className="h-4 w-24 bg-white/10 rounded" />
+                  <div className="h-8 w-8 bg-white/10 rounded-lg" />
+                </div>
+                <div className="h-8 w-16 bg-white/10 rounded mt-4" />
+              </div>
+            ))
+          ) : (
+            <>
+              <StatCard title="Total Candidates" value={analytics?.total_candidates ?? 0} icon={<Users className="h-5 w-5" />}    trend={analytics?.recent_uploads_7d ?? 0}  trendLabel="this week" delay={0.1} />
+              <StatCard title="Strong Matches"   value={analytics?.strong_matches ?? 0}  icon={<FileSearch className="h-5 w-5" />} trend={analytics?.matches ?? 0}   trendLabel="good matches" delay={0.2} />
+              <StatCard title="Avg Match Score"   value={analytics?.average_score ?? 0}   icon={<TrendingUp className="h-5 w-5" />} trend={0}  trendLabel="overall" delay={0.3} />
+              <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
+                onClick={() => navigate('/jobs')}
+                className="cursor-pointer rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-cyan-500/40 transition-all flex flex-col justify-between">
+                <div className="flex items-start justify-between">
+                  <p className="text-sm font-medium text-theme-2">Open Positions</p>
+                  <div className="rounded-lg bg-cyan-500/10 p-2 text-cyan-400"><Briefcase className="h-5 w-5" /></div>
+                </div>
+                <div>
+                  <p className="font-display text-4xl font-bold text-theme-1 mt-4 tracking-tight">
+                    {openJobs === null ? '—' : openJobs}
+                  </p>
+                  <p className="text-xs text-theme-3 mt-2">Active job listings</p>
+                </div>
+              </motion.div>
+            </>
+          )}
         </div>
 
         {/* Algorithm Action Cards */}
@@ -385,7 +681,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-theme-2">Interviews Scheduled Today</p>
-                <p className="text-3xl font-bold text-theme-1 mt-2">4</p>
+                <p className="text-3xl font-bold text-theme-1 mt-2">{scheduledCount}</p>
                 <p className="text-xs text-theme-3 mt-1">Click to view & reschedule</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15 text-green-400">
@@ -393,7 +689,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
-              <div className="h-full w-4/5 rounded-full bg-gradient-to-r from-green-400 to-green-500" />
+              <div className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (scheduledCount / 6) * 100)}%` }} />
             </div>
           </motion.button>
 
@@ -403,7 +699,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-sm font-medium text-theme-2">Optimal Shortlist Size</p>
-                <p className="text-3xl font-bold text-theme-1 mt-2">3</p>
+                <p className="text-3xl font-bold text-theme-1 mt-2">{shortlistCount}</p>
                 <p className="text-xs text-theme-3 mt-1">Click to edit budget & candidates</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
@@ -411,7 +707,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
-              <div className="h-full w-3/5 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${Math.min(100, (shortlistCount / 5) * 100)}%` }} />
             </div>
           </motion.button>
         </div>
@@ -430,14 +726,14 @@ export default function Dashboard() {
             onClick={closeModal}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl">
+              className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl relative">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-theme-1 font-semibold text-lg">{modalTitle}</h3>
                 <button onClick={closeModal} className="text-theme-3 hover:text-theme-1 transition-colors"><X size={18} /></button>
               </div>
               {modalType === 'interviews'
-                ? <InterviewModal onClose={closeModal} />
-                : <ShortlistModal onClose={closeModal} />}
+                ? <InterviewModal onClose={closeModal} onUpdateCount={setScheduledCount} />
+                : <ShortlistModal onClose={closeModal} onUpdateCount={setShortlistCount} />}
             </motion.div>
           </motion.div>
         )}
@@ -445,3 +741,4 @@ export default function Dashboard() {
     </motion.div>
   );
 }
+

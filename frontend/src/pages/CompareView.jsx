@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from 'recharts';
+import { Loader2 } from 'lucide-react';
 import { getCandidateById } from '../data/candidates';
 
 // ── Skill category definitions ────────────────────────────────
@@ -39,7 +40,40 @@ function computeCategoryScores(candidate) {
 export default function CompareView() {
   const [params] = useSearchParams();
   const ids = params.get('ids')?.split(',') || [];
-  const [a, b] = [getCandidateById(ids[0]), getCandidateById(ids[1])];
+  const [a, setCandidateA] = useState(null);
+  const [b, setCandidateB] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const API = '/api/v1';
+    
+    Promise.all([
+      fetch(`${API}/candidates/${ids[0]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      fetch(`${API}/candidates/${ids[1]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+    ])
+      .then(([dataA, dataB]) => {
+        setCandidateA(dataA);
+        setCandidateB(dataB);
+      })
+      .catch(() => {
+        // Fallback to local storage
+        setCandidateA(getCandidateById(ids[0]));
+        setCandidateB(getCandidateById(ids[1]));
+      })
+      .finally(() => setLoading(false));
+  }, [ids[0], ids[1]]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-page flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 text-sm">Performing comparative analysis...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!a || !b) {
     return (

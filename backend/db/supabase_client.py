@@ -135,18 +135,22 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             linkedin    TEXT,
             location    TEXT,
             score       INTEGER DEFAULT 0,
+            blind_score INTEGER DEFAULT 0,
             status      TEXT DEFAULT 'Match',
             summary     TEXT,
             skills      TEXT,
             experience  TEXT,
             job_matches TEXT,
             radar_data  TEXT,
+            qa          TEXT,
             analyzed_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS jobs (
             id          TEXT PRIMARY KEY,
             title       TEXT,
-            company     TEXT,
+            company     TEXT DEFAULT 'HireIQ Corp',
+            department  TEXT,
+            employment_type TEXT,
             location    TEXT,
             description TEXT,
             required_skills TEXT,
@@ -154,7 +158,7 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             experience_required INTEGER DEFAULT 0,
             max_experience INTEGER DEFAULT 99,
             salary_range TEXT,
-            status      TEXT DEFAULT 'active',
+            status      TEXT DEFAULT 'Open',
             created_at  TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS analytics (
@@ -164,6 +168,12 @@ def _bootstrap_sqlite(conn: sqlite3.Connection):
             created_at  TEXT DEFAULT (datetime('now'))
         );
     """)
+    # Migration: Ensure blind_score exists in older databases
+    try:
+        conn.execute("ALTER TABLE candidates ADD COLUMN blind_score INTEGER DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
 
 
 # ─── Helper Serializers ────────────────────────────────────────
@@ -183,7 +193,7 @@ def _json_loads(v: str | None) -> Any:
 def _row_to_dict(row: sqlite3.Row) -> dict:
     """Convert an sqlite3.Row to a regular dict, deserializing JSON columns."""
     d = dict(row)
-    for col in ("skills", "experience", "job_matches", "radar_data"):
+    for col in ("skills", "experience", "job_matches", "radar_data", "qa"):
         if col in d:
             d[col] = _json_loads(d[col])
     return d
@@ -208,12 +218,14 @@ async def save_candidate(candidate: dict) -> dict:
                 "linkedin":    candidate.get("linkedin"),
                 "location":    candidate.get("location", "Remote"),
                 "score":       candidate.get("score", 0),
+                "blind_score": candidate.get("blind_score", candidate.get("score", 0)),
                 "status":      candidate.get("status", "Match"),
                 "summary":     candidate.get("summary", ""),
                 "skills":      candidate.get("skills", []),
                 "experience":  candidate.get("experience", []),
                 "job_matches": candidate.get("jobMatches", candidate.get("job_matches", [])),
                 "radar_data":  candidate.get("radarData", candidate.get("radar_data", [])),
+                "qa":          candidate.get("qa", []),
             }
             result = sb.table("candidates").upsert(row).execute()
             return result.data[0] if result.data else row
@@ -225,8 +237,8 @@ async def save_candidate(candidate: dict) -> dict:
     conn.execute("""
         INSERT OR REPLACE INTO candidates
             (id, name, role, email, github, linkedin, location, score, status,
-             summary, skills, experience, job_matches, radar_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             summary, skills, experience, job_matches, radar_data, qa, blind_score)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         candidate.get("id"),
         candidate.get("name"),
@@ -242,6 +254,8 @@ async def save_candidate(candidate: dict) -> dict:
         _json_dumps(candidate.get("experience", [])),
         _json_dumps(candidate.get("jobMatches", candidate.get("job_matches", []))),
         _json_dumps(candidate.get("radarData", candidate.get("radar_data", []))),
+        _json_dumps(candidate.get("qa", [])),
+        candidate.get("blind_score", candidate.get("score", 0)),
     ))
     conn.commit()
     return candidate
@@ -361,3 +375,104 @@ def get_db_status() -> dict:
         "sqlite_path": str(_DB_PATH),
         "sqlite_size_mb": round(_DB_PATH.stat().st_size / 1024 / 1024, 2) if _DB_PATH.exists() else 0,
     }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#   PUBLIC API — jobs
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def save_job(job: dict) -> dict:
+    """Upsert a job. Tries Supabase first, then SQLite."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            row = {
+                "id":                  str(job.get("id")),
+                "title":               job.get("title"),
+                "company":             job.get("company", "HireIQ Corp"),
+                "department":          job.get("department", "Engineering"),
+                "employment_type":     job.get("employment_type", "Full-time"),
+                "location":            job.get("location"),
+                "description":         job.get("description"),
+                "required_skills":     job.get("required_skills"),
+                "preferred_skills":    job.get("preferred_skills", ""),
+                "experience_required": job.get("experience_required", 0),
+                "max_experience":      job.get("max_experience", 99),
+                "salary_range":        job.get("salary_range", ""),
+                "status":              job.get("status", "Open"),
+            }
+            result = sb.table("jobs").upsert(row).execute()
+            return result.data[0] if result.data else row
+        except Exception as e:
+            logger.warning("Supabase job upsert failed (%s) — falling back to SQLite", e)
+
+    # SQLite fallback
+    conn = _get_sqlite()
+    conn.execute("""
+        INSERT OR REPLACE INTO jobs
+            (id, title, company, department, employment_type, location, description,
+             required_skills, preferred_skills, experience_required, max_experience,
+             salary_range, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        str(job.get("id")),
+        job.get("title"),
+        job.get("company", "HireIQ Corp"),
+        job.get("department", "Engineering"),
+        job.get("employment_type", "Full-time"),
+        job.get("location"),
+        job.get("description"),
+        job.get("required_skills"),
+        job.get("preferred_skills", ""),
+        job.get("experience_required", 0),
+        job.get("max_experience", 99),
+        job.get("salary_range", ""),
+        job.get("status", "Open"),
+    ))
+    conn.commit()
+    return job
+
+
+async def fetch_all_jobs() -> list[dict]:
+    """Fetch all jobs."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            result = sb.table("jobs").select("*").execute()
+            return result.data or []
+        except Exception as e:
+            logger.warning("Supabase jobs fetch failed (%s) — falling back to SQLite", e)
+
+    conn = _get_sqlite()
+    rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+async def fetch_job_by_id(job_id: str) -> dict | None:
+    """Fetch a single job by id."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            result = sb.table("jobs").select("*").eq("id", job_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.warning("Supabase job fetch-by-id failed (%s) — falling back to SQLite", e)
+
+    conn = _get_sqlite()
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", (str(job_id),)).fetchone()
+    return dict(row) if row else None
+
+
+async def delete_job(job_id: str) -> bool:
+    """Delete a job by id."""
+    sb = _try_init_supabase()
+    if sb:
+        try:
+            sb.table("jobs").delete().eq("id", job_id).execute()
+        except Exception as e:
+            logger.warning("Supabase job delete failed: %s", e)
+
+    conn = _get_sqlite()
+    conn.execute("DELETE FROM jobs WHERE id = ?", (str(job_id),))
+    conn.commit()
+    return True

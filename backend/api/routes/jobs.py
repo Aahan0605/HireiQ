@@ -4,7 +4,9 @@ from typing import Optional
 from datetime import datetime
 import math
 import heapq
+import uuid
 from collections import Counter
+from db.supabase_client import save_job, fetch_all_jobs, fetch_job_by_id, delete_job as delete_job_db
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
@@ -20,51 +22,59 @@ class JobCreate(BaseModel):
     status: str           # Open / Closed / Draft
 
 
-# In-memory store (seeded on startup)
-jobs_db: list[dict] = []
-
-
-def _seed():
-    # Time Complexity: O(1) — runs once on startup
-    if jobs_db:
+async def _seed_if_empty():
+    """Seeds default jobs into the database if empty."""
+    existing = await fetch_all_jobs()
+    if existing:
         return
-    jobs_db.extend([
+    seed_jobs = [
         {
-            "id": 1, "title": "Senior Frontend Engineer",
-            "department": "Engineering", "location": "Remote",
-            "employment_type": "Full-time", "experience_required": 3,
+            "id": "1",
+            "title": "Senior Frontend Engineer",
+            "department": "Engineering",
+            "location": "Remote",
+            "employment_type": "Full-time",
+            "experience_required": 3,
             "description": "We need a strong frontend engineer to build scalable UI components",
             "required_skills": "React,TypeScript,Next.js,CSS,Testing,Webpack",
-            "status": "Open", "created_at": datetime.now().isoformat(),
+            "status": "Open",
         },
         {
-            "id": 2, "title": "Backend Python Developer",
-            "department": "Engineering", "location": "Bangalore",
-            "employment_type": "Full-time", "experience_required": 2,
+            "id": "2",
+            "title": "Backend Python Developer",
+            "department": "Engineering",
+            "location": "Bangalore",
+            "employment_type": "Full-time",
+            "experience_required": 2,
             "description": "Backend developer for our core API and data pipeline",
             "required_skills": "Python,FastAPI,PostgreSQL,Docker,Redis,CI/CD",
-            "status": "Open", "created_at": datetime.now().isoformat(),
+            "status": "Open",
         },
         {
-            "id": 3, "title": "ML Engineer",
-            "department": "AI/ML", "location": "Remote",
-            "employment_type": "Full-time", "experience_required": 2,
+            "id": "3",
+            "title": "ML Engineer",
+            "department": "AI/ML",
+            "location": "Remote",
+            "employment_type": "Full-time",
+            "experience_required": 2,
             "description": "ML engineer to build and deploy machine learning models",
             "required_skills": "Python,PyTorch,Scikit-learn,MLflow,Statistics,Spark",
-            "status": "Open", "created_at": datetime.now().isoformat(),
+            "status": "Open",
         },
         {
-            "id": 4, "title": "Fullstack Developer",
-            "department": "Product", "location": "Hybrid",
-            "employment_type": "Full-time", "experience_required": 2,
+            "id": "4",
+            "title": "Fullstack Developer",
+            "department": "Product",
+            "location": "Hybrid",
+            "employment_type": "Full-time",
+            "experience_required": 2,
             "description": "Fullstack engineer to work across frontend and backend systems",
             "required_skills": "React,Node.js,PostgreSQL,Docker,TypeScript,REST APIs",
-            "status": "Open", "created_at": datetime.now().isoformat(),
+            "status": "Open",
         },
-    ])
-
-
-_seed()
+    ]
+    for job in seed_jobs:
+        await save_job(job)
 
 
 def _cosine_similarity(text_a: str, text_b: str) -> float:
@@ -93,70 +103,73 @@ def _cosine_similarity(text_a: str, text_b: str) -> float:
 # ── CRUD ──────────────────────────────────────────────────────
 
 @router.get("")
-def get_jobs():
-    # Time Complexity: O(1)
-    return jobs_db
+async def get_jobs():
+    await _seed_if_empty()
+    return await fetch_all_jobs()
 
 
 @router.post("", status_code=201)
-def create_job(job: JobCreate):
-    # Time Complexity: O(n) to find max id
-    new_id = max((j["id"] for j in jobs_db), default=0) + 1
-    record = {**job.model_dump(), "id": new_id, "created_at": datetime.now().isoformat()}
-    jobs_db.append(record)
-    return record
+async def create_job(job: JobCreate):
+    record = {
+        **job.model_dump(),
+        "id": str(uuid.uuid4()),
+        "created_at": datetime.now().isoformat(),
+        "company": "HireIQ Corp"
+    }
+    return await save_job(record)
 
 
 @router.get("/{job_id}")
-def get_job(job_id: int):
-    # Time Complexity: O(n)
-    job = next((j for j in jobs_db if j["id"] == job_id), None)
+async def get_job(job_id: str):
+    job = await fetch_job_by_id(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.put("/{job_id}")
-def update_job(job_id: int, job: JobCreate):
-    # Time Complexity: O(n)
-    idx = next((i for i, j in enumerate(jobs_db) if j["id"] == job_id), None)
-    if idx is None:
+async def update_job(job_id: str, job: JobCreate):
+    existing = await fetch_job_by_id(job_id)
+    if not existing:
         raise HTTPException(status_code=404, detail="Job not found")
-    jobs_db[idx].update(job.model_dump())
-    return jobs_db[idx]
+    record = {
+        **job.model_dump(),
+        "id": job_id,
+        "company": existing.get("company", "HireIQ Corp")
+    }
+    return await save_job(record)
 
 
 @router.delete("/{job_id}")
-def delete_job(job_id: int):
-    # Time Complexity: O(n)
-    global jobs_db
-    before = len(jobs_db)
-    jobs_db = [j for j in jobs_db if j["id"] != job_id]
-    if len(jobs_db) == before:
+async def delete_job(job_id: str):
+    existing = await fetch_job_by_id(job_id)
+    if not existing:
         raise HTTPException(status_code=404, detail="Job not found")
+    await delete_job_db(job_id)
     return {"status": "deleted"}
 
 
 # ── MATCHING ──────────────────────────────────────────────────
 
 @router.get("/{job_id}/matches")
-def job_matches(job_id: int):
+async def job_matches(job_id: str):
     """
     Rank all candidates for a job using TF-IDF cosine similarity + Max-Heap.
     Time Complexity: O(n log n) — TF-IDF scoring O(n*m) + Max-Heap ranking O(n log n)
     """
-    from .candidates import candidates_db  # import here to avoid circular at module load
+    from db.supabase_client import fetch_all_candidates
 
-    job = next((j for j in jobs_db if j["id"] == job_id), None)
+    job = await fetch_job_by_id(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     job_text = job["description"] + " " + job["required_skills"].replace(",", " ")
     job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
 
+    candidates_list = await fetch_all_candidates()
     max_heap: list = []
 
-    for c in candidates_db:
+    for c in candidates_list:
         # Build candidate text from skills + summary
         cand_skills_list = c.get("skills", [])
         cand_text = " ".join(cand_skills_list) + " " + c.get("summary", "")

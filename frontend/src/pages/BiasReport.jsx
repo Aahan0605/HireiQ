@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
-const BIAS_DATA = [
+const API = '/api/v1';
+
+const DEFAULT_BIAS_DATA = [
   { name: 'Alice Chen', full: 94, blind: 96, role: 'Frontend Engineer' },
   { name: 'Marcus Jones', full: 88, blind: 91, role: 'Fullstack Engineer' },
   { name: 'Sofia Rodriguez', full: 97, blind: 97, role: 'Backend Lead' },
@@ -10,23 +13,99 @@ const BIAS_DATA = [
 ];
 
 export default function BiasReport() {
-  const biasedCount = BIAS_DATA.filter(c => Math.abs(c.full - c.blind) > 3).length;
-  const hasBias = biasedCount > 0;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [biasData, setBiasData] = useState([]);
+  const [summary, setSummary] = useState({
+    flagged_count: 0,
+    overall_fair: true,
+    unbiased_pct: 100,
+    avg_full: 0,
+    avg_blind: 0,
+  });
 
-  // CSS donut: 80% unbiased
-  const biasedPct = Math.round((biasedCount / BIAS_DATA.length) * 100);
-  const unbiasedPct = 100 - biasedPct;
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API}/candidates/bias-audit`)
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(data => {
+        const results = data.results || [];
+        const formatted = results.map(r => ({
+          name: r.candidate_name,
+          full: r.full_score,
+          blind: r.blind_score,
+          role: r.role || 'Software Engineer',
+        }));
+        
+        const finalData = formatted.length > 0 ? formatted : DEFAULT_BIAS_DATA;
+        setBiasData(finalData);
+        
+        const biasedCount = finalData.filter(c => Math.abs(c.full - c.blind) > 3).length;
+        const unbiasedPct = Math.round(((finalData.length - biasedCount) / finalData.length) * 100);
+
+        setSummary({
+          flagged_count: data.flagged_count !== undefined ? data.flagged_count : biasedCount,
+          overall_fair: data.overall_fair !== undefined ? data.overall_fair : (biasedCount === 0),
+          unbiased_pct: data.flagged_ratio !== undefined ? Math.round((1 - data.flagged_ratio) * 100) : unbiasedPct,
+          avg_full: Math.round(finalData.reduce((s, c) => s + c.full, 0) / finalData.length),
+          avg_blind: Math.round(finalData.reduce((s, c) => s + c.blind, 0) / finalData.length),
+        });
+        setError('');
+      })
+      .catch(() => {
+        setError('Backend database empty or offline — showing local seeded analysis.');
+        setBiasData(DEFAULT_BIAS_DATA);
+        const biasedCount = DEFAULT_BIAS_DATA.filter(c => Math.abs(c.full - c.blind) > 3).length;
+        setSummary({
+          flagged_count: biasedCount,
+          overall_fair: biasedCount === 0,
+          unbiased_pct: Math.round(((DEFAULT_BIAS_DATA.length - biasedCount) / DEFAULT_BIAS_DATA.length) * 100),
+          avg_full: 90,
+          avg_blind: 92,
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const biasedCount = summary.flagged_count;
+  const hasBias = biasedCount > 0;
+  const unbiasedPct = summary.unbiased_pct;
+  const biasedPct = 100 - unbiasedPct;
   const circumference = 2 * Math.PI * 40;
   const biasedDash = (biasedPct / 100) * circumference;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400 text-sm">Evaluating anonymization metrics...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="min-h-screen bg-page p-6 lg:p-10">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white">🛡️ Bias Audit Report</h1>
-          <p className="text-gray-400 mt-1 text-sm">Anonymization Engine Analysis — comparing full vs blind scoring</p>
+        <div className="mb-8 flex justify-between items-start flex-wrap gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white">🛡️ Bias Audit Report</h1>
+            <p className="text-gray-400 mt-1 text-sm">Anonymization Engine Analysis — comparing full vs blind scoring</p>
+          </div>
+          <span className={`text-xs font-bold px-3 py-1.5 rounded-xl border ${
+            summary.overall_fair ? 'border-green-500/30 bg-green-500/10 text-green-400' : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+          }`}>
+            Status: {summary.overall_fair ? 'Fair/Balanced' : 'Review Required'}
+          </span>
         </div>
+
+        {error && (
+          <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-400 text-sm">
+            ⚠️ {error}
+          </div>
+        )}
 
         {/* Bias detected banner */}
         {hasBias && (
@@ -52,13 +131,13 @@ export default function BiasReport() {
               <span className="text-center">Delta</span>
             </div>
             <div className="space-y-3">
-              {BIAS_DATA.map((c, i) => {
+              {biasData.map((c, i) => {
                 const delta = c.blind - c.full;
                 const absDelta = Math.abs(delta);
                 const isBiased = absDelta > 3;
                 return (
                   <motion.div
-                    key={c.name}
+                    key={c.name + i}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0, transition: { delay: i * 0.08 } }}
                     className={`grid grid-cols-4 items-center rounded-lg px-3 py-3 ${isBiased ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-white/5'}`}
@@ -122,16 +201,16 @@ export default function BiasReport() {
             <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-5">
               <h3 className="text-theme-1 font-semibold text-sm mb-3">Summary</h3>
               <p className="text-gray-400 text-xs leading-relaxed">
-                <span className="text-theme-1 font-medium">{biasedCount} out of {BIAS_DATA.length}</span> candidates showed score variance &gt;3 points when anonymized, suggesting possible demographic influence in the original scoring.
+                <span className="text-theme-1 font-medium">{biasedCount} out of {biasData.length}</span> candidates showed score variance &gt;3 points when anonymized, suggesting possible demographic influence in the original scoring.
               </p>
               <div className="mt-4 space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Avg full score</span>
-                  <span className="text-theme-1 font-medium">{Math.round(BIAS_DATA.reduce((s, c) => s + c.full, 0) / BIAS_DATA.length)}</span>
+                  <span className="text-theme-1 font-medium">{summary.avg_full}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-400">Avg blind score</span>
-                  <span className="text-cyan-400 font-medium">{Math.round(BIAS_DATA.reduce((s, c) => s + c.blind, 0) / BIAS_DATA.length)}</span>
+                  <span className="text-cyan-400 font-medium">{summary.avg_blind}</span>
                 </div>
               </div>
             </div>
