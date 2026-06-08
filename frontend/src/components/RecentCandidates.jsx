@@ -21,6 +21,9 @@ function getBestJobMatch(candidate, jobs) {
 
 export default function RecentCandidates() {
   const [jobs, setJobs] = useState([]);
+  const [blindReview] = useState(() => {
+    return localStorage.getItem('hireiq_blind_review') === 'true';
+  });
 
   useEffect(() => {
     fetch(`${API}/jobs`)
@@ -47,6 +50,11 @@ export default function RecentCandidates() {
       <div className="flex flex-col gap-3">
         {candidates.map((c, i) => {
           const bestJob = getBestJobMatch(c, jobs);
+          const displayName = blindReview 
+            ? `Candidate ${c.id ? String(c.id).substring(0, 4).toUpperCase() : 'XXXX'}` 
+            : c.name;
+          const displayInitials = blindReview ? '🕵️' : c.name?.split(' ').map(n => n[0]).join('');
+
           return (
             <motion.div key={c.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.08 } }}>
               <Link to={`/candidate/${c.id}`}
@@ -54,10 +62,10 @@ export default function RecentCandidates() {
 
                 <div className="flex items-center gap-4">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-card-2 text-sm font-bold text-emerald-500 group-hover:bg-emerald-500 group-hover:text-bg transition-colors">
-                    {c.name?.split(' ').map(n => n[0]).join('')}
+                    {displayInitials}
                   </div>
                   <div>
-                    <h3 className="font-medium text-gray-100 group-hover:text-white transition-colors text-sm">{c.name}</h3>
+                    <h3 className="font-medium text-gray-100 group-hover:text-white transition-colors text-sm">{displayName}</h3>
                     <p className="text-xs text-gray-500">{c.role}</p>
                     {/* Best job match line */}
                     <p className="text-xs text-gray-600 mt-0.5">
