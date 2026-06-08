@@ -32,8 +32,15 @@ export default function Candidates() {
   const [selected, setSelected]     = useState(new Set());
   const [shortlisted, setShortlisted] = useState(new Set()); // top-3 highlight
   const [deltas, setDeltas]         = useState({});          // rank delta badges
+  const [blindReview, setBlindReview] = useState(() => {
+    return localStorage.getItem('hireiq_blind_review') === 'true';
+  });
   const navigate = useNavigate();
   const deltaTimer = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem('hireiq_blind_review', blindReview);
+  }, [blindReview]);
 
   useEffect(() => {
     let intervalId = null;
@@ -217,6 +224,14 @@ export default function Candidates() {
             className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
             ⭐ Optimal Shortlist
           </button>
+          <button onClick={() => setBlindReview(!blindReview)}
+            className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+              blindReview
+                ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/25 shadow-glow-red'
+                : 'border-black/10 dark:border-white/10 bg-card text-gray-300 hover:bg-white/5'
+            }`}>
+            🕵️ Blind Mode: {blindReview ? 'ON' : 'OFF'}
+          </button>
           <div className="flex items-center gap-3 ml-auto">
             <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               Import CSV
@@ -257,6 +272,12 @@ export default function Candidates() {
               const isShortlisted = shortlisted.has(c?.id);
               const delta         = deltas[c?.id];
 
+              const displayName = blindReview 
+                ? `Candidate ${c?.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
+                : c?.name;
+
+              const displayInitials = blindReview ? '🕵️' : c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2);
+
               return (
                 <motion.div key={c?.id} layout
                   className={`flex items-center justify-between p-4 bg-card border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
@@ -271,10 +292,10 @@ export default function Candidates() {
                       onClick={e => e.stopPropagation()}
                       className="w-4 h-4 accent-emerald-500 cursor-pointer" />
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold flex-shrink-0">
-                      {c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
+                      {displayInitials}
                     </div>
                     <div>
-                      <p className="text-theme-1 text-sm font-semibold">{c?.name}</p>
+                      <p className="text-theme-1 text-sm font-semibold">{displayName}</p>
                       <p className="text-gray-400 text-xs">{c?.role}</p>
                     </div>
                   </div>

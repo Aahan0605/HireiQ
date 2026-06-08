@@ -59,6 +59,53 @@ export default function CandidateProfile() {
   const [qaLoading, setQaLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
 
+  const [blindReview] = useState(() => {
+    return localStorage.getItem('hireiq_blind_review') === 'true';
+  });
+
+  const [notes, setNotes] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`hireiq_notes_${id}`) || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [newComment, setNewComment] = useState('');
+  const [newRating, setNewRating] = useState(5);
+  const [interviewerName, setInterviewerName] = useState('Senior Interviewer');
+
+  const handleAddNote = (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+
+    const note = {
+      id: Date.now().toString(),
+      author: interviewerName,
+      comment: newComment,
+      rating: newRating,
+      date: new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    };
+
+    const updated = [note, ...notes];
+    setNotes(updated);
+    localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
+    setNewComment('');
+    toast.success('Feedback recorded!');
+  };
+
+  const handleDeleteNote = (noteId) => {
+    const updated = notes.filter(n => n.id !== noteId);
+    setNotes(updated);
+    localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
+    toast.success('Feedback deleted.');
+  };
+
   // Fetch open jobs for Recommended Roles section
   useEffect(() => {
     fetch(`${API}/jobs`)
@@ -286,9 +333,13 @@ export default function CandidateProfile() {
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <div className="mb-6 flex flex-col items-center">
                 <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-[#0d0d1a] shadow-glow-mint">
-                  {candidate?.name?.split(' ')?.map(n => n?.[0])?.join('') || 'C'}
+                  {blindReview ? '🕵️' : (candidate?.name?.split(' ')?.map(n => n?.[0])?.join('') || 'C')}
                 </div>
-                <h1 className="text-2xl font-bold text-white text-center">{candidate?.name}</h1>
+                <h1 className="text-2xl font-bold text-white text-center">
+                  {blindReview 
+                    ? `Candidate ${candidate?.id ? candidate.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
+                    : candidate?.name}
+                </h1>
                 <p className="text-gray-400 text-sm text-center">{candidate?.role}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-400">
                   <Award className="h-4 w-4" /> {candidate?.score}% Match
@@ -299,10 +350,18 @@ export default function CandidateProfile() {
               </div>
 
               <div className="space-y-3 border-t border-black/10 dark:border-white/10 pt-5 text-sm">
-                {candidate?.location && <div className="flex items-center gap-3 text-gray-300"><MapPin className="h-4 w-4 text-gray-500" />{candidate.location}</div>}
-                {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" />{candidate.email}</div>}
-                {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" />{candidate.github}</div>}
-                {candidate?.linkedin && <div className="flex items-center gap-3 text-gray-300"><Linkedin className="h-4 w-4 text-gray-500" />{candidate.linkedin}</div>}
+                {blindReview ? (
+                  <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
+                    🔒 Blind mode is enabled. Contact details, location, and social links are hidden to minimize bias.
+                  </div>
+                ) : (
+                  <>
+                    {candidate?.location && <div className="flex items-center gap-3 text-gray-300"><MapPin className="h-4 w-4 text-gray-500" />{candidate.location}</div>}
+                    {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" />{candidate.email}</div>}
+                    {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" />{candidate.github}</div>}
+                    {candidate?.linkedin && <div className="flex items-center gap-3 text-gray-300"><Linkedin className="h-4 w-4 text-gray-500" />{candidate.linkedin}</div>}
+                  </>
+                )}
               </div>
 
               <div className="mt-6 flex flex-col gap-2">
@@ -486,6 +545,94 @@ export default function CandidateProfile() {
                   </motion.div>
                 )) : <p className="text-gray-500 text-sm">No experience data available.</p>}
               </div>
+            </MagneticCard>
+
+            {/* Team Interviewer Feedback Section */}
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
+              <h3 className="mb-4 text-xl font-semibold text-white flex items-center gap-2">
+                💬 Team Interviewer Feedback
+              </h3>
+              <p className="text-xs text-gray-500 mb-6">Collaborative rating and screening notes from interviewers</p>
+
+              {/* Form to add note */}
+              <form onSubmit={handleAddNote} className="mb-6 space-y-4 p-4 rounded-xl border border-white/5 bg-white/5">
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-gray-400 mb-1">Interviewer Name</label>
+                    <input 
+                      type="text" 
+                      value={interviewerName} 
+                      onChange={e => setInterviewerName(e.target.value)}
+                      placeholder="Your Name / Role"
+                      className="w-full text-xs rounded-lg border border-white/10 bg-[#0d0d1a] px-3 py-2 text-white outline-none focus:border-violet/40 transition-colors"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 mb-1">Rating</label>
+                    <select 
+                      value={newRating} 
+                      onChange={e => setNewRating(Number(e.target.value))}
+                      className="rounded-lg border border-white/10 bg-[#0d0d1a] px-3 py-2 text-xs text-white outline-none focus:border-violet/40 transition-colors cursor-pointer"
+                    >
+                      <option value={5}>⭐️⭐️⭐️⭐️⭐️ (5/5)</option>
+                      <option value={4}>⭐️⭐️⭐️⭐️ (4/5)</option>
+                      <option value={3}>⭐️⭐️⭐️ (3/5)</option>
+                      <option value={2}>⭐️⭐️ (2/5)</option>
+                      <option value={1}>⭐️ (1/5)</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Interview Comments / Scorecard Notes</label>
+                  <textarea 
+                    value={newComment} 
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Describe candidate technical execution, communication, and overall culture fit..."
+                    rows={3}
+                    className="w-full text-xs rounded-lg border border-white/10 bg-[#0d0d1a] p-3 text-white outline-none focus:border-violet/40 transition-colors resize-none"
+                    required
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 text-xs transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                  Save Feedback
+                </button>
+              </form>
+
+              {/* Feed timeline */}
+              {notes.length > 0 ? (
+                <div className="space-y-4">
+                  {notes.map(note => (
+                    <div key={note.id} className="p-4 border border-white/5 bg-white/[0.02] rounded-xl flex flex-col gap-2 relative group">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-bold text-white">{note.author}</span>
+                          <span className="text-gray-500 text-[10px] ml-2">{note.date}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-yellow-400 text-xs">{'★'.repeat(note.rating)}{'☆'.repeat(5 - note.rating)}</span>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteNote(note.id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 text-xs transition-opacity p-1 ml-1"
+                            title="Delete note"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-gray-300 text-xs leading-relaxed font-sans whitespace-pre-wrap">{note.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 border border-dashed border-white/5 rounded-xl bg-white/[0.01]">
+                  <p className="text-gray-500 text-xs">No feedback logged yet. Log notes using the form above.</p>
+                </div>
+              )}
             </MagneticCard>
 
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
