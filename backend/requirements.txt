@@ -13,3 +13,5 @@ aiosqlite
 python-multipart
 supabase
 fpdf2
+stripe
+

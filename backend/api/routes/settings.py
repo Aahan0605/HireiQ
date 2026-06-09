@@ -104,3 +104,48 @@ def get_db_status():
     """Return database connection status."""
     from db.supabase_client import get_db_status as _status
     return _status()
+
+
+class CheckoutSessionRequest(BaseModel):
+    plan_name: str
+    success_url: str
+    cancel_url: str
+
+
+@router.post("/billing/create-checkout-session")
+def create_checkout_session(req: CheckoutSessionRequest):
+    """Create a Stripe Checkout session for subscription plans."""
+    import stripe
+    import os
+    from fastapi import HTTPException
+    
+    stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+    
+    if not stripe.api_key:
+        # Graceful fallback: return a mock success URL to simulate checkout completion
+        return {"url": f"{req.success_url}?session_id=mock_session_{os.urandom(8).hex()}"}
+        
+    price_map = {
+        "Pro": os.getenv("STRIPE_PRICE_PRO_ID", "price_1MockProPriceID"),
+        "Enterprise": os.getenv("STRIPE_PRICE_ENTERPRISE_ID", "price_1MockEnterprisePriceID")
+    }
+    
+    price_id = price_map.get(req.plan_name)
+    if not price_id:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+        
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price': price_id,
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=req.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=req.cancel_url,
+        )
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

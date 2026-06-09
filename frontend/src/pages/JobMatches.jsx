@@ -5,7 +5,6 @@ import { ArrowLeft } from 'lucide-react';
 
 const API = '/api/v1';
 
-// Gold / silver / bronze / gray rank colours
 const rankStyle = (i) => {
   if (i === 0) return 'bg-yellow-400/20 text-yellow-300 border-yellow-400/30';
   if (i === 1) return 'bg-gray-300/20 text-gray-300 border-gray-300/30';
@@ -18,13 +17,76 @@ const scoreStyle = (s) =>
   s >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
              'bg-red-500/20 text-red-400';
 
+function CandidateCard({ c, i, blindReview, navigate }) {
+  const displayName = blindReview
+    ? `Candidate ${c.id ? c.id.toString().substring(0, 4).toUpperCase() : 'XXXX'}`
+    : c.name;
+  const displayInitials = blindReview
+    ? '🕵️'
+    : c.name?.split(' ').map((n) => n[0]).join('').slice(0, 2);
+
+  return (
+    <motion.div
+      key={c.id}
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
+      className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all"
+    >
+      {/* Rank badge */}
+      <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
+        #{i + 1}
+      </div>
+
+      {/* Avatar */}
+      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-white text-sm font-bold">
+        {displayInitials}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-white font-semibold text-sm">{displayName}</p>
+          <p className="text-gray-400 text-xs">{c.role}</p>
+          <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${scoreStyle(c.match_score)}`}>
+            {c.match_score}% match
+          </span>
+        </div>
+
+        {c.matched_skills && c.matched_skills.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {c.matched_skills.map((s) => (
+              <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">{s}</span>
+            ))}
+          </div>
+        )}
+
+        {c.missing_skills && c.missing_skills.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {c.missing_skills.map((s) => (
+              <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 line-through">{s}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* View profile */}
+      <button
+        onClick={() => navigate(`/candidate/${c.id}`)}
+        className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/45 text-emerald-300 transition-all"
+      >
+        View Profile →
+      </button>
+    </motion.div>
+  );
+}
+
 export default function JobMatches() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [job, setJob]         = useState(null);
+  const [job, setJob] = useState(null);
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
+  const [error, setError] = useState('');
 
   const [blindReview] = useState(() => {
     return localStorage.getItem('hireiq_blind_review') === 'true';
@@ -32,8 +94,8 @@ export default function JobMatches() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/jobs/${id}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
-      fetch(`${API}/jobs/${id}/matches`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      fetch(`${API}/jobs/${id}`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+      fetch(`${API}/jobs/${id}/matches`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
     ])
       .then(([jobData, matchData]) => { setJob(jobData); setMatches(matchData); })
       .catch(() => setError('Failed to load. Is the backend running?'))
@@ -46,7 +108,7 @@ export default function JobMatches() {
       <div className="max-w-4xl mx-auto">
 
         {/* Back */}
-        <Link to="/jobs" className="inline-flex items-center gap-2 text-gray-400 hover:text-theme-1 text-sm mb-6 transition-colors">
+        <Link to="/jobs" className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-6 transition-colors">
           <ArrowLeft size={16} /> Back to Jobs
         </Link>
 
@@ -86,62 +148,8 @@ export default function JobMatches() {
         {/* Ranked list */}
         {!loading && matches.length > 0 && (
           <div className="space-y-3 mb-6">
-            {matches.map((c, i) => {
-              const displayName = blindReview 
-                ? `Candidate ${c.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
-                : c.name;
-              const displayInitials = blindReview ? '🕵️' : c.name?.split(' ').map(n => n[0]).join('').slice(0, 2);
-
-              return (
-                <motion.div key={c.id}
-                  initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.05 } }}
-                  className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-4 flex items-start gap-4 hover:border-emerald-500/30 transition-all">
-
-                  {/* Rank badge */}
-                  <div className={`flex-shrink-0 w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${rankStyle(i)}`}>
-                    #{i + 1}
-                  </div>
-
-                  {/* Avatar */}
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold">
-                    {displayInitials}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-theme-1 font-semibold text-sm">{displayName}</p>
-                      <p className="text-gray-400 text-xs">{c.role}</p>
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${scoreStyle(c.match_score)}`}>
-                        {c.match_score}% match
-                      </span>
-                    </div>
-
-                  {/* Matched skills */}
-                  {c.matched_skills?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {c.matched_skills.map(s => (
-                        <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">{s}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Missing skills */}
-                  {c.missing_skills?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {c.missing_skills.map(s => (
-                        <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 line-through">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* View profile */}
-                <button onClick={() => navigate(`/candidate/${c.id}`)}
-                  className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/45 text-emerald-300 transition-all">
-                  View Profile →
-                </button>
-              </motion.div>
+            {matches.map((c, i) => (
+              <CandidateCard key={c.id} c={c} i={i} blindReview={blindReview} navigate={navigate} />
             ))}
           </div>
         )}

@@ -110,38 +110,52 @@ export default function Candidates() {
   }, [blindReview]);
 
   useEffect(() => {
-    let intervalId = null;
+    let isMounted = true;
+    let timerId = null;
 
     const fetchCandidates = () => {
       fetch(`${API}/candidates`)
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
+          if (!isMounted) return;
           if (Array.isArray(data)) {
             setCandidates(data);
             
             // Check if any candidate is still analyzing
             const isAnyAnalyzing = data.some(c => c.status === 'Analyzing');
-            if (isAnyAnalyzing && !intervalId) {
-              intervalId = setInterval(fetchCandidates, 3000);
-            } else if (!isAnyAnalyzing && intervalId) {
-              clearInterval(intervalId);
-              intervalId = null;
+            if (isAnyAnalyzing) {
+              if (!timerId) {
+                timerId = setInterval(fetchCandidates, 3000);
+              }
+            } else {
+              if (timerId) {
+                clearInterval(timerId);
+                timerId = null;
+              }
             }
           } else {
             setCandidates(getAllCandidates());
           }
         })
         .catch(() => { 
+          if (!isMounted) return;
           setCandidates(getAllCandidates()); 
           setError('Backend offline — showing local data.'); 
+          if (timerId) {
+            clearInterval(timerId);
+            timerId = null;
+          }
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
     };
 
     fetchCandidates();
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      isMounted = false;
+      if (timerId) clearInterval(timerId);
     };
   }, []);
 

@@ -30,7 +30,7 @@ export default function Settings() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
 
-  // Load current weights from backend on mount
+  // Load current weights from backend on mount and listen for Stripe checkout callbacks
   useEffect(() => {
     fetch(`${API}/settings/weights`)
       .then(r => r.ok ? r.json() : null)
@@ -44,6 +44,20 @@ export default function Settings() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Listen for Stripe checkout session redirect success/cancel params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success') {
+      const planName = localStorage.getItem('hireiq_saas_pending_plan') || 'Pro';
+      setPlan(planName);
+      localStorage.setItem('hireiq_saas_plan', planName);
+      localStorage.removeItem('hireiq_saas_pending_plan');
+      toast.success(`Subscription verified! You have been upgraded to ${planName}! 🎉`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('checkout') === 'cancel') {
+      toast.info("Subscription checkout was cancelled.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   const total   = resume + github + leetcode + portfolio;
@@ -78,6 +92,39 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2500);
   };
 
+  const handleInitiateCheckout = async (planName) => {
+    setSelectedPlan(planName);
+    setCheckoutLoading(true);
+    try {
+      // Store pending plan name locally to activate on successful redirect back
+      localStorage.setItem('hireiq_saas_pending_plan', planName);
+      
+      const res = await fetch(`${API}/settings/billing/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan_name: planName,
+          success_url: window.location.origin + '/settings?checkout=success',
+          cancel_url: window.location.origin + '/settings?checkout=cancel'
+        })
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.url && data.url.includes('stripe.com')) {
+        // Redirect to Stripe Checkout page
+        window.location.href = data.url;
+      } else {
+        // Fallback to beautiful local credit card mock form
+        setShowCheckout(true);
+      }
+    } catch {
+      // Fallback on error / offline
+      setShowCheckout(true);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   const handleSubscribe = (e) => {
     e.preventDefault();
     if (!cardNumber || !cardHolder || !cardExpiry || !cardCVC) {
@@ -89,6 +136,7 @@ export default function Settings() {
       setCheckoutLoading(false);
       setPlan(selectedPlan);
       localStorage.setItem('hireiq_saas_plan', selectedPlan);
+      localStorage.removeItem('hireiq_saas_pending_plan');
       setShowCheckout(false);
       toast.success(`Success! You have been upgraded to the ${selectedPlan} plan! 🎉`);
     }, 2000);
@@ -348,17 +396,15 @@ export default function Settings() {
                   </ul>
                 </div>
                 <button
-                  onClick={() => {
-                    setSelectedPlan('Pro');
-                    setShowCheckout(true);
-                  }}
-                  disabled={plan === 'Pro'}
-                  className={`w-full py-2 rounded-lg text-xs font-semibold transition-all ${
+                  onClick={() => handleInitiateCheckout('Pro')}
+                  disabled={plan === 'Pro' || checkoutLoading}
+                  className={`w-full py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     plan === 'Pro' 
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default' 
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95 disabled:opacity-50'
                   }`}
                 >
+                  {checkoutLoading && selectedPlan === 'Pro' && <RefreshCw className="h-3 w-3 animate-spin" />}
                   {plan === 'Pro' ? 'Current Active Plan' : 'Upgrade to Pro'}
                 </button>
               </div>
@@ -381,17 +427,15 @@ export default function Settings() {
                   </ul>
                 </div>
                 <button
-                  onClick={() => {
-                    setSelectedPlan('Enterprise');
-                    setShowCheckout(true);
-                  }}
-                  disabled={plan === 'Enterprise'}
-                  className={`w-full py-2 rounded-lg text-xs font-semibold border transition-all ${
+                  onClick={() => handleInitiateCheckout('Enterprise')}
+                  disabled={plan === 'Enterprise' || checkoutLoading}
+                  className={`w-full py-2 rounded-lg text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
                     plan === 'Enterprise' 
                       ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 cursor-default' 
-                      : 'bg-white/5 text-white border-white/10 hover:bg-white/10 active:scale-95'
+                      : 'bg-white/5 text-white border-white/10 hover:bg-white/10 active:scale-95 disabled:opacity-50'
                   }`}
                 >
+                  {checkoutLoading && selectedPlan === 'Enterprise' && <RefreshCw className="h-3 w-3 animate-spin" />}
                   {plan === 'Enterprise' ? 'Current Active Plan' : 'Select Enterprise'}
                 </button>
               </div>

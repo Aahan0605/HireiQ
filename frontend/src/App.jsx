@@ -16,6 +16,7 @@ import Jobs from './pages/Jobs';
 import JobMatches from './pages/JobMatches';
 import BiasReport from './pages/BiasReport';
 import CompareView from './pages/CompareView';
+import NotFound from './pages/NotFound';
 
 const DASH_PREFIXES = [
   '/dashboard', '/analyze', '/candidates', '/candidate',
@@ -65,6 +66,7 @@ function AppRoutes() {
           <Route path="/settings"           element={<Settings />} />
           <Route path="/compare"            element={<CompareView />} />
         </Route>
+        <Route path="*"                     element={<NotFound />} />
       </Routes>
     </>
   );

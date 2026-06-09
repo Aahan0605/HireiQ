@@ -273,12 +273,17 @@ async def _process_resume(file: UploadFile) -> dict:
     from .settings import active_weights
     from db.supabase_client import save_candidate, fetch_all_jobs
 
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     allowed_ext = {".pdf", ".txt", ".md", ".docx"}
     if ext not in allowed_ext:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'.")
 
     content = await file.read()
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
 
     if ext == ".pdf":
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
@@ -572,8 +577,11 @@ async def upload_resume(background_tasks: BackgroundTasks, file: UploadFile = Fi
     # Save placeholder to DB
     await save_candidate(placeholder)
     
-    # 3. Read file content
+    # 3. Read file content and validate size
     content = await file.read()
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
     
     # 4. Enqueue background process task
     background_tasks.add_task(background_process_resume_task, candidate_id, file.filename, content)
