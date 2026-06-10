@@ -12,6 +12,11 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default='Recruiter')
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    is_verified = Column(Boolean, default=False)
+    verification_token = Column(String(255), nullable=True)
+    verification_token_expires = Column(DateTime, nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
 
     # Relationships
     memberships = relationship("OrganizationMember", back_populates="user", cascade="all, delete-orphan")

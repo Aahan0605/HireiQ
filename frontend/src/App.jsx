@@ -19,6 +19,7 @@ import BiasReport from './pages/BiasReport';
 import CompareView from './pages/CompareView';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
+import VerifyEmail from './pages/VerifyEmail';
 
 const DASH_PREFIXES = [
   '/dashboard', '/analyze', '/candidates', '/candidate',
@@ -55,6 +56,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/"       element={<Landing />} />
         <Route path="/signin" element={<SignIn />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
         {/* All dashboard pages share the sidebar layout */}
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>

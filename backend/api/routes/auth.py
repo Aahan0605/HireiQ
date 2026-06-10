@@ -1,10 +1,17 @@
 import uuid
+import secrets
+import os
+import asyncio
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from api.core.security import verify_password, get_password_hash, create_access_token
 from api.core.dependencies import get_current_user
 from db.supabase_client import save_user, fetch_user_by_email
+from db.session import SessionLocal
+from db.models import User
+from api.core.email import send_verification_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -59,6 +66,28 @@ async def register(user_in: UserRegister):
     
     await save_user(user_data)
     
+    # Generate verification token
+    token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=24)
+    
+    # Save token to user record
+    db = SessionLocal()
+    try:
+        user_record = db.query(User).filter(User.id == user_id).first()
+        if user_record:
+            user_record.verification_token = token
+            user_record.verification_token_expires = expires
+            user_record.is_verified = False
+            db.commit()
+    finally:
+        db.close()
+    
+    # Send verification email (non-blocking)
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    verification_link = f"{frontend_url}/verify-email?token={token}"
+    
+    asyncio.create_task(send_verification_email(user_in.email, verification_link))
+    
     # Track user registration event in PostHog
     import posthog
     try:
@@ -73,12 +102,12 @@ async def register(user_in: UserRegister):
     except Exception:
         pass
     
-    # Return user details without password hash
     return {
         "id": user_id,
         "email": user_in.email,
         "role": user_in.role,
-        "message": "User registered successfully."
+        "message": "Registration successful. Please check your email to verify your account.",
+        "email_verification_sent": True
     }
 
 @router.post("/login", response_model=Token)
@@ -90,6 +119,12 @@ async def login_json(user_in: UserLogin):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.get("is_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Please verify your email before logging in."
         )
     
     access_token = create_access_token(subject=user["id"])
@@ -129,11 +164,34 @@ async def login_oauth(form_data: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if not user.get("is_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Please verify your email before logging in."
+        )
+    
     access_token = create_access_token(subject=user["id"])
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+@router.get("/verify-email")
+async def verify_email(token: str):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.verification_token == token).first()
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification token.")
+        if user.verification_token_expires < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Verification token has expired. Please register again.")
+        user.is_verified = True
+        user.verification_token = None
+        user.verification_token_expires = None
+        db.commit()
+        return {"message": "Email verified successfully. You can now sign in."}
+    finally:
+        db.close()
 
 @router.get("/me", response_model=dict)
 async def read_users_me(current_user: dict = Depends(get_current_user)):

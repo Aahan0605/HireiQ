@@ -367,7 +367,13 @@ async def fetch_user_by_email(email: str) -> dict | None:
         u = db.query(User).filter(User.email == email).first()
         if not u:
             return None
-        return {"id": u.id, "email": u.email, "hashed_password": u.hashed_password, "role": u.role}
+        return {
+            "id": u.id,
+            "email": u.email,
+            "hashed_password": u.hashed_password,
+            "role": u.role,
+            "is_verified": u.is_verified
+        }
     finally:
         db.close()
 
@@ -377,7 +383,13 @@ async def fetch_user_by_id(user_id: str) -> dict | None:
         u = db.query(User).filter(User.id == user_id).first()
         if not u:
             return None
-        return {"id": u.id, "email": u.email, "hashed_password": u.hashed_password, "role": u.role}
+        return {
+            "id": u.id,
+            "email": u.email,
+            "hashed_password": u.hashed_password,
+            "role": u.role,
+            "is_verified": u.is_verified
+        }
     finally:
         db.close()
 
