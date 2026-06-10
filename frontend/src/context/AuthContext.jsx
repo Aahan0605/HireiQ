@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       
       toast.success('Signed in successfully!');
-      return data.user;
+      return { user: data.user };
     } catch (err) {
       toast.error(err.message || 'Error signing in.');
       throw err;

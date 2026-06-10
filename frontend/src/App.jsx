@@ -18,6 +18,7 @@ import JobMatches from './pages/JobMatches';
 import BiasReport from './pages/BiasReport';
 import CompareView from './pages/CompareView';
 import NotFound from './pages/NotFound';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const DASH_PREFIXES = [
   '/dashboard', '/analyze', '/candidates', '/candidate',
@@ -56,7 +57,7 @@ function AppRoutes() {
         <Route path="/signin" element={<SignIn />} />
 
         {/* All dashboard pages share the sidebar layout */}
-        <Route element={<DashboardLayout />}>
+        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard"          element={<Dashboard />} />
           <Route path="/analyze"            element={<Analyze />} />
           <Route path="/candidates"         element={<Candidates />} />

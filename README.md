@@ -125,7 +125,7 @@ npm install
 npm run dev
 ```
 *   **App UI**: Access [http://localhost:6901](http://localhost:6901) on your local browser.
-*   **Default Login**: Use `REDACTED_EMAIL@example.com` with password `REDACTED_PASSWORD`.
+*   **Sign Up**: Register a new recruiter account directly on the Sign Up page.
 
 ---
 

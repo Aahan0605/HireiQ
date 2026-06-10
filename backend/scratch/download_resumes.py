@@ -131,10 +131,10 @@ async def add_candidates_to_db():
     
     db = SessionLocal()
     try:
-        # Find default user REDACTED_EMAIL@example.com
-        user = db.query(User).filter(User.email == "REDACTED_EMAIL@example.com").first()
+        # Find default user or first user in DB
+        user = db.query(User).filter(User.email == "REDACTED_EMAIL@example.com").first() or db.query(User).first()
         if not user:
-            print("Default admin user not found in database. Seed user first.")
+            print("No users found in database. Please register a user first.")
             return
             
         # Get user's active tenant

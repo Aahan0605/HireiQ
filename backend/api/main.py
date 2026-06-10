@@ -60,33 +60,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="HireIQ API", version="1.0.0")
 
 @app.on_event("startup")
-def seed_default_user():
-    import uuid
-    from db.session import SessionLocal, engine
-    from db.models import User, Base
-    from api.core.security import get_password_hash
-
-    # Ensure all tables are created (including new models)
+def on_startup():
+    from db.session import engine
+    from db.models import Base
     Base.metadata.create_all(bind=engine)
-
-    db = SessionLocal()
-    try:
-        email = "REDACTED_EMAIL@example.com"
-        existing = db.query(User).filter(User.email == email).first()
-        if not existing:
-            new_user = User(
-                id=str(uuid.uuid4()),
-                email=email,
-                hashed_password=get_password_hash("REDACTED_PASSWORD"),
-                role="Admin"
-            )
-            db.add(new_user)
-            db.commit()
-            logger.info("Auto-seeded default user: REDACTED_EMAIL@example.com")
-    except Exception as e:
-        logger.error(f"Failed to seed default user: {e}")
-    finally:
-        db.close()
+    logger.info("Database schema bootstrapped.")
 
 # ─── CORS — restrict to known frontend origins in production ───
 _allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:6901,http://localhost:5173").split(",")

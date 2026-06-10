@@ -1,27 +1,22 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import MagneticCard from '../components/MagneticCard';
 import { useAuth } from '../context/AuthContext';
 import ConstellationBackground from '../components/ConstellationBackground';
 
 export default function SignIn() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, register, loading } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Recruiter');
 
-  // Set default credentials only for login view helper
   React.useEffect(() => {
-    if (!isRegistering) {
-      setEmail('REDACTED_EMAIL@example.com');
-      setPassword('REDACTED_PASSWORD');
-    } else {
-      setEmail('');
-      setPassword('');
-    }
+    setEmail('');
+    setPassword('');
   }, [isRegistering]);
 
   const handleAuth = async (e) => {
@@ -32,7 +27,8 @@ export default function SignIn() {
         setIsRegistering(false);
       } else {
         await login(email, password);
-        navigate('/dashboard');
+        const state = location.state;
+        navigate(state?.from?.pathname || '/dashboard', { replace: true });
       }
     } catch (err) {
       console.error(err);
@@ -144,16 +140,7 @@ export default function SignIn() {
             )}
           </div>
 
-          {!isRegistering && (
-            <div className="mt-6 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-left text-xs text-gray-300">
-              <span className="font-bold text-emerald-400 block mb-1">Demo Access Credentials</span>
-              Use the pre-filled credentials or sign in with:
-              <div className="mt-2 font-mono text-[11px] text-gray-400 bg-black/20 p-2 rounded border border-white/5 space-y-1">
-                <div>Email: <span className="text-white">REDACTED_EMAIL@example.com</span></div>
-                <div>Password: <span className="text-white">REDACTED_PASSWORD</span></div>
-              </div>
-            </div>
-          )}
+
         </MagneticCard>
       </motion.div>
     </div>
