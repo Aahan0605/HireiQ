@@ -76,25 +76,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Strict Security Headers Middleware ─────────────────────────
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
+    allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").replace(",", " ")
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: https:; "
-        "connect-src 'self' http://localhost:8000 ws://localhost:8000 http://localhost:6901 ws://localhost:6901;"
+        f"default-src 'self'; "
+        f"script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        f"style-src 'self' 'unsafe-inline'; "
+        f"img-src 'self' data: https:; "
+        f"connect-src 'self' {allowed_origins};"
     )
     return response
 
 # ─── Global rate limiting (simple in-memory) ────────────────────
+# NOTE: This in-memory rate limiter works for single-process deployments.
+# For multi-worker production (gunicorn with multiple workers), replace with
+# a Redis-backed limiter: pip install slowapi and use SlowAPI with RedisStore.
 _rate_store: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 _UPLOAD_RATE_LIMIT = 10  # uploads per minute per IP
@@ -112,10 +115,17 @@ async def rate_limit_middleware(request: Request, call_next):
     _rate_store[client_ip] = [t for t in _rate_store[client_ip] if now - t < 60]
 
     if len(_rate_store[client_ip]) >= limit:
+        # Cleanup empty IP entries to prevent memory leak
+        if not _rate_store[client_ip]:
+            del _rate_store[client_ip]
         return JSONResponse(
             status_code=429,
             content={"detail": "Too many requests. Please try again later."},
         )
+
+    # Cleanup empty IP entries to prevent memory leak
+    if not _rate_store[client_ip]:
+        del _rate_store[client_ip]
 
     _rate_store[client_ip].append(now)
     response = await call_next(request)

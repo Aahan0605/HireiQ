@@ -40,6 +40,7 @@ def _candidate_to_dict(c: Candidate) -> dict:
     """Serialize Candidate SQLAlchemy object to dict, decrypting PII fields."""
     name = decrypt_field(c.name)
     email = decrypt_field(c.email)
+    resume_text = decrypt_field(c.resume_text)
     
     skills = _json_loads(c.skills)
     experience = _json_loads(c.experience)
@@ -61,7 +62,7 @@ def _candidate_to_dict(c: Candidate) -> dict:
         "blind_score": c.blind_score,
         "status": c.status,
         "summary": c.summary,
-        "resume_text": c.resume_text or "",
+        "resume_text": resume_text or "",
         "skills": skills,
         "experience": experience,
         "job_matches": job_matches,
@@ -108,9 +109,13 @@ async def save_candidate(candidate: dict) -> dict:
         cand_id = candidate.get("id")
         existing = db.query(Candidate).filter(Candidate.id == cand_id).first()
         
-        # Encrypt name and email PII fields
+        # Encrypt name, email, and resume_text fields
         enc_name = encrypt_field(candidate.get("name"))
         enc_email = encrypt_field(candidate.get("email"))
+        if "resume_text" in candidate:
+            enc_resume = encrypt_field(candidate.get("resume_text"))
+        else:
+            enc_resume = existing.resume_text if existing else None
 
         if existing:
             existing.organization_id = tenant_id
@@ -124,7 +129,7 @@ async def save_candidate(candidate: dict) -> dict:
             existing.blind_score = candidate.get("blind_score", existing.blind_score)
             existing.status = candidate.get("status", existing.status)
             existing.summary = candidate.get("summary", existing.summary)
-            existing.resume_text = candidate.get("resume_text", existing.resume_text)
+            existing.resume_text = enc_resume
             existing.skills = _json_dumps(candidate.get("skills", _json_loads(existing.skills)))
             existing.experience = _json_dumps(candidate.get("experience", _json_loads(existing.experience)))
             existing.job_matches = _json_dumps(candidate.get("jobMatches", candidate.get("job_matches", _json_loads(existing.job_matches))))
@@ -145,7 +150,7 @@ async def save_candidate(candidate: dict) -> dict:
                 blind_score=candidate.get("blind_score", candidate.get("score", 0)),
                 status=candidate.get("status", "Analyzing"),
                 summary=candidate.get("summary", ""),
-                resume_text=candidate.get("resume_text", ""),
+                resume_text=enc_resume if enc_resume is not None else "",
                 skills=_json_dumps(candidate.get("skills", [])),
                 experience=_json_dumps(candidate.get("experience", [])),
                 job_matches=_json_dumps(candidate.get("jobMatches", candidate.get("job_matches", []))),
