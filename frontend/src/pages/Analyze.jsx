@@ -73,24 +73,70 @@ export default function Analyze() {
   const handleSingle = async () => {
     if (!files[0]) return;
     setAnalyzing(true);
-    let p = 0;
-    const iv = setInterval(() => {
-      p = Math.min(p + Math.random() * 8, 90);
-      setProgress(p);
-      setCurrentStep(Math.min(Math.floor((p / 100) * analysisSteps.length), analysisSteps.length - 1));
-    }, 200);
+    setProgress(10);
+    setCurrentStep(0);
 
     try {
-      const newCandidate = await addCandidateFromCV(files[0]);
-      clearInterval(iv);
-      setProgress(100);
-      setCurrentStep(analysisSteps.length - 1);
-      setTimeout(() => navigate('/candidates'), 800);
-    } catch (e) {
-      clearInterval(iv);
+      const formData = new FormData();
+      formData.append('file', files[0]);
+
+      const uploadRes = await apiFetch(`${API}/candidates/upload-resume`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        if (uploadRes.status === 402) {
+          setShowUpgradeModal(true);
+          return;
+        }
+        throw new Error(err.detail || 'Upload failed');
+      }
+
+      const { candidate_id } = await uploadRes.json();
+      setProgress(30);
+      setCurrentStep(1);
+
+      // Poll for completion
+      let attempts = 0;
+      const maxAttempts = 40; // 60 seconds max
+      
+      const poll = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(poll);
+          toast.error('Analysis is taking longer than expected. Check the Candidates page.');
+          setAnalyzing(false);
+          return;
+        }
+
+        try {
+          const statusRes = await apiFetch(`${API}/candidates/${candidate_id}`);
+          if (!statusRes.ok) return;
+          const candidate = await statusRes.json();
+
+          const stepProgress = Math.min(30 + (attempts / maxAttempts) * 60, 90);
+          setProgress(Math.round(stepProgress));
+          setCurrentStep(Math.min(Math.floor((stepProgress / 100) * analysisSteps.length), analysisSteps.length - 1));
+
+          if (candidate.status !== 'Analyzing') {
+            clearInterval(poll);
+            setProgress(100);
+            setCurrentStep(analysisSteps.length - 1);
+            setTimeout(() => {
+              toast.success('Analysis complete!');
+              navigate(`/candidate/${candidate_id}`);
+            }, 600);
+          }
+        } catch (e) {
+          // silent - keep polling
+        }
+      }, 1500);
+
+    } catch (err) {
+      toast.error(err.message || 'Upload failed. Please try again.');
       setAnalyzing(false);
-      setProgress(0);
-      toast.error('Failed to start candidate analysis.');
     }
   };
 
@@ -261,10 +307,11 @@ export default function Analyze() {
                 <h3 className="mb-2 text-2xl font-bold text-white">
                   {mode === 'bulk' ? `Processing ${files.length} Resumes...` : 'Analyzing Profile'}
                 </h3>
-                <p className="mb-8 text-center text-text-2 max-w-sm">
-                  {mode === 'bulk'
-                    ? 'Running TF-IDF scoring on all resumes concurrently and saving to database...'
-                    : analysisSteps[currentStep]}
+                <p className="text-theme-2 text-sm text-center mb-8 max-w-sm">
+                  {progress < 30 ? 'Uploading resume...' 
+                   : progress < 70 ? 'Analyzing candidate profile...' 
+                   : progress < 100 ? 'Finalizing results...' 
+                   : 'Complete!'}
                 </p>
                 <div className="w-full max-w-sm">
                   <div className="mb-2 flex justify-between text-sm font-medium">
