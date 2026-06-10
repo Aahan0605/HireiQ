@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard } from 'lucide-react';
+import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard, Users, UserPlus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/apiFetch';
+import { useAuth } from '../context/AuthContext';
+
 
 const API = '/api/v1';
 
 export default function Settings() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('tab') === 'billing' ? 'billing' : 'scoring';
+    const tab = params.get('tab');
+    if (tab === 'billing') return 'billing';
+    if (tab === 'team') return 'team';
+    return 'scoring';
   });
   
   // Scoring weights state
@@ -34,6 +40,85 @@ export default function Settings() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
+
+  // Team states
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('Recruiter');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSuccessLink, setInviteSuccessLink] = useState(null);
+
+  const fetchMembers = () => {
+    setMembersLoading(true);
+    setMembersError(null);
+    apiFetch(`${API}/members`)
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to load team members.");
+        return res.json();
+      })
+      .then(data => {
+        setMembers(data);
+      })
+      .catch(err => {
+        setMembersError(err.message || "Unable to load team members.");
+      })
+      .finally(() => {
+        setMembersLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === 'team') {
+      fetchMembers();
+    }
+  }, [activeTab]);
+
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail) return;
+    setInviteLoading(true);
+    setInviteSuccessLink(null);
+    try {
+      const res = await apiFetch(`${API}/members/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to invite member.");
+      }
+      const frontendUrl = window.location.origin;
+      const link = `${frontendUrl}/accept-invite?token=${data.token}`;
+      setInviteSuccessLink(link);
+      setInviteEmail('');
+      toast.success(`Invitation generated for ${inviteEmail}!`);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err.message || "Error generating invitation.");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!window.confirm("Are you sure you want to remove this team member?")) return;
+    try {
+      const res = await apiFetch(`${API}/members/${memberId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to remove member.");
+      }
+      toast.success("Team member removed successfully.");
+      fetchMembers();
+    } catch (err) {
+      toast.error(err.message || "Error removing team member.");
+    }
+  };
 
   // Load current weights and sync billing quota/plan from backend on mount and listen for Stripe checkout callbacks
   useEffect(() => {
@@ -237,6 +322,16 @@ export default function Settings() {
             >
               <Zap size={13} /> Billing & Plan
             </button>
+            <button 
+              onClick={() => setActiveTab('team')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'team' 
+                  ? 'bg-emerald-600 text-white shadow' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Users size={13} /> Team
+            </button>
           </div>
         </div>
 
@@ -334,7 +429,7 @@ export default function Settings() {
               </button>
             </motion.div>
           </div>
-        ) : (
+        ) : activeTab === 'billing' ? (
           /* Billing & SaaS tabs */
           <div className="space-y-6">
             {/* Active Plan Usage Tracker */}
@@ -622,6 +717,171 @@ export default function Settings() {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+        ) : (
+          /* Team management tab */
+          <div className="space-y-6">
+            {/* Team Members List Card */}
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Team Members</h2>
+                  <p className="text-xs text-gray-400">Manage colleagues and their workspace roles</p>
+                </div>
+                {membersLoading && <RefreshCw className="h-4 w-4 text-emerald-500 animate-spin" />}
+              </div>
+
+              {membersLoading && members.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <RefreshCw className="animate-spin text-emerald-500 h-6 w-6" />
+                </div>
+              ) : membersError ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle size={14} /> {membersError}
+                </div>
+              ) : members.length === 0 ? (
+                <div className="text-center py-8 text-xs text-gray-400">
+                  No members found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead>
+                      <tr className="border-b border-white/10 text-gray-400 text-xs font-semibold">
+                        <th className="pb-3 pt-2 px-4">Email</th>
+                        <th className="pb-3 pt-2 px-4">Role</th>
+                        <th className="pb-3 pt-2 px-4">Joined At</th>
+                        <th className="pb-3 pt-2 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-xs sm:text-sm">
+                      {members.map(m => (
+                        <tr key={m.id} className="hover:bg-white/5 transition-colors">
+                          <td className="py-3 px-4 text-white font-medium">{m.email}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                              m.role === 'Admin' || m.role === 'Owner'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : 'bg-white/5 text-gray-300 border-white/10'
+                            }`}>
+                              {m.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-400">
+                            {m.joined_at ? new Date(m.joined_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Pending'}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            {user?.email !== m.email && (user?.role === 'Owner' || user?.role === 'Admin') && (
+                              <button
+                                onClick={() => handleRemoveMember(m.id)}
+                                className="text-xs text-red-400 hover:text-red-300 font-semibold transition-colors active:scale-95 flex items-center gap-1 ml-auto"
+                              >
+                                <Trash2 size={12} /> Remove
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.div>
+
+            {/* Invite Section */}
+            {(user?.role === 'Owner' || user?.role === 'Admin') ? (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <UserPlus className="text-emerald-500" size={18} />
+                  <h3 className="text-lg font-semibold text-white">Invite Team Member</h3>
+                </div>
+                
+                <form onSubmit={handleInvite} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="colleague@company.com"
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1">Role</label>
+                      <select
+                        value={inviteRole}
+                        onChange={e => setInviteRole(e.target.value)}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors"
+                      >
+                        <option value="Recruiter">Recruiter</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Hiring Manager">Hiring Manager</option>
+                        <option value="Viewer">Viewer</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="submit"
+                    disabled={inviteLoading}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium flex items-center gap-2 text-xs transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {inviteLoading ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" /> Inviting...
+                      </>
+                    ) : (
+                      <>
+                        Send Invitation
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {inviteSuccessLink && (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                    className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2"
+                  >
+                    <p className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                      <Check size={14} /> Invitation generated successfully!
+                    </p>
+                    <p className="text-xs text-gray-400">Share this link with your team member to accept the invite:</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={inviteSuccessLink}
+                        className="flex-1 px-3 py-1.5 bg-black/30 border border-white/10 rounded-lg text-gray-300 text-xs font-mono select-all outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteSuccessLink);
+                          toast.success("Invitation link copied to clipboard!");
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                      >
+                        Copy Link
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 text-center"
+              >
+                <Lock className="mx-auto text-gray-400 mb-2" size={24} />
+                <h3 className="text-sm font-semibold text-white mb-1">Invite Form Restricted</h3>
+                <p className="text-xs text-gray-400">Only workspace Owners and Admins can invite new team members.</p>
+              </motion.div>
+            )}
           </div>
         )}
 

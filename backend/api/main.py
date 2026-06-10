@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-from .routes import jobs, candidates, settings, reports, auth, billing
+from .routes import jobs, candidates, settings, reports, auth, billing, members
 
 import sentry_sdk
 import posthog
@@ -138,6 +138,7 @@ app.include_router(jobs.router,       prefix="/api/v1")
 app.include_router(settings.router,   prefix="/api/v1")
 app.include_router(reports.router,    prefix="/api/v1")
 app.include_router(billing.router,    prefix="/api/v1")
+app.include_router(members.router,    prefix="/api/v1")
 
 # ─── Prometheus Monitoring ──────────────────────────────────────
 Instrumentator().instrument(app).expose(app)
