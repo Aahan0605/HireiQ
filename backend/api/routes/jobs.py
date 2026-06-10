@@ -8,11 +8,15 @@ import uuid
 from collections import Counter
 from db.supabase_client import save_job, fetch_all_jobs, fetch_job_by_id, delete_job as delete_job_db
 from api.core.dependencies import get_current_user
+from api.core.rbac import require_tenant, require_permission, Permission
+from db.session import get_db
+from sqlalchemy.orm import Session
+from api.core.limits import check_job_creation_limit, increment_jobs_created
 
 router = APIRouter(
     prefix="/jobs",
     tags=["Jobs"],
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_tenant)]
 )
 
 
@@ -27,14 +31,14 @@ class JobCreate(BaseModel):
     status: str           # Open / Closed / Draft
 
 
-async def _seed_if_empty():
+async def _seed_if_empty(tenant_id: str):
     """Seeds default jobs into the database if empty."""
     existing = await fetch_all_jobs()
     if existing:
         return
     seed_jobs = [
         {
-            "id": "1",
+            "id": f"seed-1-{tenant_id}",
             "title": "Senior Frontend Engineer",
             "department": "Engineering",
             "location": "Remote",
@@ -45,7 +49,7 @@ async def _seed_if_empty():
             "status": "Open",
         },
         {
-            "id": "2",
+            "id": f"seed-2-{tenant_id}",
             "title": "Backend Python Developer",
             "department": "Engineering",
             "location": "Bangalore",
@@ -56,7 +60,7 @@ async def _seed_if_empty():
             "status": "Open",
         },
         {
-            "id": "3",
+            "id": f"seed-3-{tenant_id}",
             "title": "ML Engineer",
             "department": "AI/ML",
             "location": "Remote",
@@ -67,7 +71,7 @@ async def _seed_if_empty():
             "status": "Open",
         },
         {
-            "id": "4",
+            "id": f"seed-4-{tenant_id}",
             "title": "Fullstack Developer",
             "department": "Product",
             "location": "Hybrid",
@@ -108,32 +112,35 @@ def _cosine_similarity(text_a: str, text_b: str) -> float:
 # ── CRUD ──────────────────────────────────────────────────────
 
 @router.get("")
-async def get_jobs():
-    await _seed_if_empty()
+async def get_jobs(tenant_id: str = Depends(require_tenant)):
+    await _seed_if_empty(tenant_id)
     return await fetch_all_jobs()
 
 
-@router.post("", status_code=201)
-async def create_job(job: JobCreate):
+@router.post("", status_code=201, dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
+async def create_job(job: JobCreate, tenant_id: str = Depends(require_tenant), db: Session = Depends(get_db)):
+    check_job_creation_limit(db, tenant_id)
     record = {
         **job.model_dump(),
         "id": str(uuid.uuid4()),
         "created_at": datetime.now().isoformat(),
         "company": "HireIQ Corp"
     }
-    return await save_job(record)
+    res = await save_job(record)
+    increment_jobs_created(db, tenant_id)
+    return res
 
 
 @router.get("/{job_id}")
-async def get_job(job_id: str):
+async def get_job(job_id: str, tenant_id: str = Depends(require_tenant)):
     job = await fetch_job_by_id(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
-@router.put("/{job_id}")
-async def update_job(job_id: str, job: JobCreate):
+@router.put("/{job_id}", dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
+async def update_job(job_id: str, job: JobCreate, tenant_id: str = Depends(require_tenant)):
     existing = await fetch_job_by_id(job_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -145,8 +152,8 @@ async def update_job(job_id: str, job: JobCreate):
     return await save_job(record)
 
 
-@router.delete("/{job_id}")
-async def delete_job(job_id: str):
+@router.delete("/{job_id}", dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
+async def delete_job(job_id: str, tenant_id: str = Depends(require_tenant)):
     existing = await fetch_job_by_id(job_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -157,7 +164,7 @@ async def delete_job(job_id: str):
 # ── MATCHING ──────────────────────────────────────────────────
 
 @router.get("/{job_id}/matches")
-async def job_matches(job_id: str):
+async def job_matches(job_id: str, tenant_id: str = Depends(require_tenant)):
     """
     Rank all candidates for a job using TF-IDF cosine similarity + Max-Heap.
     Time Complexity: O(n log n) — TF-IDF scoring O(n*m) + Max-Heap ranking O(n log n)

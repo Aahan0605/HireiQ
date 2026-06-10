@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState('scoring'); // 'scoring' | 'billing'
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') === 'billing' ? 'billing' : 'scoring';
+  });
   
   // Scoring weights state
   const [resume,    setResume]    = useState(40);
@@ -22,6 +26,7 @@ export default function Settings() {
 
   // Billing SaaS states
   const [plan, setPlan] = useState(() => localStorage.getItem('hireiq_saas_plan') || 'Free');
+  const [quotaUsed, setQuotaUsed] = useState(0);
   const [cardNumber, setCardNumber] = useState('');
   const [cardHolder, setCardHolder] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
@@ -30,9 +35,9 @@ export default function Settings() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
 
-  // Load current weights from backend on mount and listen for Stripe checkout callbacks
+  // Load current weights and sync billing quota/plan from backend on mount and listen for Stripe checkout callbacks
   useEffect(() => {
-    fetch(`${API}/settings/weights`)
+    apiFetch(`${API}/settings/weights`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data) {
@@ -45,15 +50,40 @@ export default function Settings() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
+    apiFetch(`${API}/settings/analytics`)
+      .then(r => r.ok ? r.json() : { total_candidates: 0 })
+      .then(data => {
+        setQuotaUsed(data.total_candidates ?? 0);
+        if (data.plan_name) {
+          setPlan(data.plan_name);
+          localStorage.setItem('hireiq_saas_plan', data.plan_name);
+        }
+      })
+      .catch(() => {});
+
     // Listen for Stripe checkout session redirect success/cancel params
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') === 'success') {
       const planName = localStorage.getItem('hireiq_saas_pending_plan') || 'Pro';
-      setPlan(planName);
-      localStorage.setItem('hireiq_saas_plan', planName);
-      localStorage.removeItem('hireiq_saas_pending_plan');
-      toast.success(`Subscription verified! You have been upgraded to ${planName}! 🎉`);
-      window.history.replaceState({}, document.title, window.location.pathname);
+      apiFetch(`${API}/settings/billing/update-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_name: planName })
+      })
+      .then(r => {
+        if (r.ok) {
+          setPlan(planName);
+          localStorage.setItem('hireiq_saas_plan', planName);
+          toast.success(`Subscription verified! You have been upgraded to ${planName}! 🎉`);
+        } else {
+          toast.error("Failed to verify subscription on server.");
+        }
+      })
+      .catch(() => toast.error("Failed to verify subscription on server."))
+      .finally(() => {
+        localStorage.removeItem('hireiq_saas_pending_plan');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      });
     } else if (params.get('checkout') === 'cancel') {
       toast.info("Subscription checkout was cancelled.");
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -65,7 +95,7 @@ export default function Settings() {
 
   const handleSaveWeights = async () => {
     try {
-      await fetch(`${API}/settings/weights`, {
+      await apiFetch(`${API}/settings/weights`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +112,7 @@ export default function Settings() {
 
   const handleSaveThresholds = async () => {
     try {
-      await fetch(`${API}/settings/thresholds`, {
+      await apiFetch(`${API}/settings/thresholds`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ strong: strongMatch, match, weak: weakMatch }),
@@ -99,7 +129,7 @@ export default function Settings() {
       // Store pending plan name locally to activate on successful redirect back
       localStorage.setItem('hireiq_saas_pending_plan', planName);
       
-      const res = await fetch(`${API}/settings/billing/create-checkout-session`, {
+      const res = await apiFetch(`${API}/settings/billing/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,27 +155,46 @@ export default function Settings() {
     }
   };
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault();
     if (!cardNumber || !cardHolder || !cardExpiry || !cardCVC) {
       toast.error("Please fill in all payment fields.");
       return;
     }
     setCheckoutLoading(true);
-    setTimeout(() => {
-      setCheckoutLoading(false);
+    try {
+      const res = await apiFetch(`${API}/settings/billing/update-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_name: selectedPlan })
+      });
+      if (!res.ok) throw new Error();
       setPlan(selectedPlan);
       localStorage.setItem('hireiq_saas_plan', selectedPlan);
       localStorage.removeItem('hireiq_saas_pending_plan');
       setShowCheckout(false);
       toast.success(`Success! You have been upgraded to the ${selectedPlan} plan! 🎉`);
-    }, 2000);
+    } catch {
+      toast.error("Failed to upgrade subscription on server.");
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
-  const handleResetPlan = () => {
-    setPlan('Free');
-    localStorage.setItem('hireiq_saas_plan', 'Free');
-    toast.success("Downgraded back to Free tier.");
+  const handleResetPlan = async () => {
+    try {
+      const res = await apiFetch(`${API}/settings/billing/update-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_name: 'Free' })
+      });
+      if (!res.ok) throw new Error();
+      setPlan('Free');
+      localStorage.setItem('hireiq_saas_plan', 'Free');
+      toast.success("Downgraded back to Free tier.");
+    } catch {
+      toast.error("Failed to downgrade subscription on server.");
+    }
   };
 
   const sliders = [
@@ -315,15 +364,17 @@ export default function Settings() {
               {plan === 'Free' ? (
                 <div>
                   <div className="flex justify-between text-xs text-gray-400 mb-2">
-                    <span>3 of 5 CV uploads parsed</span>
-                    <span className="text-emerald-400 font-bold">60% quota used</span>
+                    <span>{quotaUsed} of 5 CV uploads parsed</span>
+                    <span className="text-emerald-400 font-bold">{Math.round((quotaUsed / 5) * 100)}% quota used</span>
                   </div>
                   <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: '60%' }} />
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} />
                   </div>
                   <p className="text-[11px] text-yellow-400/80 mt-3 flex items-center gap-1.5">
                     <AlertCircle size={12} />
-                    You are approaching your free tier limit. Upgrade to Pro for unlimited parsing and candidate management.
+                    {quotaUsed >= 5 
+                      ? "You have reached your free tier limit. Upgrade to Pro for unlimited parsing and candidate management."
+                      : "Upgrade to Pro for unlimited parsing, advanced filters, and candidate management."}
                   </p>
                 </div>
               ) : (

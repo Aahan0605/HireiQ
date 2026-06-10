@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, MapPin, Clock, Trash2, Edit2, X } from 'lucide-react';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
@@ -32,7 +33,7 @@ export default function Jobs() {
 
   const load = () => {
     setLoading(true);
-    fetch(`${API}/jobs`)
+    apiFetch(`${API}/jobs`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => { setJobs(data); setError(''); })
       .catch(() => setError('Failed to load jobs. Is the backend running?'))
@@ -80,7 +81,7 @@ export default function Jobs() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this job?')) return;
-    await fetch(`${API}/jobs/${id}`, { method: 'DELETE' });
+    await apiFetch(`${API}/jobs/${id}`, { method: 'DELETE' });
     setJobs(prev => prev.filter(j => j.id !== id));
   };
 
@@ -92,7 +93,7 @@ export default function Jobs() {
       let res;
       if (editingJob) {
         // PUT — update existing job
-        res = await fetch(`${API}/jobs/${editingJob.id}`, {
+        res = await apiFetch(`${API}/jobs/${editingJob.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -102,7 +103,7 @@ export default function Jobs() {
         setJobs(prev => prev.map(j => j.id === editingJob.id ? updated : j));
       } else {
         // POST — create new job
-        res = await fetch(`${API}/jobs`, {
+        res = await apiFetch(`${API}/jobs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

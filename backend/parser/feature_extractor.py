@@ -384,19 +384,24 @@ def extract_contact(text: str) -> dict[str, str | None]:
     """
     Extract real contact information from resume text.
 
-    Only extracts email, GitHub, LinkedIn if explicitly present.
+    Only extracts email, GitHub, LinkedIn, and phone if explicitly present.
     NEVER generates fake contact info. Returns None for missing fields.
 
     Time: O(n) where n = text length
     """
-    email_match = re.findall(r"[\w\.\-]+@[\w\.\-]+\.\w{2,}", text)
+    email_match = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
     github_match = re.findall(r"github\.com/[\w\-]+", text, re.IGNORECASE)
     linkedin_match = re.findall(r"linkedin\.com/in/[\w\-]+", text, re.IGNORECASE)
+    
+    # Phone number matching pattern supporting international format, brackets, hyphens, and spaces
+    phone_pattern = r"\+?\d{1,4}?[\s.-]?\(?\d{1,3}?\)?[\s.-]?\d{1,4}[\s.-]?\d{1,4}[\s.-]?\d{1,9}"
+    phone_match = re.findall(phone_pattern, text)
 
     return {
         "email": email_match[0] if email_match else None,
         "github": github_match[0] if github_match else None,
         "linkedin": linkedin_match[0] if linkedin_match else None,
+        "phone": phone_match[0].strip() if phone_match else None,
     }
 
 
@@ -408,7 +413,7 @@ def _extract_email(text: str) -> str:
     if not text:
         return None
 
-    match = re.search(r"[\w\.-]+@[\w\.-]+\.\w{2,}", text)
+    match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
     return match.group(0) if match else None
 
 
@@ -491,43 +496,115 @@ def _extract_experience_from_timeline(text: str) -> list[dict]:
     return experiences[:5]  # Return max 5 experiences
 
 
+
+def _extract_projects(text: str) -> list[dict[str, str]]:
+    """
+    Extract project titles and descriptions from resume text.
+    Looks for sections labeled 'projects' or similar and parses list items.
+    """
+    projects = []
+    text_lower = text.lower()
+    
+    # Locate project section
+    project_headers = ["projects", "personal projects", "academic projects", "key projects", "selected projects"]
+    start_idx = -1
+    for header in project_headers:
+        idx = text_lower.find(header)
+        if idx != -1:
+            start_idx = idx + len(header)
+            break
+            
+    if start_idx != -1:
+        # End of section is the next major header (e.g. Experience, Education, Skills)
+        next_headers = ["experience", "education", "skills", "certifications", "languages", "interests", "about me"]
+        end_idx = len(text)
+        for nh in next_headers:
+            idx = text_lower.find(nh, start_idx)
+            if idx != -1 and idx < end_idx:
+                end_idx = idx
+                
+        project_section = text[start_idx:end_idx].strip()
+        lines = [l.strip() for l in project_section.split("\n") if l.strip()]
+        
+        current_project = None
+        for line in lines:
+            is_bullet = line.startswith(("*", "-", "•", "▪"))
+            clean_line = re.sub(r"^[*\-•▪]\s*", "", line).strip()
+            
+            title_match = re.search(r"^([a-zA-Z0-9\s\-\.\/]+)(?:\s*[\(\[].*?[\)\]])?(?:\s*[:|–—-])", clean_line)
+            if title_match and len(title_match.group(1).strip()) < 40:
+                title = title_match.group(1).strip()
+                desc = clean_line[title_match.end():].strip()
+                current_project = {"title": title, "description": desc}
+                projects.append(current_project)
+            elif is_bullet and current_project:
+                current_project["description"] += " " + clean_line
+            elif len(clean_line) < 40 and any(c.isupper() for c in clean_line[:3]):
+                current_project = {"title": clean_line, "description": ""}
+                projects.append(current_project)
+            elif current_project:
+                current_project["description"] += " " + clean_line
+
+    for p in projects:
+        p["description"] = p["description"].strip()
+        
+    projects = [p for p in projects if len(p["title"]) > 2]
+    
+    if not projects:
+        project_regex = re.findall(r"(?:built|developed|designed|implemented)\s+([A-Z][A-Za-z0-9\s\-]+?)(?:\s+using|\s+with|\s+to|\s+for|\.|,)", text)
+        for match in project_regex[:3]:
+            title = match.strip()
+            if len(title) > 3 and len(title) < 40:
+                projects.append({"title": title, "description": f"Developed {title} integration."})
+                
+    return projects[:5]
+
+
+def _extract_achievements(text: str) -> list[str]:
+    """
+    Extract achievement statements from the resume (bullet points emphasizing impact/results).
+    """
+    achievements = []
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    
+    impact_keywords = [
+        r"\b(?:won|awarded|achieved|ranked|first place|scholarship)\b",
+        r"\b(?:increased|decreased|reduced|saved|grew|improved|optimized|cut)\s+(?:by\s+)?\d+\s*%",
+        r"\b(?:managed|led|directed|oversaw)\s+team\s+of\s+\d+",
+        r"\b(?:published|presented|authored)\b",
+        r"\b(?:successfully\s+)?(?:launched|delivered|deployed|migrated)\b"
+    ]
+    
+    for line in lines:
+        clean_line = re.sub(r"^[*\-•▪]\s*", "", line).strip()
+        if len(clean_line) < 15 or len(clean_line) > 150:
+            continue
+            
+        for pattern in impact_keywords:
+            if re.search(pattern, clean_line, re.IGNORECASE):
+                achievements.append(clean_line)
+                break
+                
+    return achievements[:5]
+
+
 def extract_features(text: str) -> dict:
     """
     Extract structured features from resume text.
-
-    Performs:
-        1. Skill detection using KMP pattern matching
-        2. Experience extraction via regex
-        3. Education level identification
-        4. Certification detection
-
-    Time Complexity: O(n·k) where n = text length, k = number of known skills (KMP for each)
-    Space Complexity: O(k) for skills list
-
-    Args:
-        text: Cleaned resume text (output of resume_parser).
-
-    Returns:
-        Dict with keys:
-            - skills:         list[str] — matched skill names
-            - experience:     float — estimated years of experience
-            - education:      str — highest education level detected
-            - certifications: list[str] — detected certifications
-            - raw_text:       str — original text for downstream use
-
-    Examples:
-        >>> features = extract_features("Python developer with 5 years experience, B.Tech, AWS SAA certified")
-        >>> "Python" in features["skills"]
-        True
-        >>> features["experience"]
-        5.0
     """
     if not text:
         return {
+            "name": "",
+            "email": None,
+            "phone": None,
+            "github": None,
+            "linkedin": None,
             "skills": [],
             "experience": 0.0,
             "education": "unknown",
             "certifications": [],
+            "projects": [],
+            "achievements": [],
             "raw_text": "",
         }
 
@@ -535,12 +612,23 @@ def extract_features(text: str) -> dict:
     experience = _extract_experience(text)
     education = _extract_education(text)
     certifications = _extract_certifications(text)
+    name = _extract_name(text)
+    contact = extract_contact(text)
+    projects = _extract_projects(text)
+    achievements = _extract_achievements(text)
 
     return {
+        "name": name,
+        "email": contact.get("email"),
+        "phone": contact.get("phone"),
+        "github": contact.get("github"),
+        "linkedin": contact.get("linkedin"),
         "skills": skills,
         "experience": experience,
         "education": education,
         "certifications": certifications,
+        "projects": projects,
+        "achievements": achievements,
         "raw_text": text,
     }
 
@@ -772,15 +860,62 @@ def _extract_skills(text: str) -> list[str]:
 def _extract_experience(text: str) -> float:
     """
     Extract years of experience from experience entries with dates.
-
     Parses experience timeline to calculate total years.
-    Time: O(n)
     """
     if not text:
         return 0.0
 
     text_lower = text.lower()
     years_found: list[float] = []
+
+    # Helper to parse month/year into numerical year float
+    def parse_date(date_str: str) -> float | None:
+        date_str = date_str.lower().strip()
+        if date_str in ("present", "current", "now"):
+            return 2026.5  # current time approximation for mid-2026
+
+        # Try to find year
+        year_match = re.search(r"\b(20\d{2}|19\d{2})\b", date_str)
+        if not year_match:
+            return None
+        year = int(year_match.group(1))
+
+        # Try to find month
+        months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+        month_idx = 0  # default to Jan
+        for i, m in enumerate(months):
+            if m in date_str:
+                month_idx = i
+                break
+        else:
+            # Check for numeric month: e.g. "06/2021" or "06-2021"
+            num_month_match = re.search(r"\b(0?[1-9]|1[0-2])[\s/]+(20\d{2}|19\d{2})\b", date_str)
+            if num_month_match:
+                month_idx = int(num_month_match.group(1)) - 1
+
+        return year + (month_idx / 12.0)
+
+    # 1. Match date ranges (e.g. "June 2021 - Present", "06/2021 - 08/2023", "2018 - 2021", "Jan 2020 to Dec 2022")
+    date_regex = r"(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s\.\d,]*\d{4})|(?:\d{1,2}[\s/]+\d{4})|(?:\b\d{4}\b)"
+    range_regex = rf"({date_regex})\s*(?:-|–|—|to)\s*({date_regex}|present|current|now)"
+    
+    accumulated_years = 0.0
+    # Process line-by-line to filter out education-related lines
+    for line in text_lower.split("\n"):
+        if any(keyword in line for keyword in ["university", "college", "school", "iit", "nirma", "education", "degree", "btech", "mtech", "b.tech", "b.s.", "bachelor", "master", "phd", "coursework"]):
+            continue
+        
+        ranges = re.findall(range_regex, line)
+        for start_str, end_str in ranges:
+            t_start = parse_date(start_str)
+            t_end = parse_date(end_str)
+            if t_start is not None and t_end is not None:
+                diff = t_end - t_start
+                if 0 < diff < 40:
+                    accumulated_years += diff
+
+    if accumulated_years > 0:
+        years_found.append(round(accumulated_years, 1))
 
     # Pattern 1: "X years of experience" / "X+ years" / "X yrs"
     pattern1 = re.findall(
@@ -829,7 +964,7 @@ def _extract_experience(text: str) -> float:
     for year_str in pattern5:
         try:
             start_year = int(year_str)
-            approx_years = 2026 - start_year  # current year approximation
+            approx_years = 2026 - start_year
             if 0 < approx_years < 50:
                 years_found.append(float(approx_years))
         except ValueError:
@@ -838,8 +973,8 @@ def _extract_experience(text: str) -> float:
     if not years_found:
         return 0.0
 
-    # Return the maximum detected years (most representative)
     return max(years_found)
+
 
 
 def extract_experience(text: str) -> list[dict]:
@@ -929,7 +1064,8 @@ def _extract_education(text: str) -> str:
     sorted_keywords = sorted(EDUCATION_KEYWORDS.keys(), key=len, reverse=True)
 
     for keyword in sorted_keywords:
-        if keyword in text_lower:
+        # Check for whole-word boundary matches to avoid false positives (e.g., matching "mba" in "Bombay")
+        if re.search(r"\b" + re.escape(keyword) + r"\b", text_lower):
             degree = EDUCATION_KEYWORDS[keyword]
             score = EDUCATION_SCORES.get(degree, 0.0)
             detected.append((degree, score))
@@ -1212,13 +1348,24 @@ def get_skill_categories(skills: list[str]) -> dict[str, list[str]]:
     return {k: v for k, v in categories.items() if v}
 
 
-def generate_resume_insights(features: dict, text: str) -> dict:
+def generate_resume_insights(
+    features: dict,
+    text: str,
+    github_signals: dict | None = None,
+    linkedin_signals: dict | None = None,
+) -> dict:
     """Generate detailed candidate insights and scores from extracted features."""
     import re
-    skills = features.get("skills", [])
+    skills = list(features.get("skills", []))
     experience = features.get("experience", 0.0)
     education = features.get("education", "unknown")
     certs = features.get("certifications", [])
+
+    # Merge GitHub languages into skills list (deduplicated)
+    if github_signals and github_signals.get("languages"):
+        for lang in github_signals.get("languages", []):
+            if lang.lower() not in {s.lower() for s in skills}:
+                skills.append(lang)
 
     # 1. Completeness Score
     score_parts = 0
@@ -1226,27 +1373,51 @@ def generate_resume_insights(features: dict, text: str) -> dict:
     elif len(skills) >= 1: score_parts += 10
     
     if experience > 0: score_parts += 20
+    if experience >= 5: score_parts += 10  # experience depth
     
     if education != "unknown": score_parts += 20
     
-    email_m = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+    email_m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
     github_m = re.search(r"github\.com/[\w-]+", text, re.I)
     linkedin_m = re.search(r"linkedin\.com/in/[\w-]+", text, re.I)
     
-    if email_m: score_parts += 15
-    if github_m: score_parts += 12
-    if linkedin_m: score_parts += 13
+    has_github = github_m or (github_signals and bool(github_signals))
+    has_linkedin = linkedin_m or (linkedin_signals and linkedin_signals.get("has_linkedin"))
     
+    if email_m: score_parts += 15
+    if has_github: score_parts += 12
+    if has_linkedin: score_parts += 13
+    
+    # factor in github repo count (>=5 repos = +10pts)
+    if github_signals and github_signals.get("total_repos", 0) >= 5:
+        score_parts += 10
+        
+    # factor in certifications
+    if certs or (linkedin_signals and linkedin_signals.get("certifications")):
+        score_parts += 10
+        
     completeness = min(100, max(20, score_parts))
 
     # 2. ATS Score
     ats_points = 30
-    if "experience" in text.lower(): ats_points += 15
-    if "education" in text.lower(): ats_points += 15
-    if "skills" in text.lower() or "technologies" in text.lower(): ats_points += 15
-    if len(skills) >= 8: ats_points += 15
-    if len(skills) > 20: ats_points -= 5
+    if "experience" in text.lower() or "work history" in text.lower() or "employment" in text.lower(): ats_points += 15
+    if "education" in text.lower() or "academic" in text.lower() or "university" in text.lower(): ats_points += 15
+    if "skills" in text.lower() or "technologies" in text.lower() or "technical expertise" in text.lower(): ats_points += 15
     
+    word_count = len(text.split())
+    if word_count >= 400: ats_points += 10
+    
+    if len(skills) >= 8: ats_points += 15
+    
+    # penalise skill overload
+    if len(skills) > 30: ats_points -= 8
+    elif len(skills) > 20: ats_points -= 5
+    
+    if github_signals:
+        commit_freq = github_signals.get("commit_frequency_per_week", github_signals.get("commit_frequency", 0.0))
+        if commit_freq > 2:
+            ats_points += 8
+            
     ats_score = min(100, max(30, ats_points))
 
     # 3. Career Progression
@@ -1256,8 +1427,10 @@ def generate_resume_insights(features: dict, text: str) -> dict:
         progression = "Mid-Senior Level Specialist"
     elif experience >= 1.5:
         progression = "Independent Professional / Mid-Level"
-    else:
+    elif experience > 0.0:
         progression = "Early Career / Associate Level"
+    else:
+        progression = "Entry Level / Student"
 
     # 4. Strengths, Weaknesses, and Concerns
     strengths = []
@@ -1270,28 +1443,54 @@ def generate_resume_insights(features: dict, text: str) -> dict:
         strengths.append("Established track record with 5+ years in engineering.")
     if certs:
         strengths.append(f"Validated industry competence with {len(certs)} certifications (e.g. {certs[0]}).")
-    if github_m:
+    if has_github:
         strengths.append("Active open source developer footprint detected via GitHub.")
+    if github_signals:
+        stars = github_signals.get("total_stars", 0)
+        if stars >= 20:
+            strengths.append(f"Strong open-source validation with {stars} total GitHub stars.")
+        commit_freq = github_signals.get("commit_frequency_per_week", github_signals.get("commit_frequency", 0.0))
+        if commit_freq >= 5:
+            strengths.append(f"High development velocity with {commit_freq:.1f} commits per week.")
+        if github_signals.get("has_tests"):
+            strengths.append("Demonstrates commitment to software quality with test suites present in repositories.")
+    if linkedin_signals:
+        recs = linkedin_signals.get("recommendations", 0)
+        if recs > 0:
+            strengths.append(f"Strong peer endorsements with {recs} LinkedIn recommendations.")
+        conns = linkedin_signals.get("connections", 0)
+        if conns >= 500:
+            strengths.append(f"Extensive professional network with {conns}+ LinkedIn connections.")
+
     if len(strengths) == 0:
         strengths.append("Possesses core fundamental engineering skills.")
 
     if len(skills) < 5:
         weaknesses.append("Narrow technical stack listing. Recommend expanding core skills.")
     if experience < 1.0:
-        weaknesses.append("Limited commercial experience listed on profile.")
+        if not github_signals:
+            weaknesses.append("Limited commercial experience listed on profile, compounded by lack of public GitHub portfolio.")
+        else:
+            weaknesses.append("Limited commercial experience listed, but compensated by active public GitHub portfolio.")
     if education == "unknown":
         weaknesses.append("No formal degree program detected on resume.")
-    if not certs:
+    if not certs and not (linkedin_signals and linkedin_signals.get("certifications")):
         weaknesses.append("No cloud or vendor certifications listed to validate domain competence.")
     if len(weaknesses) == 0:
         weaknesses.append("None identified. High compatibility across standard criteria.")
 
-    if not linkedin_m and not github_m:
+    if not has_linkedin and not has_github:
         concerns.append("Minimal online portfolio presence (missing both LinkedIn and GitHub links).")
     if experience > 10.0 and len(skills) < 6:
         concerns.append("Experience/Skill set mismatch: long tenure but very few modern skills listed.")
     if len(concerns) == 0:
         concerns.append("Resume structures align with industry best practices.")
+
+    sources_used = {
+        "resume": True,
+        "github": github_signals is not None and bool(github_signals),
+        "linkedin": linkedin_signals is not None and linkedin_signals.get("has_linkedin", False)
+    }
 
     return {
         "completeness_score": completeness,
@@ -1300,5 +1499,6 @@ def generate_resume_insights(features: dict, text: str) -> dict:
         "strengths": strengths,
         "weaknesses": weaknesses,
         "concerns": concerns,
+        "sources_used": sources_used,
     }
 

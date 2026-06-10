@@ -10,6 +10,9 @@ from engine.bias_auditor import (
     audit_bias,
     run_batch_bias_audit,
 )
+from engine.skill_confidence import compute_skill_confidence
+from engine.ranker import compute_composite_rank_score
+from engine.matcher import compute_match_breakdown
 
 __all__ = [
     "verify_claims",
@@ -18,4 +21,7 @@ __all__ = [
     "create_blind_features",
     "audit_bias",
     "run_batch_bias_audit",
+    "compute_skill_confidence",
+    "compute_composite_rank_score",
+    "compute_match_breakdown",
 ]

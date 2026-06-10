@@ -143,6 +143,17 @@ export default function SignIn() {
               </>
             )}
           </div>
+
+          {!isRegistering && (
+            <div className="mt-6 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-left text-xs text-gray-300">
+              <span className="font-bold text-emerald-400 block mb-1">Demo Access Credentials</span>
+              Use the pre-filled credentials or sign in with:
+              <div className="mt-2 font-mono text-[11px] text-gray-400 bg-black/20 p-2 rounded border border-white/5 space-y-1">
+                <div>Email: <span className="text-white">REDACTED_EMAIL@example.com</span></div>
+                <div>Password: <span className="text-white">REDACTED_PASSWORD</span></div>
+              </div>
+            </div>
+          )}
         </MagneticCard>
       </motion.div>
     </div>

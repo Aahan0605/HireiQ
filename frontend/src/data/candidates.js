@@ -1,4 +1,5 @@
 // Central data store for candidates with session persistence
+import { apiFetch } from '../lib/apiFetch';
 const DEFAULT_CANDIDATES = [
   { 
     id: '1', 
@@ -80,12 +81,23 @@ const STORAGE_KEY = 'hireiq_dynamic_candidates';
 export const getAllCandidates = () => {
   if (typeof window === 'undefined') return DEFAULT_CANDIDATES;
   
-  const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let stored = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    stored = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(stored)) {
+      stored = [];
+    }
+  } catch (e) {
+    console.error("Failed to parse stored candidates:", e);
+    stored = [];
+  }
+  
   // Avoid duplicates if user refreshes but same IDs are there
   const merged = [...DEFAULT_CANDIDATES];
   
   stored.forEach(storedCand => {
-    if (!merged.find(c => c.id === storedCand.id)) {
+    if (storedCand && storedCand.id && !merged.find(c => c.id === storedCand.id)) {
       merged.unshift(storedCand); // New ones at the top
     }
   });
@@ -118,7 +130,7 @@ export const addCandidateFromCV = async (file) => {
   let jobMatches   = [];     // ranked job matches from backend
 
   try {
-    const res = await fetch("/api/v1/candidates/upload-resume", {
+    const res = await apiFetch("/api/v1/candidates/upload-resume", {
       method: "POST",
       body: formData
     });
@@ -408,7 +420,16 @@ export const addCandidateFromCV = async (file) => {
     scoringMethod: backendScore !== null ? 'tfidf' : 'keyword', // audit trail
   };
 
-  const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  let stored = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    stored = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(stored)) {
+      stored = [];
+    }
+  } catch (e) {
+    console.error("Failed to parse stored candidates during add:", e);
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify([...stored, newCandidate]));
   
   return newCandidate;

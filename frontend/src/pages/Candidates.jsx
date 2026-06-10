@@ -4,6 +4,7 @@ import { Search, Trash2, Cpu, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
@@ -114,7 +115,7 @@ export default function Candidates() {
     let timerId = null;
 
     const fetchCandidates = () => {
-      fetch(`${API}/candidates`)
+      apiFetch(`${API}/candidates`)
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           if (!isMounted) return;
@@ -222,7 +223,7 @@ export default function Candidates() {
   const handleDeleteCandidate = async (id, name) => {
     if (!window.confirm(`Delete candidate "${name}"? This action cannot be undone.`)) return;
     try {
-      const res = await fetch(`${API}/candidates/${id}`, {
+      const res = await apiFetch(`${API}/candidates/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Delete failed');
@@ -242,13 +243,27 @@ export default function Candidates() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     if (filtered.length === 0) {
       toast.error('No candidates to export');
       return;
     }
-    window.location.href = `${API}/reports/candidates/csv`;
-    toast.success('ATS CSV Export started!');
+    try {
+      const response = await apiFetch(`${API}/reports/candidates/csv`);
+      if (!response.ok) throw new Error('Failed to export CSV');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'HireIQ_Candidates_Report.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('ATS CSV Export successful!');
+    } catch (err) {
+      toast.error(err.message || 'Error exporting CSV');
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -260,7 +275,7 @@ export default function Candidates() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API}/candidates/upload-csv`, {
+      const response = await apiFetch(`${API}/candidates/upload-csv`, {
         method: 'POST',
         body: formData,
       });
@@ -270,7 +285,7 @@ export default function Candidates() {
       toast.success(data.message || 'CSV imported successfully!');
       
       // Refresh candidates list
-      fetch(`${API}/candidates`)
+      apiFetch(`${API}/candidates`)
         .then(r => r.json())
         .then(data => setCandidates(Array.isArray(data) ? data : getAllCandidates()))
         .catch(console.error);
@@ -283,16 +298,27 @@ export default function Candidates() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filtered.length === 0) {
       toast.error('No candidates to export');
       return;
     }
-
-    // We use the backend URL directly which provides proper Content-Disposition headers.
-    // This is much more reliable for preserving file names and extensions.
-    window.location.href = `${API}/reports/candidates/pdf`;
-    toast.success('ATS PDF Export started!');
+    try {
+      const response = await apiFetch(`${API}/reports/candidates/pdf`);
+      if (!response.ok) throw new Error('Failed to export PDF');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'HireIQ_Candidates_Report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('ATS PDF Export successful!');
+    } catch (err) {
+      toast.error(err.message || 'Error exporting PDF');
+    }
   };
 
   const handleUpdateStage = async (id, stageKey) => {
@@ -301,15 +327,22 @@ export default function Candidates() {
       prev.map(c => c.id === id ? { ...c, status: stageKey } : c)
     );
 
-    // 2. Update in localStorage to survive refreshes (offline fallback)
-    const STORAGE_KEY = 'hireiq_dynamic_candidates';
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    const updatedStored = stored.map(c => c.id === id ? { ...c, status: stageKey } : c);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStored));
+    // 2. Update in localStorage safely
+    try {
+      const STORAGE_KEY = 'hireiq_dynamic_candidates';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const stored = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(stored)) {
+        const updatedStored = stored.map(c => c.id === id ? { ...c, status: stageKey } : c);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStored));
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
     // 3. Make PATCH request to backend
     try {
-      const res = await fetch(`${API}/candidates/${id}`, {
+      const res = await apiFetch(`${API}/candidates/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
@@ -321,6 +354,79 @@ export default function Candidates() {
     } catch (err) {
       console.error(err);
       // Silent fail if backend offline since local/session is updated
+    }
+  };
+
+  const handleBulkUpdateStage = async (stageKey) => {
+    const selectedIds = Array.from(selected);
+    // 1. Update local state
+    setCandidates(prev => 
+      prev.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey } : c)
+    );
+
+    // 2. Update localStorage safely
+    try {
+      const STORAGE_KEY = 'hireiq_dynamic_candidates';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const stored = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(stored)) {
+        const updatedStored = stored.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey } : c);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStored));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    toast.loading(`Updating ${selectedIds.length} candidate(s)...`);
+    
+    // 3. Concurrently patch backend
+    try {
+      await Promise.all(selectedIds.map(id => 
+        apiFetch(`${API}/candidates/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: stageKey })
+        })
+      ));
+      toast.dismiss();
+      toast.success(`Updated ${selectedIds.length} candidate(s) to ${stageKey}.`);
+      setSelected(new Set());
+    } catch (err) {
+      toast.dismiss();
+      console.error(err);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const selectedIds = Array.from(selected);
+    if (!window.confirm(`Delete ${selectedIds.length} selected candidate(s)? This action cannot be undone.`)) return;
+    
+    setCandidates(prev => prev.filter(c => !selectedIds.includes(c.id)));
+    
+    try {
+      const STORAGE_KEY = 'hireiq_dynamic_candidates';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const stored = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(stored)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored.filter(c => !selectedIds.includes(c.id))));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    toast.loading(`Deleting ${selectedIds.length} candidate(s)...`);
+
+    try {
+      await Promise.all(selectedIds.map(id => 
+        apiFetch(`${API}/candidates/${id}`, { method: 'DELETE' })
+      ));
+      toast.dismiss();
+      toast.success(`Successfully deleted ${selectedIds.length} candidate(s).`);
+      setSelected(new Set());
+    } catch (err) {
+      toast.dismiss();
+      console.error(err);
+      toast.error("Error deleting candidate(s) from server.");
     }
   };
 
@@ -589,12 +695,17 @@ export default function Candidates() {
 
                 const displayName = blindReview 
                   ? `Candidate ${c?.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
-                  : c?.name;
+                  : (c?.name || 'Anonymous Candidate');
 
-                const displayInitials = blindReview ? '🕵️' : c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2);
+                const displayInitials = blindReview ? '🕵️' : (c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2) || 'C');
 
                 return (
                   <motion.div key={c?.id} layout
+                    onClick={() => {
+                      if (c?.status !== 'Analyzing') {
+                        navigate(`/candidate/${c?.id}`);
+                      }
+                    }}
                     className={`flex items-center justify-between p-4 bg-card border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
                       isShortlisted ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0d0d1a] border-yellow-500/30' :
                       isSelected    ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-black/10 dark:border-white/10'
@@ -672,17 +783,54 @@ export default function Candidates() {
         )}
       </div>
 
-      {/* Compare floating bar — appears when exactly 2 selected */}
+      {/* Bulk actions floating bar */}
       <AnimatePresence>
-        {selected.size >= 2 && (
+        {selected.size > 0 && (
           <motion.div initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-emerald-500/40 rounded-2xl px-6 py-3 flex items-center gap-4 shadow-2xl">
-            <span className="text-theme-1 text-sm">Comparing {selected.size} candidates</span>
-            <button onClick={() => navigate(`/compare?ids=${Array.from(selected).join(',')}`)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-theme-1 text-sm px-4 py-2 rounded-xl transition-all active:scale-95">
-              Compare Now →
-            </button>
-            <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-theme-1 text-sm">✕</button>
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-emerald-500/30 rounded-2xl px-6 py-4 flex flex-col sm:flex-row items-center gap-4 shadow-2xl backdrop-blur-xl">
+            <span className="text-white text-xs font-bold whitespace-nowrap bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full">
+              {selected.size} selected
+            </span>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Move Stage Selector */}
+              <select 
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBulkUpdateStage(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none cursor-pointer focus:border-emerald-500/40"
+              >
+                <option value="">Move Stage...</option>
+                {KANBAN_STAGES.map(stage => (
+                  <option key={stage.key} value={stage.key}>{stage.label}</option>
+                ))}
+              </select>
+
+              {/* Compare Button */}
+              <button 
+                disabled={selected.size < 2}
+                onClick={() => navigate(`/compare?ids=${Array.from(selected).join(',')}`)}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-1.5 rounded-xl transition-all active:scale-95 whitespace-nowrap"
+              >
+                Compare Now →
+              </button>
+
+              {/* Delete Button */}
+              <button 
+                onClick={handleBulkDelete}
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold px-4 py-1.5 rounded-xl border border-red-500/20 transition-all active:scale-95 whitespace-nowrap flex items-center gap-1"
+              >
+                <Trash2 size={12} /> Delete
+              </button>
+
+              {/* Clear Button */}
+              <button onClick={() => setSelected(new Set())} className="text-gray-400 hover:text-white text-xs px-2 py-1">
+                Clear
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

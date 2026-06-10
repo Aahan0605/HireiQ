@@ -5,6 +5,7 @@ import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, C
 import { toast } from 'sonner';
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
@@ -50,7 +51,7 @@ function InterviewModal({ onClose, onUpdateCount }) {
     }
 
     // Fetch candidates from DB to populate autocomplete/dropdown
-    fetch(`${API}/candidates`)
+    apiFetch(`${API}/candidates`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setCandidates(data))
       .catch(console.error);
@@ -133,7 +134,7 @@ function InterviewModal({ onClose, onUpdateCount }) {
         end_time: parseTimeToFloat(iv.end)
       }));
 
-      const res = await fetch(`${API}/candidates/schedule`, {
+      const res = await apiFetch(`${API}/candidates/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ candidates: payload })
@@ -359,7 +360,7 @@ function ShortlistModal({ onClose, onUpdateCount }) {
         cost: c.cost
       }));
 
-      const res = await fetch(`${API}/candidates/shortlist`, {
+      const res = await apiFetch(`${API}/candidates/shortlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ candidates: payload, budget: currentBudget })
@@ -387,7 +388,7 @@ function ShortlistModal({ onClose, onUpdateCount }) {
     setBudget(initialBudget);
 
     setLoading(true);
-    fetch(`${API}/candidates`)
+    apiFetch(`${API}/candidates`)
       .then(r => r.ok ? r.json() : [])
       .then(data => {
         let list = data;
@@ -589,30 +590,93 @@ export default function Dashboard() {
 
   useEffect(() => {
     // Initial fetch of jobs count
-    fetch(`${API}/jobs`)
+    apiFetch(`${API}/jobs`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setOpenJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open').length : 0))
       .catch(() => setOpenJobs(0));
 
     // Fetch analytics stats
-    fetch(`${API}/settings/analytics`)
+    apiFetch(`${API}/settings/analytics`)
       .then(r => r.ok ? r.json() : null)
       .then(data => setAnalytics(data))
       .catch(() => setAnalytics(null));
 
-    // Load active schedule count from localStorage
-    const storedIvs = JSON.parse(localStorage.getItem('hireiq_interviews') || '[]');
-    const confirmedCount = storedIvs.filter(i => i.status === 'confirmed' || i.status === 'rescheduled').length;
-    setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
+    // Load active schedule count from localStorage safely
+    try {
+      const rawIvs = localStorage.getItem('hireiq_interviews');
+      const storedIvs = rawIvs ? JSON.parse(rawIvs) : [];
+      if (Array.isArray(storedIvs)) {
+        const confirmedCount = storedIvs.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
+        setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
+      } else {
+        setScheduledCount(INITIAL_INTERVIEWS.length);
+      }
+    } catch (e) {
+      console.error(e);
+      setScheduledCount(INITIAL_INTERVIEWS.length);
+    }
 
-    // Load shortlist count from localStorage
-    const storedShortlist = JSON.parse(localStorage.getItem('hireiq_shortlist_result') || 'null');
-    if (storedShortlist && storedShortlist.selected_candidates) {
-      setShortlistCount(storedShortlist.selected_candidates.length);
-    } else {
+    // Load shortlist count from localStorage safely
+    try {
+      const rawShortlist = localStorage.getItem('hireiq_shortlist_result');
+      const storedShortlist = rawShortlist ? JSON.parse(rawShortlist) : null;
+      if (storedShortlist && Array.isArray(storedShortlist.selected_candidates)) {
+        setShortlistCount(storedShortlist.selected_candidates.length);
+      } else {
+        setShortlistCount(3);
+      }
+    } catch (e) {
+      console.error(e);
       setShortlistCount(3);
     }
   }, []);
+
+  const [seeding, setSeeding] = useState(false);
+
+  const handleSeedDemo = async () => {
+    setSeeding(true);
+    try {
+      const res = await apiFetch(`${API}/candidates/seed-demo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error("Backend seeder failed.");
+      toast.success("Successfully seeded 5 high-fidelity candidates! 🎉");
+      
+      // Refresh stats
+      const analyticRes = await apiFetch(`${API}/settings/analytics`);
+      if (analyticRes.ok) {
+        const stats = await analyticRes.json();
+        setAnalytics(stats);
+      }
+      
+      const jobsRes = await apiFetch(`${API}/jobs`);
+      if (jobsRes.ok) {
+        const jobsData = await jobsRes.json();
+        setOpenJobs(Array.isArray(jobsData) ? jobsData.filter(j => j.status === 'Open').length : 0);
+      }
+      
+      // Reload schedule count safely
+      try {
+        const rawIvs = localStorage.getItem('hireiq_interviews');
+        const storedIvs = rawIvs ? JSON.parse(rawIvs) : [];
+        if (Array.isArray(storedIvs)) {
+          const confirmedCount = storedIvs.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
+          setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
+        } else {
+          setScheduledCount(INITIAL_INTERVIEWS.length);
+        }
+      } catch (e) {
+        console.error(e);
+        setScheduledCount(INITIAL_INTERVIEWS.length);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error seeding workspace demo data.");
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const openModal = (type) => { setModalType(type); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setModalType(null); };
@@ -673,49 +737,85 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Algorithm Action Cards */}
-        <div className="grid gap-6 sm:grid-cols-2 mb-8">
-          <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
-            onClick={() => openModal('interviews')}
-            className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-green-500/40 transition-all cursor-pointer text-left">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm font-medium text-theme-2">Interviews Scheduled Today</p>
-                <p className="text-3xl font-bold text-theme-1 mt-2">{scheduledCount}</p>
-                <p className="text-xs text-theme-3 mt-1">Click to view & reschedule</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15 text-green-400">
-                <Calendar className="h-6 w-6" />
-              </div>
+        {/* Main Workspace Content */}
+        {!isLoading && analytics?.total_candidates === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center max-w-2xl mx-auto space-y-6 mt-6"
+          >
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400">
+              <Sparkles className="h-8 w-8" />
             </div>
-            <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
-              <div className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (scheduledCount / 6) * 100)}%` }} />
+            <div className="space-y-2">
+              <h2 className="font-display text-2xl font-bold text-white">Welcome to your HireIQ Workspace! 🚀</h2>
+              <p className="text-sm text-gray-400 max-w-md mx-auto leading-relaxed">
+                Get started by analyzing your candidates' resumes or load a sample recruiter workspace to immediately explore candidate profiles, dynamic skill graphs, and bias audits.
+              </p>
             </div>
-          </motion.button>
+            <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
+              <button
+                onClick={handleSeedDemo}
+                disabled={seeding}
+                className="inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 font-bold text-white shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 disabled:opacity-50"
+              >
+                {seeding ? "Loading Demo Workspace..." : "Load Demo Candidates (1-Click)"}
+              </button>
+              <Link
+                to="/analyze"
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-surface/30 backdrop-blur-md px-8 font-semibold text-white hover:bg-white/5 active:scale-95 transition-all duration-200"
+              >
+                Upload Candidate Resume
+              </Link>
+            </div>
+          </motion.div>
+        ) : (
+          <>
+            {/* Algorithm Action Cards */}
+            <div className="grid gap-6 sm:grid-cols-2 mb-8">
+              <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+                onClick={() => openModal('interviews')}
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-green-500/40 transition-all cursor-pointer text-left">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-sm font-medium text-theme-2">Interviews Scheduled Today</p>
+                    <p className="text-3xl font-bold text-theme-1 mt-2">{scheduledCount}</p>
+                    <p className="text-xs text-theme-3 mt-1">Click to view & reschedule</p>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-500/15 text-green-400">
+                    <Calendar className="h-6 w-6" />
+                  </div>
+                </div>
+                <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
+                  <div className="h-full rounded-full bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${Math.min(100, (scheduledCount / 6) * 100)}%` }} />
+                </div>
+              </motion.button>
 
-          <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
-            onClick={() => openModal('shortlist')}
-            className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-emerald-500/40 transition-all cursor-pointer text-left">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <p className="text-sm font-medium text-theme-2">Optimal Shortlist Size</p>
-                <p className="text-3xl font-bold text-theme-1 mt-2">{shortlistCount}</p>
-                <p className="text-xs text-theme-3 mt-1">Click to edit budget & candidates</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
-                <Target className="h-6 w-6" />
-              </div>
+              <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+                onClick={() => openModal('shortlist')}
+                className="rounded-2xl border border-black/10 dark:border-white/10 bg-card p-6 hover:border-emerald-500/40 transition-all cursor-pointer text-left">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="text-sm font-medium text-theme-2">Optimal Shortlist Size</p>
+                    <p className="text-3xl font-bold text-theme-1 mt-2">{shortlistCount}</p>
+                    <p className="text-xs text-theme-3 mt-1">Click to edit budget & candidates</p>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                    <Target className="h-6 w-6" />
+                  </div>
+                </div>
+                <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
+                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${Math.min(100, (shortlistCount / 5) * 100)}%` }} />
+                </div>
+              </motion.button>
             </div>
-            <div className="h-1 w-full rounded-full bg-black/5 dark:bg-white/5">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${Math.min(100, (shortlistCount / 5) * 100)}%` }} />
-            </div>
-          </motion.button>
-        </div>
 
-        {/* Recent Analyses */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <RecentCandidates />
-        </div>
+            {/* Recent Analyses */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <RecentCandidates />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modal */}

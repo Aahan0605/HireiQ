@@ -1,6 +1,46 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: hireiq-db
+    environment:
+      - POSTGRES_DB=hireiq
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: hireiq-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    restart: always
+
   backend:
     build:
       context: ./backend
@@ -9,14 +49,57 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
+      - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/hireiq
+      - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
       - CORS_ORIGINS=http://localhost,http://localhost:80,http://localhost:6901,http://localhost:5173
       - RATE_LIMIT_PER_MINUTE=60
-    volumes:
-      - ./backend/db:/app/db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    restart: always
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hireiq-celery-worker
+    command: celery -A tasks.worker.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres_password@db:5432/hireiq
+      - REDIS_URL=redis://redis:6379/0
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - FIELD_ENCRYPTION_KEY=${FIELD_ENCRYPTION_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A tasks.worker.celery_app inspect ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
     restart: always
 
   frontend:
@@ -27,5 +110,14 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
     restart: always
+
+volumes:
+  postgres_data:

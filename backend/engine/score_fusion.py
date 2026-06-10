@@ -42,6 +42,10 @@ from signals.cert_verifier import (
     score_certifications,
 )
 from engine.claim_verifier import verify_claims
+from engine.skill_confidence import compute_skill_confidence
+from engine.ranker import compute_composite_rank_score
+from engine.matcher import compute_match_breakdown
+from signals.github_signal import analyze_github_profile
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +116,7 @@ async def compute_full_candidate_score(
         external_signals,
         claimed_skills,
         role_type,
+        required_certs=jd_features.get("required_certifications", []) if jd_features else [],
     )
 
     # ── Step 5: Verify claims ──
@@ -122,8 +127,39 @@ async def compute_full_candidate_score(
         role_type, ROLE_WEIGHT_PROFILES.get("backend_engineer", SCORING_WEIGHTS)
     )
 
+    # Determine active signal keys based on what was provided/found
+    active_keys = {
+        "resume_skill_match",
+        "resume_experience",
+        "resume_education",
+    }
+    if github_username:
+        active_keys.add("github_score")
+    if cf_handle or cc_username or lc_username:
+        active_keys.add("competitive_coding")
+    if portfolio_url:
+        active_keys.add("portfolio_score")
+    linkedin_data = external_signals.get("linkedin", {})
+    if linkedin_data and linkedin_data.get("has_linkedin", False):
+        active_keys.add("linkedin_score")
+    cert_data = external_signals.get("certifications", [])
+    if cert_data:
+        active_keys.add("certification_score")
+
+    # Redistribute weights of inactive signals to active ones proportionally
+    adjusted_weights = {}
+    active_weight_sum = sum(role_weights.get(k, 0.0) for k in active_keys)
+    if active_weight_sum > 0:
+        for key, weight in role_weights.items():
+            if key in active_keys:
+                adjusted_weights[key] = weight / active_weight_sum
+            else:
+                adjusted_weights[key] = 0.0
+    else:
+        adjusted_weights = role_weights.copy()
+
     all_scores = {**base_scores, **signal_scores}
-    component_breakdown = _build_component_breakdown(all_scores, role_weights)
+    component_breakdown = _build_component_breakdown(all_scores, adjusted_weights)
     weighted_raw = sum(
         entry["weighted_score"] for entry in component_breakdown.values()
     )
@@ -154,6 +190,69 @@ async def compute_full_candidate_score(
         external_signals=external_signals,
     )
 
+    # ── Step 10: Compute intelligence insights ──
+    github_raw = external_signals.get("github", {})
+    linkedin_raw = external_signals.get("linkedin", {})
+
+    # Skill confidence
+    skill_confidence = compute_skill_confidence(
+        resume_features, linkedin_raw, github_raw
+    )
+
+    # GitHub deep analysis
+    github_analysis = analyze_github_profile(
+        github_raw, claimed_skills, role_type.split("_")[0] if "_" in role_type else role_type
+    )
+
+    # Composite ranking
+    ranking_result = compute_composite_rank_score(
+        all_scores, candidate_name, role_type
+    )
+
+    # Match breakdown
+    match_breakdown = compute_match_breakdown(
+        resume_features, jd_features, github_raw, linkedin_raw
+    )
+
+    # AI recruiter summary
+    ai_summary = _generate_recruiter_summary(
+        candidate_name=candidate_name,
+        final_score=final_score,
+        resume_features=resume_features,
+        skill_confidence=skill_confidence,
+        github_analysis=github_analysis,
+        linkedin_signals=linkedin_raw,
+        match_breakdown=match_breakdown,
+        trust_result=trust_result,
+        missing_skills=missing_skills,
+        role_type=role_type,
+    )
+
+    # ── Build the insights package ──
+    from parser.feature_extractor import generate_resume_insights
+    base_insights = generate_resume_insights(resume_features, resume_text)
+
+    insights = {
+        "completeness_score": base_insights.get("completeness_score", 80),
+        "ats_score": base_insights.get("ats_score", 75),
+        "career_progression": base_insights.get("career_progression", "Mid-Level Professional"),
+        "strengths": base_insights.get("strengths", []),
+        "weaknesses": base_insights.get("weaknesses", []),
+        "concerns": base_insights.get("concerns", []),
+        "ai_summary": ai_summary,
+        "skill_confidence": skill_confidence,
+        "github_analysis": github_analysis,
+        "ranking": ranking_result,
+        "match_breakdown": match_breakdown,
+        "resume_features": {
+            "skills": claimed_skills,
+            "experience_years": claimed_experience,
+            "education": claimed_education,
+            "certifications": claimed_certs,
+            "projects": resume_features.get("projects", []),
+        },
+    }
+
     return {
         "candidate_name": candidate_name,
         "role_type": role_type,
@@ -174,18 +273,19 @@ async def compute_full_candidate_score(
             "certifications": claimed_certs,
         },
         "external_signals": {
-            "github": external_signals.get("github", {}),
+            "github": github_raw,
             "competitive": {
                 "codeforces": external_signals.get("codeforces", {}),
                 "codechef": external_signals.get("codechef", {}),
                 "leetcode": external_signals.get("leetcode", {}),
             },
             "portfolio": external_signals.get("portfolio", {}),
-            "linkedin": external_signals.get("linkedin", {}),
+            "linkedin": linkedin_raw,
         },
         "matched_skills": matched_skills,
         "missing_skills": missing_skills,
         "recommendations": recommendations,
+        "insights": insights,
     }
 
 
@@ -253,6 +353,8 @@ def _compute_resume_scores(
 
     # Education score
     education = resume_features.get("education", [])
+    if isinstance(education, str):
+        education = [education]
     edu_score = 0.0
     degree_weights = {
         "phd": 1.0,
@@ -347,6 +449,7 @@ def _score_external_signals(
     external_signals: dict[str, Any],
     claimed_skills: list[str],
     role_type: str,
+    required_certs: list[str] | None = None,
 ) -> dict[str, float]:
     """Score all external signals into 0.0–1.0 range."""
     scores: dict[str, float] = {}
@@ -377,7 +480,7 @@ def _score_external_signals(
     cert_data = external_signals.get("certifications", [])
     scores["certification_score"] = score_certifications(
         cert_data,
-        claimed_skills,
+        required_certs if required_certs is not None else [],
     )
 
     # Placeholder scores for signals not yet implemented
@@ -534,3 +637,198 @@ def generate_recommendations(
                 recs.append(fr)
 
     return recs[:5]
+
+
+# ─────────────────────────────────────────────────────────────
+# AI Recruiter Summary Generator
+# ─────────────────────────────────────────────────────────────
+
+
+def _generate_recruiter_summary(
+    candidate_name: str,
+    final_score: float,
+    resume_features: dict,
+    skill_confidence: dict,
+    github_analysis: dict,
+    linkedin_signals: dict,
+    match_breakdown: dict,
+    trust_result: dict,
+    missing_skills: list[str],
+    role_type: str,
+) -> dict[str, Any]:
+    """
+    Generate a comprehensive, structured AI recruiter summary.
+
+    Returns:
+        Dict containing:
+            - executive_summary: str (2-4 sentence career evaluation)
+            - career_tier: str (e.g. "Senior", "Mid-Level", "Junior")
+            - strengths: list[str]
+            - concerns: list[str]
+            - interview_focus: list[str]
+            - verdict: str ("Strong Hire" | "Hire" | "Lean Hire" | "No Hire")
+    """
+    experience_years = 0.0
+    raw_exp = resume_features.get("experience", resume_features.get("experience_years", 0.0))
+    if isinstance(raw_exp, (int, float)):
+        experience_years = float(raw_exp)
+    elif isinstance(raw_exp, str):
+        try:
+            experience_years = float(raw_exp)
+        except (ValueError, TypeError):
+            pass
+
+    # Determine career tier
+    if experience_years >= 8:
+        career_tier = "Staff / Principal"
+    elif experience_years >= 5:
+        career_tier = "Senior"
+    elif experience_years >= 2:
+        career_tier = "Mid-Level"
+    elif experience_years >= 0.5:
+        career_tier = "Junior"
+    else:
+        career_tier = "Entry-Level / Fresher"
+
+    # Determine verdict
+    trust_score = trust_result.get("trust_score", 1.0) if isinstance(trust_result, dict) else 1.0
+    if final_score >= 85 and trust_score >= 0.8:
+        verdict = "Strong Hire"
+    elif final_score >= 70 and trust_score >= 0.6:
+        verdict = "Hire"
+    elif final_score >= 55:
+        verdict = "Lean Hire"
+    else:
+        verdict = "No Hire"
+
+    # Build strengths list
+    strengths = []
+    high_confidence_skills = [
+        s for s, d in skill_confidence.items()
+        if d.get("confidence", 0) >= 70 and d.get("evidence_count", 0) >= 3
+    ]
+    if high_confidence_skills:
+        top_3 = high_confidence_skills[:3]
+        strengths.append(
+            f"Multi-source verified expertise in {', '.join(top_3)} "
+            f"(confirmed across Resume, LinkedIn, and GitHub)."
+        )
+
+    eng_score = github_analysis.get("engineering_score", 0)
+    if eng_score >= 75:
+        strengths.append(
+            f"Strong engineering profile on GitHub (score: {eng_score:.0f}/100) "
+            f"with {github_analysis.get('open_source_score', 0):.0f}/100 open-source score."
+        )
+    elif eng_score >= 50:
+        strengths.append(
+            f"Active GitHub presence with engineering score {eng_score:.0f}/100."
+        )
+
+    match_pct = match_breakdown.get("overall_match_percentage", 0)
+    skills_pct = match_breakdown.get("skills_match", 0)
+    if skills_pct >= 80:
+        strengths.append(f"Excellent skills alignment with job requirements ({skills_pct:.0f}% match).")
+    elif skills_pct >= 60:
+        strengths.append(f"Good skills alignment ({skills_pct:.0f}% match) with room for growth.")
+
+    if experience_years >= 5:
+        strengths.append(f"{experience_years:.1f} years of professional experience — {career_tier} tier.")
+
+    certs = resume_features.get("certifications", [])
+    if certs:
+        strengths.append(f"Holds {len(certs)} professional certification(s): {', '.join(certs[:3])}.")
+
+    if linkedin_signals.get("has_linkedin") and linkedin_signals.get("recommendations", 0) >= 3:
+        strengths.append(
+            f"Strong LinkedIn presence with {linkedin_signals.get('connections', 0)}+ connections "
+            f"and {linkedin_signals.get('recommendations', 0)} recommendations."
+        )
+
+    # Build concerns list
+    concerns = []
+    if missing_skills:
+        concerns.append(f"Missing JD-required skills: {', '.join(missing_skills[:4])}.")
+
+    unsupported = github_analysis.get("unsupported_claims", [])
+    if unsupported:
+        concerns.append(
+            f"Skills claimed on resume but not verified on GitHub: {', '.join(unsupported[:3])}."
+        )
+
+    if trust_score < 0.7:
+        flags = trust_result.get("flags", []) if isinstance(trust_result, dict) else []
+        flag_msgs = [f.get("message", str(f)) for f in flags[:2]] if flags else ["Verification flags detected."]
+        concerns.append(f"Trust concerns: {'; '.join(flag_msgs)}")
+
+    if experience_years < 2 and career_tier in ("Junior", "Entry-Level / Fresher"):
+        concerns.append(
+            "Limited professional experience — would benefit from mentorship in a structured team."
+        )
+
+    # Build interview focus areas
+    interview_focus = []
+    if unsupported:
+        interview_focus.append(
+            f"Deep-dive into {unsupported[0]} proficiency — ask for specific project examples and architecture decisions."
+        )
+
+    low_confidence = [
+        s for s, d in skill_confidence.items()
+        if 30 <= d.get("confidence", 0) < 60
+    ]
+    if low_confidence:
+        interview_focus.append(
+            f"Probe depth of knowledge in {', '.join(low_confidence[:3])} "
+            f"(single-source claims with moderate confidence)."
+        )
+
+    if missing_skills:
+        interview_focus.append(
+            f"Assess willingness and ability to learn {missing_skills[0]} — "
+            f"discuss past experience ramping up on new technologies."
+        )
+
+    if eng_score >= 60:
+        interview_focus.append(
+            "Review a specific GitHub project — discuss architecture, testing strategy, and deployment."
+        )
+    else:
+        interview_focus.append(
+            "Ask for a live coding exercise or take-home assignment to assess practical coding ability."
+        )
+
+    interview_focus.append(
+        f"Behavioral: Evaluate leadership and collaboration style for {career_tier} expectations."
+    )
+
+    # Build executive summary
+    role_display = role_type.replace("_", " ").title()
+    summary_parts = [
+        f"{candidate_name} is a {career_tier} {role_display} candidate "
+        f"scoring {final_score:.0f}/100 overall with a {match_pct:.0f}% job match."
+    ]
+
+    if strengths:
+        summary_parts.append(
+            f"Key strengths include {strengths[0].lower().rstrip('.')}"
+            + (f" and {strengths[1].lower().rstrip('.')}" if len(strengths) > 1 else "")
+            + "."
+        )
+
+    if concerns:
+        summary_parts.append(f"Primary area of attention: {concerns[0].lower()}")
+
+    summary_parts.append(f"Verdict: {verdict}.")
+
+    executive_summary = " ".join(summary_parts)
+
+    return {
+        "executive_summary": executive_summary,
+        "career_tier": career_tier,
+        "strengths": strengths[:5],
+        "concerns": concerns[:4],
+        "interview_focus": interview_focus[:5],
+        "verdict": verdict,
+        "match_percentage": round(match_pct, 1),
+    }

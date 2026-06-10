@@ -1,16 +1,40 @@
-FROM python:3.11-slim
+# Stage 1: Build dependencies
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies if any are needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
+# Stage 2: Final minimal runner
+FROM python:3.11-slim AS runner
+
+WORKDIR /app
+
+# Install runtime-only requirements if any
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-privileged user and group
+RUN groupadd -g 10001 python && \
+    useradd -r -u 10001 -g python python
+
+# Copy installed packages from builder
+COPY --from=builder /root/.local /home/python/.local
 COPY . .
+
+# Set correct ownership
+RUN chown -R python:python /app
+
+ENV PATH=/home/python/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
+
+USER python
 
 EXPOSE 8000
 

@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from api.core.dependencies import get_current_user
+from api.core.rbac import require_tenant
 
 router = APIRouter(
     prefix="/settings",
     tags=["Settings"],
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_tenant)]
 )
 
 
@@ -69,34 +70,38 @@ def get_thresholds():
 
 @router.get("/analytics")
 async def get_analytics():
-    """Return analytics summary from database + in-memory seeded data."""
+    """Return analytics summary from database."""
     from db.supabase_client import get_analytics_summary
-    from api.routes.candidates import candidates_db
+    try:
+        db_analytics = await get_analytics_summary()
+        return db_analytics
+    except Exception as e:
+        return {
+            "total_candidates": 0,
+            "strong_matches": 0,
+            "matches": 0,
+            "weak_matches": 0,
+            "average_score": 0.0,
+            "recent_uploads_7d": 0,
+            "top_skills": [],
+            "storage_backend": "sqlite",
+            "sqlite_size_mb": 0.0
+        }
 
-    db_analytics = await get_analytics_summary()
 
-    # Merge seeded in-memory candidates into the analytics when DB is sparse
-    seeded_count = len(candidates_db)
-    if seeded_count > 0:
-        seeded_strong = sum(1 for c in candidates_db if c.get("score", 0) >= 85)
-        seeded_match  = sum(1 for c in candidates_db if 60 <= c.get("score", 0) < 85)
-        seeded_avg    = sum(c.get("score", 0) for c in candidates_db) / seeded_count
-
-        db_total = db_analytics.get("total_candidates", 0)
-        combined_total = db_total + seeded_count
-        combined_strong = db_analytics.get("strong_matches", 0) + seeded_strong
-        combined_match  = db_analytics.get("matches", 0) + seeded_match
-
-        # Weighted average score
-        db_avg = db_analytics.get("average_score", 0)
-        combined_avg = ((db_avg * db_total) + (seeded_avg * seeded_count)) / combined_total if combined_total > 0 else 0
-
-        db_analytics["total_candidates"] = combined_total
-        db_analytics["strong_matches"]   = combined_strong
-        db_analytics["matches"]          = combined_match
-        db_analytics["average_score"]    = round(combined_avg, 1)
-
-    return db_analytics
+@router.get("/worker-status")
+def get_worker_status():
+    """Check if the Redis broker and Celery worker are online."""
+    from tasks.worker import celery_app
+    try:
+        # Check active workers
+        ping_result = celery_app.control.ping(timeout=0.3)
+        if ping_result:
+            return {"status": "online", "message": f"Active worker(s) detected: {list(ping_result[0].keys()) if ping_result else ''}"}
+        else:
+            return {"status": "fallback", "message": "Redis online, worker process offline. Using local background tasks fallback."}
+    except Exception:
+        return {"status": "fallback", "message": "Redis broker offline. Using local background tasks fallback."}
 
 
 @router.get("/db-status")
@@ -113,7 +118,7 @@ class CheckoutSessionRequest(BaseModel):
 
 
 @router.post("/billing/create-checkout-session")
-def create_checkout_session(req: CheckoutSessionRequest):
+def create_checkout_session(req: CheckoutSessionRequest, tenant_id: str = Depends(require_tenant)):
     """Create a Stripe Checkout session for subscription plans."""
     import stripe
     import os
@@ -127,6 +132,7 @@ def create_checkout_session(req: CheckoutSessionRequest):
         
     price_map = {
         "Pro": os.getenv("STRIPE_PRICE_PRO_ID", "price_1MockProPriceID"),
+        "Business": os.getenv("STRIPE_PRICE_BUSINESS_ID", "price_1MockBusinessPriceID"),
         "Enterprise": os.getenv("STRIPE_PRICE_ENTERPRISE_ID", "price_1MockEnterprisePriceID")
     }
     
@@ -142,10 +148,37 @@ def create_checkout_session(req: CheckoutSessionRequest):
                 'quantity': 1,
             }],
             mode='subscription',
+            client_reference_id=tenant_id,
+            metadata={"plan_name": req.plan_name},
             success_url=req.success_url + "?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=req.cancel_url,
         )
         return {"url": session.url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdatePlanRequest(BaseModel):
+    plan_name: str
+
+
+@router.post("/billing/update-plan")
+def update_plan(req: UpdatePlanRequest, tenant_id: str = Depends(require_tenant)):
+    """Manually update the plan for testing/mock purposes."""
+    from db.session import SessionLocal
+    from db.models import Subscription
+    from fastapi import HTTPException
+    db = SessionLocal()
+    try:
+        sub = db.query(Subscription).filter(Subscription.organization_id == tenant_id).first()
+        if sub:
+            sub.plan_name = req.plan_name
+            sub.status = "active"
+            db.commit()
+            return {"status": "success", "plan_name": sub.plan_name}
+        else:
+            raise HTTPException(status_code=404, detail="Subscription record not found")
+    finally:
+        db.close()
+
 

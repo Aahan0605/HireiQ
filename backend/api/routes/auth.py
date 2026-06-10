@@ -59,6 +59,20 @@ async def register(user_in: UserRegister):
     
     await save_user(user_data)
     
+    # Track user registration event in PostHog
+    import posthog
+    try:
+        posthog.capture(
+            distinct_id=user_id,
+            event="user_signup",
+            properties={
+                "email": user_in.email,
+                "role": user_in.role
+            }
+        )
+    except Exception:
+        pass
+    
     # Return user details without password hash
     return {
         "id": user_id,
@@ -79,6 +93,21 @@ async def login_json(user_in: UserLogin):
         )
     
     access_token = create_access_token(subject=user["id"])
+    
+    # Track user login event in PostHog
+    import posthog
+    try:
+        posthog.capture(
+            distinct_id=user["id"],
+            event="user_login",
+            properties={
+                "email": user["email"],
+                "role": user.get("role", "Recruiter")
+            }
+        )
+    except Exception:
+        pass
+
     return {
         "access_token": access_token,
         "token_type": "bearer",

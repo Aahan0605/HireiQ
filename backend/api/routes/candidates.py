@@ -19,6 +19,11 @@ import uuid
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from api.core.dependencies import get_current_user
+from api.core.rbac import require_tenant, require_permission, Permission
+from db.session import get_db
+from sqlalchemy.orm import Session
+from api.core.limits import check_cv_upload_limit, increment_cv_parses
+from tasks.worker import process_resume_task
 
 from api.models import (
     CandidateResult,
@@ -46,7 +51,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/candidates",
     tags=["candidates"],
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_tenant)]
 )
 
 
@@ -265,6 +270,67 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
 # ─────────────────────────────────────────────────────────────
 
 
+def build_ai_summary(name: str, features: dict, job_matches: list, final_score: int) -> str:
+    # 1. Experience tier
+    exp = features.get("experience", 0.0)
+    if exp >= 8.0:
+        tier = "Senior Leadership / Principal Tier"
+    elif exp >= 4.0:
+        tier = "Mid-Senior Level Specialist"
+    elif exp >= 1.5:
+        tier = "Independent Professional / Mid-Level"
+    elif exp > 0.0:
+        tier = "Early Career / Associate Level"
+    else:
+        tier = "Entry Level / Student"
+
+    # 2. Match percentage
+    match_pct = 0
+    if job_matches:
+        match_pct = round(job_matches[0].get("tfidf_score", 0))
+
+    # 3. Strengths
+    skills = features.get("skills", [])
+    certs = features.get("certifications", [])
+    strengths_list = []
+    if skills:
+        strengths_list.append(f"proficiency in {', '.join(skills[:3])}")
+    if certs:
+        strengths_list.append(f"holds certifications: {', '.join(certs[:2])}")
+    if exp > 0:
+        strengths_list.append(f"{exp} years of industry experience")
+    
+    if len(strengths_list) >= 2:
+        strengths_str = f"{strengths_list[0]} and {strengths_list[1]}"
+    elif strengths_list:
+        strengths_str = strengths_list[0]
+    else:
+        strengths_str = "core engineering capabilities"
+
+    # 4. Weakness/Gap
+    education = features.get("education", "unknown")
+    if education == "unknown":
+        gap = "no formal degree detected on resume"
+    elif len(skills) < 5:
+        gap = "a relatively narrow technical stack"
+    else:
+        gap = "opportunities to expand domain certifications"
+
+    # 5. Verdict
+    if final_score >= 85:
+        verdict = "Shortlist"
+    elif final_score >= 65:
+        verdict = "Screening"
+    else:
+        verdict = "No Hire"
+
+    s1 = f"{name} is a {tier} candidate scoring {final_score}/100 overall with a {match_pct}% job match."
+    s2 = f"Key strengths include {strengths_str}."
+    s3 = f"Primary area of attention: {gap}."
+    s4 = f"Verdict: {verdict}."
+    return f"{s1} {s2} {s3} {s4}"
+
+
 async def _process_resume(file: UploadFile) -> dict:
     """Shared processing logic for a single resume file."""
     import tempfile, os, heapq
@@ -377,14 +443,14 @@ async def _process_resume(file: UploadFile) -> dict:
         "id": str(uuid.uuid4()),
         "name": name,
         "role": "Software Engineer",
-        "email": email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com",
+        "email": features.get("email") or (email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com"),
         "github": github_m.group() if github_m else "",
         "linkedin": linkedin_m.group() if linkedin_m else "",
         "location": "Remote",
         "score": final_score,
         "blind_score": blind_score,
         "status": "Strong Match" if final_score > 90 else "Match",
-        "summary": text[:400].strip(),
+        "summary": build_ai_summary(name, features, job_matches, final_score),
         "skills": features.get("skills", []),
         "experience": [],
         "jobMatches": job_matches,
@@ -515,14 +581,15 @@ async def background_process_resume_task(candidate_id: str, filename: str, conte
             "id": candidate_id,
             "name": name,
             "role": "Software Engineer",
-            "email": email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com",
+            "email": features.get("email") or (email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com"),
             "github": github_m.group() if github_m else "",
             "linkedin": linkedin_m.group() if linkedin_m else "",
             "location": "Remote",
             "score": final_score,
             "blind_score": blind_score,
             "status": "Strong Match" if final_score > 90 else "Match",
-            "summary": text[:400].strip(),
+            "summary": build_ai_summary(name, features, job_matches, final_score),
+            "resume_text": text,
             "skills": features.get("skills", []),
             "experience": [],
             "jobMatches": job_matches,
@@ -546,18 +613,28 @@ async def background_process_resume_task(candidate_id: str, filename: str, conte
             pass
 
 
-@router.post("/upload-resume", status_code=202)
-async def upload_resume(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+@router.post("/upload-resume", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
+async def upload_resume(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(require_tenant),
+    db: Session = Depends(get_db)
+):
     from db.supabase_client import save_candidate
+    import base64
     
-    # 1. Create a unique candidate ID
+    # 1. Enforce active tenant quota limits
+    check_cv_upload_limit(db, tenant_id)
+    
+    # 2. Create a unique candidate ID
     candidate_id = str(uuid.uuid4())
     
-    # 2. Setup a placeholder candidate record
+    # 3. Setup a placeholder candidate record
     raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
     name = " ".join(w.capitalize() for w in raw_name.split())
     placeholder = {
         "id": candidate_id,
+        "organization_id": tenant_id,
         "name": name,
         "role": "Software Engineer",
         "email": f"{raw_name.lower().replace(' ', '.')}@example.com",
@@ -577,14 +654,22 @@ async def upload_resume(background_tasks: BackgroundTasks, file: UploadFile = Fi
     # Save placeholder to DB
     await save_candidate(placeholder)
     
-    # 3. Read file content and validate size
+    # 4. Read file content and validate size
     content = await file.read()
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
     
-    # 4. Enqueue background process task
-    background_tasks.add_task(background_process_resume_task, candidate_id, file.filename, content)
+    # 5. Base64 encode and Enqueue Celery background task (falling back to FastAPI BackgroundTasks if Redis is offline)
+    content_b64 = base64.b64encode(content).decode("utf-8")
+    try:
+        process_resume_task.delay(candidate_id, file.filename, content_b64, tenant_id)
+    except Exception as e:
+        logger.warning("Celery/Redis broker offline. Falling back to FastAPI BackgroundTasks: %s", e)
+        background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
+    
+    # 6. Increment the tenant's parse usage
+    increment_cv_parses(db, tenant_id)
     
     return {
         "candidate_id": candidate_id,
@@ -594,8 +679,13 @@ async def upload_resume(background_tasks: BackgroundTasks, file: UploadFile = Fi
     }
 
 
-@router.post("/upload-bulk", status_code=202)
-async def upload_bulk(background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)):
+@router.post("/upload-bulk", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
+async def upload_bulk(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    tenant_id: str = Depends(require_tenant),
+    db: Session = Depends(get_db)
+):
     """
     Bulk upload up to 1000 resumes concurrently in the background.
     """
@@ -603,15 +693,19 @@ async def upload_bulk(background_tasks: BackgroundTasks, files: list[UploadFile]
         raise HTTPException(status_code=400, detail="Maximum 1000 files per batch.")
 
     from db.supabase_client import save_candidate
+    import base64
     results = []
 
     for file in files:
+        check_cv_upload_limit(db, tenant_id)
+        
         candidate_id = str(uuid.uuid4())
         raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
         name = " ".join(w.capitalize() for w in raw_name.split())
         
         placeholder = {
             "id": candidate_id,
+            "organization_id": tenant_id,
             "name": name,
             "role": "Software Engineer",
             "email": f"{raw_name.lower().replace(' ', '.')}@example.com",
@@ -630,7 +724,14 @@ async def upload_bulk(background_tasks: BackgroundTasks, files: list[UploadFile]
         await save_candidate(placeholder)
         
         content = await file.read()
-        background_tasks.add_task(background_process_resume_task, candidate_id, file.filename, content)
+        content_b64 = base64.b64encode(content).decode("utf-8")
+        try:
+            process_resume_task.delay(candidate_id, file.filename, content_b64, tenant_id)
+        except Exception as e:
+            logger.warning("Celery/Redis broker offline. Falling back to FastAPI BackgroundTasks: %s", e)
+            background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
+        
+        increment_cv_parses(db, tenant_id)
         
         results.append({
             "candidate_id": candidate_id,
@@ -863,7 +964,7 @@ async def get_github_signals(username: str):
     Uses fetch_github_signals() (async httpx) + score_github().
     Time Complexity: O(1) network calls, O(r) repo parsing where r = repo count
     """
-    from signals.github_signal import fetch_github_signals, score_github
+    from signals.github_signal import fetch_github_signals, score_github, analyze_github_profile
 
     # Strip github.com/ prefix if the full URL was passed
     clean = username.strip().replace("https://", "").replace("http://", "")
@@ -879,6 +980,7 @@ async def get_github_signals(username: str):
         return {"error": f"GitHub profile '{clean}' not found or is private"}
 
     score = score_github(signals)
+    profile_analysis = analyze_github_profile(signals, [], "backend")
     return {
         "username":                clean,
         "score":                   round(score * 100),   # 0-100
@@ -896,6 +998,11 @@ async def get_github_signals(username: str):
         "profile_completeness":    signals.get("profile_completeness", 0),
         "followers":               signals.get("followers", 0),
         "raw_bio":                 signals.get("raw_bio", ""),
+        "engineering_score":       round(profile_analysis.get("engineering_score", 0)),
+        "open_source_score":       round(profile_analysis.get("open_source_score", 0)),
+        "project_maturity_score":  round(profile_analysis.get("project_maturity_score", 0)),
+        "verified_skills":         profile_analysis.get("verified_skills", []),
+        "unsupported_claims":      profile_analysis.get("unsupported_claims", []),
     }
 
 # ── Candidate data store ─────────────────────────────────────
@@ -940,20 +1047,181 @@ candidates_db = [
 
 
 @router.get("")
-async def get_all_candidates() -> list[dict]:
+async def get_all_candidates(tenant_id: str = Depends(require_tenant)) -> list[dict]:
     """
-    GET /candidates — returns Supabase candidates merged with seeded defaults.
+    GET /candidates — returns database candidates for the active tenant context.
     """
     from db.supabase_client import fetch_all_candidates
     try:
         db_candidates = await fetch_all_candidates()
-        # Merge: DB rows take priority; append seeded ones not already in DB
-        db_ids = {c["id"] for c in db_candidates}
-        merged = db_candidates + [c for c in candidates_db if c["id"] not in db_ids]
-        return merged
+        return db_candidates
     except Exception as e:
-        logger.warning("Supabase fetch failed, falling back to in-memory: %s", e)
+        logger.warning("Database fetch failed, falling back to in-memory: %s", e)
         return candidates_db
+
+
+@router.post("/seed-demo")
+async def seed_demo_candidates(tenant_id: str = Depends(require_tenant)):
+    """
+    POST /candidates/seed-demo — Seed 5 high-fidelity candidates into the database.
+    """
+    from db.supabase_client import save_candidate, fetch_all_candidates
+    try:
+        existing = await fetch_all_candidates()
+        if len(existing) > 0:
+            return {"status": "success", "message": "Database already has candidates. Seeding skipped."}
+    except Exception:
+        pass
+        
+    demo_candidates = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Alice Chen",
+            "email": "alice.chen@example.com",
+            "role": "Senior Frontend Engineer",
+            "github": "github.com/alicec",
+            "linkedin": "linkedin.com/in/alicechen",
+            "location": "San Francisco, CA",
+            "score": 94,
+            "blind_score": 96,
+            "status": "Shortlisted",
+            "summary": "Alice is a robust front-end specialist with a history of scaling design systems and optimizing web performance.",
+            "skills": ["React", "TypeScript", "Next.js", "Tailwind CSS", "CSS", "HTML", "Testing", "Webpack"],
+            "experience": [{"title": "Senior UI Engineer", "company": "Vercel", "date": "2021-Present"}, {"title": "Frontend Developer", "company": "Stripe", "date": "2018-2021"}],
+            "job_matches": [{"role": "Senior Frontend Engineer", "score": 94}],
+            "radar_data": [{"subject": "React", "A": 95, "fullMark": 100}, {"subject": "TypeScript", "A": 90, "fullMark": 100}, {"subject": "Next.js", "A": 95, "fullMark": 100}, {"subject": "CSS/UI", "A": 92, "fullMark": 100}, {"subject": "Performance", "A": 88, "fullMark": 100}],
+            "qa": [
+                {"skill": "React", "question": "Explain React Server Components and their primary benefit.", "answer": "React Server Components run exclusively on the server. Their primary benefit is zero client-side bundle size for those components, faster initial loads, and direct backend resource access."},
+                {"skill": "TypeScript", "question": "What is the difference between interface and type in TypeScript?", "answer": "Interfaces are open for declaration merging, whereas types cannot be re-declared. Types support unions, intersections, and mapped types, making them more expressive for complex types."}
+            ],
+            "insights": {
+                "completeness_score": 95,
+                "ats_score": 94,
+                "career_progression": "Strong upward trajectory",
+                "strengths": ["Next.js/React architecture", "Design systems scaling", "Web Vitals optimization"],
+                "weaknesses": ["Limited native mobile experience"],
+                "concerns": []
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Marcus Jones",
+            "email": "marcus.j@example.com",
+            "role": "Fullstack Engineer",
+            "github": "github.com/mjones-dev",
+            "linkedin": "linkedin.com/in/marcusj",
+            "location": "Austin, TX",
+            "score": 88,
+            "blind_score": 85,
+            "status": "Screening",
+            "summary": "Marcus possesses a balanced full-stack skill set with deep proficiency in Node.js, Express, PostgreSQL, and React.",
+            "skills": ["Node.js", "TypeScript", "React", "PostgreSQL", "Docker", "REST APIs", "SQL", "Redis"],
+            "experience": [{"title": "Fullstack Developer", "company": "RetailCorp", "date": "2020-Present"}],
+            "job_matches": [{"role": "Fullstack Developer", "score": 88}],
+            "radar_data": [{"subject": "Node.js", "A": 90, "fullMark": 100}, {"subject": "React", "A": 85, "fullMark": 100}, {"subject": "Postgres", "A": 88, "fullMark": 100}, {"subject": "Docker", "A": 80, "fullMark": 100}, {"subject": "APIs", "A": 92, "fullMark": 100}],
+            "qa": [
+                {"skill": "Node.js", "question": "How does Node.js handle concurrency if it is single-threaded?", "answer": "Node.js uses an asynchronous event loop backed by a thread pool (libuv) for non-blocking I/O operations, offloading tasks like file systems and network requests."}
+            ],
+            "insights": {
+                "completeness_score": 88,
+                "ats_score": 88,
+                "career_progression": "Stable Mid-Level Professional",
+                "strengths": ["PostgreSQL schema design", "REST API development", "Docker containerization"],
+                "weaknesses": ["Limited automated testing coverage"],
+                "concerns": []
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Sofia Rodriguez",
+            "email": "sofia.r@example.com",
+            "role": "Backend Lead",
+            "github": "github.com/srodrig",
+            "linkedin": "linkedin.com/in/sofiar",
+            "location": "New York, NY",
+            "score": 97,
+            "blind_score": 97,
+            "status": "Interviewing",
+            "summary": "Sofia is an exceptional backend lead with expertise in distributed systems, Go, Python, Kubernetes, and AWS.",
+            "skills": ["Python", "FastAPI", "Go", "PostgreSQL", "Kubernetes", "AWS", "Docker", "Redis", "CI/CD"],
+            "experience": [{"title": "Backend Engineering Lead", "company": "CloudScale", "date": "2019-Present"}],
+            "job_matches": [{"role": "Backend Engineer", "score": 97}],
+            "radar_data": [{"subject": "Go/Python", "A": 98, "fullMark": 100}, {"subject": "AWS", "A": 92, "fullMark": 100}, {"subject": "Kubernetes", "A": 95, "fullMark": 100}, {"subject": "Redis", "A": 90, "fullMark": 100}, {"subject": "System Design", "A": 96, "fullMark": 100}],
+            "qa": [
+                {"skill": "Go", "question": "Explain Go channels and how they prevent race conditions.", "answer": "Channels in Go allow goroutines to communicate by passing typed values, ensuring safe synchronization and memory sharing by communicating instead of sharing memory."}
+            ],
+            "insights": {
+                "completeness_score": 97,
+                "ats_score": 97,
+                "career_progression": "Excellent team lead experience",
+                "strengths": ["Kubernetes orchestration", "High-throughput microservices", "Go concurrency model"],
+                "weaknesses": ["Minimal frontend UI involvement"],
+                "concerns": []
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Tirth Patel",
+            "email": "tirth_patel@example.com",
+            "role": "Fullstack & Web3 Engineer",
+            "github": "github.com/tirthpatel",
+            "linkedin": "linkedin.com/in/tirthpatel",
+            "location": "Ahmedabad, India",
+            "score": 98,
+            "blind_score": 98,
+            "status": "Offer",
+            "summary": "Highly skilled B.Tech candidate. Winner of Codeversity National Hackathon at IIT Gandhinagar. Deep experience in Solidity and React.",
+            "skills": ["Solidity", "React", "Django", "Node.js", "Web3", "Python", "JavaScript", "TypeScript"],
+            "experience": [{"title": "Blockchain Developer Intern", "company": "EtherLabs", "date": "2022-2023"}],
+            "job_matches": [{"role": "Fullstack Web3 Engineer", "score": 98}],
+            "radar_data": [{"subject": "Solidity", "A": 98, "fullMark": 100}, {"subject": "React", "A": 92, "fullMark": 100}, {"subject": "Python", "A": 90, "fullMark": 100}, {"subject": "Web3.js", "A": 96, "fullMark": 100}, {"subject": "Hackathon Wins", "A": 100, "fullMark": 100}],
+            "qa": [
+                {"skill": "Solidity", "question": "What is reentrancy attack and how to prevent it?", "answer": "A reentrancy attack occurs when a contract calls an external untrusted contract before updating its state. It can be prevented using the checks-effects-interactions pattern or reentrancy guards."}
+            ],
+            "insights": {
+                "completeness_score": 98,
+                "ats_score": 98,
+                "career_progression": "High potential junior talent",
+                "strengths": ["Smart contract security", "Fullstack blockchain integrations", "Competitive programming/Hackathons"],
+                "weaknesses": ["Short industry track record"],
+                "concerns": []
+            }
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "name": "Bob Martinez",
+            "email": "bob.m@example.com",
+            "role": "ML Engineer",
+            "github": "github.com/bobm-ml",
+            "linkedin": "linkedin.com/in/bobm",
+            "location": "Denver, CO",
+            "score": 85,
+            "blind_score": 82,
+            "status": "Interviewing",
+            "summary": "ML Engineer with a focus on PyTorch model optimization, NLP pipelines, and cloud training environments.",
+            "skills": ["Python", "PyTorch", "TensorFlow", "Scikit-Learn", "AWS", "SQL", "Docker", "Machine Learning"],
+            "experience": [{"title": "Data Scientist", "company": "AI Labs", "date": "2021-Present"}],
+            "job_matches": [{"role": "Machine Learning Engineer", "score": 85}],
+            "radar_data": [{"subject": "PyTorch", "A": 92, "fullMark": 100}, {"subject": "Math/Stats", "A": 88, "fullMark": 100}, {"subject": "Data Mining", "A": 85, "fullMark": 100}, {"subject": "Deploy ML", "A": 78, "fullMark": 100}, {"subject": "SQL", "A": 82, "fullMark": 100}],
+            "qa": [
+                {"skill": "Machine Learning", "question": "Explain the vanishing gradient problem and how LSTMs solve it.", "answer": "Vanishing gradient occurs when gradients shrink exponentially during backpropagation in deep neural networks. LSTMs solve this using additive gates (forget gate, input gate, output gate) which maintain a constant error carousel flow."}
+            ],
+            "insights": {
+                "completeness_score": 90,
+                "ats_score": 85,
+                "career_progression": "Growing ML Specialist",
+                "strengths": ["Deep NLP architecture", "PyTorch/TensorFlow expertise", "Data preprocessing"],
+                "weaknesses": ["Limited classical software engineering architecture"],
+                "concerns": []
+            }
+        }
+    ]
+
+    for c in demo_candidates:
+        c["organization_id"] = tenant_id
+        await save_candidate(c)
+        
+    return {"status": "success", "message": f"Successfully seeded 5 demo candidates for tenant {tenant_id}"}
 
 
 @router.get("/bias-audit")
@@ -992,8 +1260,8 @@ async def get_bias_audit():
     return batch_audit
 
 
-@router.delete("/{candidate_id}")
-async def delete_candidate_endpoint(candidate_id: str):
+@router.delete("/{candidate_id}", dependencies=[Depends(require_permission(Permission.DELETE_CANDIDATE))])
+async def delete_candidate_endpoint(candidate_id: str, tenant_id: str = Depends(require_tenant)):
     """
     Delete a candidate by ID.
     """
@@ -1201,24 +1469,35 @@ async def generate_candidate_qa(candidate_id: str):
 # ── FEATURE D: Webhook-Driven GitHub Commit Sync ────────────────
 
 @router.post("/{candidate_id}/webhook/github-sync")
-async def github_webhook_sync(candidate_id: str, payload: dict = None):
+async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Session = Depends(get_db)):
     """
-    Simulated webhook receiver or manual trigger to sync GitHub signals.
-    Fetches latest commits, recalculates the candidate's GitHub score, and updates DB.
+    Robust webhook receiver or manual sync trigger. Recalculates candidate scores,
+    skill confidence, match breakdowns, and AI summaries using live GitHub signals.
     """
+    import json
     from datetime import datetime
-    from db.supabase_client import fetch_candidate_by_id, save_candidate
-    from signals.github_signal import fetch_github_signals, score_github
+    from db.models import Candidate, Job
+    from db.crypto import decrypt_field
+    from db.supabase_client import save_candidate
+    from engine.score_fusion import compute_full_candidate_score
 
-    candidate = await fetch_candidate_by_id(candidate_id)
-    if not candidate:
-        candidate = next((c for c in candidates_db if c["id"] == candidate_id), None)
-        
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    candidate_obj = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    candidate_dict = None
+    if candidate_obj:
+        candidate_name = decrypt_field(candidate_obj.name)
+        text = candidate_obj.resume_text or (candidate_name + " " + (candidate_obj.summary or ""))
+        github_url = candidate_obj.github or ""
+        tenant_id = candidate_obj.organization_id
+    else:
+        # fallback to in-memory
+        candidate_dict = next((c for c in candidates_db if c["id"] == candidate_id), None)
+        if not candidate_dict:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        candidate_name = candidate_dict.get("name", "Unknown")
+        text = candidate_dict.get("resume_text") or (candidate_name + " " + (candidate_dict.get("summary") or ""))
+        github_url = candidate_dict.get("github") or ""
+        tenant_id = candidate_dict.get("organization_id", "default-tenant")
 
-    github_url = candidate.get("github", "")
-    # Clean username
     username = github_url.strip().replace("https://", "").replace("http://", "")
     if username.startswith("github.com/"):
         username = username[len("github.com/"):]
@@ -1227,44 +1506,165 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None):
     if not username:
         raise HTTPException(status_code=400, detail="No GitHub profile set for candidate.")
 
-    # Fetch live signals
-    signals = await fetch_github_signals(username)
-    if not signals:
-        raise HTTPException(status_code=400, detail=f"GitHub profile '{username}' not found or rate limited.")
+    # Load active jobs for this tenant
+    jobs_list = db.query(Job).filter(Job.organization_id == tenant_id).all()
+    best_job = jobs_list[0] if jobs_list else None
+    role_type = "backend_engineer"
+    jd_features = {
+        "required_skills": [],
+        "preferred_skills": [],
+        "min_experience": 0,
+        "max_experience": 99,
+        "education_required": "unknown"
+    }
 
-    # Recalculate GitHub score
-    raw_github_score = score_github(signals)
-    github_score_pct = round(raw_github_score * 100)
+    if best_job:
+        role_type = "backend_engineer" if "backend" in best_job.title.lower() else "frontend_engineer"
+        jd_features = {
+            "required_skills": [s.strip() for s in best_job.required_skills.split(",") if s.strip()] if best_job.required_skills else [],
+            "preferred_skills": [s.strip() for s in best_job.preferred_skills.split(",") if s.strip()] if best_job.preferred_skills else [],
+            "min_experience": best_job.experience_required,
+            "max_experience": best_job.max_experience,
+            "education_required": "unknown"
+        }
 
-    old_score = candidate.get("score", 75)
-    # Give GitHub score 30% weight in the dynamic update if updated via sync
-    new_overall_score = min(100, max(50, round(old_score * 0.7 + github_score_pct * 0.3)))
+    # Run full scoring engine
+    try:
+        scoring_res = await compute_full_candidate_score(
+            candidate_name=candidate_name,
+            resume_text=text,
+            jd_features=jd_features,
+            github_username=username,
+            role_type=role_type
+        )
+    except Exception as e:
+        logger.error("Scoring engine failed during webhook sync: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to score candidate: {str(e)}")
 
-    candidate["score"] = new_overall_score
-    candidate["status"] = "Strong Match" if new_overall_score > 90 else "Match"
+    # Calculate 65% resume base + 35% live GitHub score fusion
+    breakdown = scoring_res.get("component_breakdown", {})
+    resume_keys = ["resume_skill_match", "resume_experience", "resume_education"]
+    resume_weight_sum = sum(breakdown.get(k, {}).get("weight", 0.0) for k in resume_keys)
+    if resume_weight_sum > 0:
+        resume_raw_score = sum(breakdown.get(k, {}).get("weighted_score", 0.0) for k in resume_keys) / resume_weight_sum
+    else:
+        resume_raw_score = 0.7  # fallback 70%
+
+    github_signals = scoring_res.get("external_signals", {}).get("github", {})
+    github_score = github_signals.get("score", 0.0)
     
-    # Update radar data to keep UI functional
-    if not candidate.get("radarData") and not candidate.get("radar_data"):
-        candidate["radar_data"] = [
-            {"subject": "Frontend", "A": 80 if "React" in candidate.get("skills", []) else 40},
-            {"subject": "Backend", "A": 80 if "Python" in candidate.get("skills", []) else 40},
-            {"subject": "DevOps", "A": 85 if "Docker" in candidate.get("skills", []) else 30},
-            {"subject": "Databases", "A": 75 if "PostgreSQL" in candidate.get("skills", []) else 50},
-            {"subject": "AI/ML", "A": 90 if "PyTorch" in candidate.get("skills", []) else 20},
-        ]
+    # 65% resume + 35% GitHub
+    fused_score_pct = (0.65 * resume_raw_score + 0.35 * github_score) * 100
+    final_score = max(0, min(100, round(fused_score_pct)))
+    blind_score = final_score
+
+    # Compute Blind Score using bias auditor
+    if best_job:
+        try:
+            from engine.bias_auditor import compute_blind_score
+            blind_res = await compute_blind_score(
+                candidate_name=candidate_name,
+                resume_text=text,
+                jd_features=jd_features,
+                role_type=role_type
+            )
+            blind_score = int(blind_res.get("final_score", final_score))
+        except Exception as e:
+            logger.warning("Failed to compute blind score in webhook sync: %s", e)
+
+    # Build job_matches list for all jobs
+    job_matches = []
+    for job in jobs_list:
+        from engine.matcher import compute_match_breakdown
+        job_jd = {
+            "required_skills": [s.strip() for s in job.required_skills.split(",") if s.strip()] if job.required_skills else [],
+            "preferred_skills": [s.strip() for s in job.preferred_skills.split(",") if s.strip()] if job.preferred_skills else [],
+            "min_experience": job.experience_required,
+            "max_experience": job.max_experience,
+            "education_required": "unknown"
+        }
+        match_breakdown = compute_match_breakdown(
+            resume_features=scoring_res["resume_features"],
+            jd_features=job_jd,
+            github_signals=github_signals,
+            linkedin_signals=scoring_res["external_signals"]["linkedin"]
+        )
+        job_matches.append({
+            "job_id": job.id,
+            "job_title": job.title,
+            "tfidf_score": match_breakdown["overall_match_percentage"],
+            "matched_skills": scoring_res["matched_skills"],
+            "missing_skills": scoring_res["missing_skills"],
+        })
+
+    experience_data = [{"title": "Experience", "company": "Various", "duration": f"{scoring_res['resume_features'].get('experience_years', 0.0)} years"}]
+
+    # Build radar_data from real signal values (commit frequency, language count, PR counts, and test presence)
+    commit_freq = github_signals.get("commit_frequency_per_week", 0.0) or github_signals.get("commit_frequency", 0.0)
+    lang_count = len(github_signals.get("languages", []))
+    pr_count = github_signals.get("open_source_prs_estimate", 0)
+    has_tests = github_signals.get("has_tests", False)
+    
+    github_analysis = scoring_res["insights"].get("github_analysis", {})
+    maturity_score = github_analysis.get("project_maturity_score", 0.0)
+
+    radar_data = [
+        {"subject": "Commit Freq", "A": min(100, round(commit_freq * 10)), "fullMark": 100},
+        {"subject": "Polyglot", "A": min(100, lang_count * 15), "fullMark": 100},
+        {"subject": "PR Activity", "A": min(100, pr_count * 10), "fullMark": 100},
+        {"subject": "Code Quality", "A": 90 if has_tests else 40, "fullMark": 100},
+        {"subject": "Maturity", "A": min(100, round(maturity_score)), "fullMark": 100}
+    ]
 
     # Save candidate
-    await save_candidate(candidate)
-    
+    if candidate_obj:
+        candidate_obj.role = scoring_res["resume_features"].get("role", "Software Engineer")
+        candidate_obj.score = final_score
+        candidate_obj.blind_score = blind_score
+        candidate_obj.status = "Strong Match" if final_score > 85 else "Match"
+        candidate_obj.summary = scoring_res["insights"]["ai_summary"]["executive_summary"]
+        candidate_obj.skills = json.dumps(scoring_res["resume_features"].get("skills", []))
+        candidate_obj.experience = json.dumps(experience_data)
+        candidate_obj.job_matches = json.dumps(job_matches)
+        candidate_obj.radar_data = json.dumps(radar_data)
+        candidate_obj.insights = json.dumps(scoring_res["insights"])
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to commit synced candidate data: {e}")
+            raise HTTPException(status_code=500, detail=f"Database commit failed: {str(e)}")
+    else:
+        # in-memory / fallback save
+        candidate_dict["role"] = scoring_res["resume_features"].get("role", "Software Engineer")
+        candidate_dict["score"] = final_score
+        candidate_dict["blind_score"] = blind_score
+        candidate_dict["status"] = "Strong Match" if final_score > 85 else "Match"
+        candidate_dict["summary"] = scoring_res["insights"]["ai_summary"]["executive_summary"]
+        candidate_dict["skills"] = scoring_res["resume_features"].get("skills", [])
+        candidate_dict["experience"] = experience_data
+        candidate_dict["job_matches"] = job_matches
+        candidate_dict["jobMatches"] = job_matches
+        candidate_dict["radar_data"] = radar_data
+        candidate_dict["radarData"] = radar_data
+        candidate_dict["insights"] = scoring_res["insights"]
+        try:
+            await save_candidate(candidate_dict)
+        except Exception as e:
+            logger.error(f"Failed to save candidate in-memory fallback: {e}")
+            raise HTTPException(status_code=500, detail=f"In-memory fallback save failed: {str(e)}")
+
     # Log audit event
     from db.supabase_client import log_analytics_event
+    github_score_pct = round(github_signals.get("score", 0) * 100)
+
     try:
         await log_analytics_event("github_sync", {
             "candidate_id": candidate_id,
-            "candidate_name": candidate.get("name"),
+            "candidate_name": candidate_name,
             "github_username": username,
             "new_github_score": github_score_pct,
-            "new_overall_score": new_overall_score,
+            "new_overall_score": final_score,
             "timestamp": datetime.now().isoformat()
         })
     except Exception as e:
@@ -1274,11 +1674,85 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None):
         "status": "success",
         "message": f"GitHub profile sync successful for {username}.",
         "github_score": github_score_pct,
-        "overall_score": new_overall_score,
+        "overall_score": final_score,
+        "skills": scoring_res["resume_features"].get("skills", []),
+        "experience": experience_data,
+        "job_matches": job_matches,
+        "radar_data": radar_data,
+        "insights": scoring_res["insights"],
         "signals": {
-            "followers": signals.get("followers", 0),
-            "public_repos": signals.get("total_repos", 0),
-            "stars": signals.get("total_stars", 0),
-            "commit_frequency": signals.get("commit_frequency_per_week", 0)
+            "followers": github_signals.get("followers", 0),
+            "public_repos": github_signals.get("total_repos", 0),
+            "stars": github_signals.get("total_stars", 0),
+            "commit_frequency": github_signals.get("commit_frequency_per_week", 0)
         }
     }
+
+
+# ── GDPR COMPLIANCE ENDPOINTS ───────────────────────────────────
+
+@router.get("/{candidate_id}/gdpr-export")
+async def gdpr_export_candidate(
+    candidate_id: str,
+    tenant_id: str = Depends(require_tenant),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    GDPR compliant candidate data export: returns raw decrypted PII fields for verification.
+    Logs an audit event for compliance tracking.
+    """
+    from db.supabase_client import fetch_candidate_by_id, log_analytics_event
+    from datetime import datetime
+    
+    candidate = await fetch_candidate_by_id(candidate_id)
+    if not candidate:
+        candidate = next((c for c in candidates_db if c["id"] == candidate_id), None)
+        
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    # Log the access event for GDPR audit
+    await log_analytics_event("GDPR_DATA_EXPORT", {
+        "candidate_id": candidate_id,
+        "candidate_name": candidate.get("name"),
+        "performed_by_user": current_user.get("email"),
+        "timestamp": datetime.now().isoformat()
+    })
+    
+    return {
+        "status": "success",
+        "exported_data": candidate
+    }
+
+
+@router.delete("/{candidate_id}/gdpr-forget", dependencies=[Depends(require_permission(Permission.DELETE_CANDIDATE))])
+async def gdpr_forget_candidate(
+    candidate_id: str,
+    tenant_id: str = Depends(require_tenant),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    GDPR 'Right to be Forgotten' candidate deletion: permanently purges a candidate.
+    Logs an audit event before deleting.
+    """
+    from db.supabase_client import fetch_candidate_by_id, delete_candidate, log_analytics_event
+    from datetime import datetime
+    
+    candidate = await fetch_candidate_by_id(candidate_id)
+    if candidate:
+        # Log GDPR forget action
+        await log_analytics_event("GDPR_DATA_DELETE", {
+            "candidate_id": candidate_id,
+            "candidate_name": candidate.get("name"),
+            "performed_by_user": current_user.get("email"),
+            "timestamp": datetime.now().isoformat()
+        })
+        await delete_candidate(candidate_id)
+        return {"status": "success", "message": f"Candidate '{candidate.get('name')}' successfully forgotten."}
+        
+    match = next((c for c in candidates_db if c["id"] == candidate_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    candidates_db.remove(match)
+    return {"status": "success", "message": f"Candidate '{match.get('name')}' successfully forgotten from memory."}

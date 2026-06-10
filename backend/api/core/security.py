@@ -4,6 +4,10 @@ from typing import Optional, Union, Any
 from jose import jwt, JWTError
 import bcrypt
 import secrets
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # JWT configuration
 # IMPORTANT: In production, always set JWT_SECRET_KEY in .env

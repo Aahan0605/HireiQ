@@ -1,7 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from api.core.security import decode_access_token
-from db.supabase_client import fetch_user_by_id
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
@@ -22,6 +21,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     if user_id is None:
         raise credentials_exception
         
+    from db.supabase_client import fetch_user_by_id
     user = await fetch_user_by_id(user_id)
     if user is None:
         raise credentials_exception
@@ -38,4 +38,5 @@ async def get_optional_current_user(token: str = Depends(oauth2_scheme)) -> dict
     user_id = decode_access_token(token)
     if user_id is None:
         return None
+    from db.supabase_client import fetch_user_by_id
     return await fetch_user_by_id(user_id)

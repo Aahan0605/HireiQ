@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch } from '../lib/apiFetch';
 import {
   Menu, X, Sun, Moon,
   LayoutDashboard, FileSearch, Users,
@@ -29,6 +30,9 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState(getInitialTheme);
+  const [workerStatus, setWorkerStatus] = useState({ status: 'online', message: '' });
+  const [quotaUsed, setQuotaUsed] = useState(0);
+  const [plan, setPlan] = useState('Free');
 
   if (!isAuthenticated) {
     return <Navigate to="/signin" replace />;
@@ -44,6 +48,26 @@ export default function DashboardLayout() {
     }
     localStorage.setItem('hireiq-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // 1. Fetch worker status
+    apiFetch('/api/v1/settings/worker-status')
+      .then(r => r.ok ? r.json() : { status: 'fallback' })
+      .then(data => setWorkerStatus(data))
+      .catch(() => setWorkerStatus({ status: 'fallback', message: '' }));
+
+    // 2. Fetch total candidates from analytics
+    apiFetch('/api/v1/settings/analytics')
+      .then(r => r.ok ? r.json() : { total_candidates: 0 })
+      .then(data => setQuotaUsed(data.total_candidates ?? 0))
+      .catch(() => {});
+
+    // 3. Load plan
+    const savedPlan = localStorage.getItem('hireiq_saas_plan') || 'Free';
+    setPlan(savedPlan);
+  }, [location.pathname, isAuthenticated]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
@@ -95,10 +119,44 @@ export default function DashboardLayout() {
           ))}
         </nav>
 
-        <div className="mt-auto pt-6 border-t border-white/10">
+        <div className="mt-auto pt-4 border-t border-white/10 space-y-4">
+          <div className="flex items-center gap-2 px-2 text-xs">
+            <span className={`h-2 w-2 rounded-full ${
+              workerStatus.status === 'online' ? 'bg-emerald-500 shadow-glow-emerald animate-pulseGlow' : 'bg-amber-500 animate-pulse'
+            }`} />
+            <span className="text-gray-400">
+              {workerStatus.status === 'online' ? 'Worker: Active' : 'Worker: Fallback'}
+            </span>
+          </div>
+
+          <div className="px-2 space-y-1.5">
+            <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+              <span>{plan} Usage</span>
+              <span>{plan === 'Free' ? `${quotaUsed}/5 parses` : `${quotaUsed}/∞ parses`}</span>
+            </div>
+            {plan === 'Free' && (
+              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                <div 
+                  className={`h-full rounded-full bg-gradient-to-r ${
+                    quotaUsed >= 5 ? 'from-rose-500 to-red-500' : 'from-emerald-400 to-emerald-600'
+                  }`} 
+                  style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} 
+                />
+              </div>
+            )}
+            {plan === 'Free' && (
+              <Link 
+                to="/settings?tab=billing" 
+                className="mt-2 block text-center rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 hover:border-emerald-500/60 p-2 text-xs font-semibold text-emerald-400 hover:text-white transition-all hover:scale-[1.02] shadow-glow-mint"
+              >
+                Upgrade to Pro ⚡
+              </Link>
+            )}
+          </div>
+
           <button
             onClick={logout}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all ${linkIdle}`}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all ${linkIdle} border-t border-white/5 pt-3`}
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />
             Sign Out

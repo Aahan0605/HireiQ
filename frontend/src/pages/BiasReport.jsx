@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
@@ -26,7 +27,7 @@ export default function BiasReport() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API}/candidates/bias-audit`)
+    apiFetch(`${API}/candidates/bias-audit`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         const results = data.results || [];
@@ -175,7 +176,7 @@ export default function BiasReport() {
             {/* CSS Donut */}
             <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 flex flex-col items-center">
               <h3 className="text-theme-1 font-semibold mb-4 text-sm">Bias Distribution</h3>
-              <svg viewBox="0 0 100 100" className="w-28 h-28">
+              <svg viewBox="0 0 100 100" className="w-28 h-28" role="img" aria-label="Donut chart representing the distribution of unbiased candidates vs candidates with potential bias">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
                 {/* Unbiased arc */}
                 <circle cx="50" cy="50" r="40" fill="none" stroke="#22c55e" strokeWidth="12"

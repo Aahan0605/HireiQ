@@ -5,8 +5,13 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('hireiq_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('hireiq_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to parse saved user:", e);
+      return null;
+    }
   });
   const [token, setToken] = useState(() => {
     return localStorage.getItem('hireiq_token') || null;

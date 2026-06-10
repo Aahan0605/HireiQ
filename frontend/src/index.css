@@ -33,8 +33,8 @@
     --surface:     #0D0D1A;
     --surface-2:   #141428;
     --surface-3:   #1C1C35;
-    --border:      rgba(255,255,255,0.07);
-    --border-glow: rgba(16,185,129,0.25);
+    --border:      rgba(255,255,255,0.13);
+    --border-glow: rgba(16,185,129,0.3);
 
     --mint:   #4DFFA4;
     --violet: #10b981;
@@ -43,8 +43,8 @@
     --sky:    #5DB8FF;
 
     --text-1: #EEEEF5;
-    --text-2: #9494B0;
-    --text-3: #4A4A6E;
+    --text-2: #B0B0CC;
+    --text-3: #7C7C9E;
   }
 
   *, *::before, *::after { box-sizing: border-box; }

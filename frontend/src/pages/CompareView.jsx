@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from 'recharts';
 import { Loader2 } from 'lucide-react';
 import { getCandidateById } from '../data/candidates';
+import { apiFetch } from '../lib/apiFetch';
 
 // ── Skill category definitions ────────────────────────────────
 // Each category maps to a set of skill keywords.
@@ -49,8 +50,8 @@ export default function CompareView() {
     const API = '/api/v1';
     
     Promise.all([
-      fetch(`${API}/candidates/${ids[0]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
-      fetch(`${API}/candidates/${ids[1]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      apiFetch(`${API}/candidates/${ids[0]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
+      apiFetch(`${API}/candidates/${ids[1]}`).then(r => { if (!r.ok) throw new Error(); return r.json(); }),
     ])
       .then(([dataA, dataB]) => {
         setCandidateA(dataA);
@@ -117,10 +118,10 @@ export default function CompareView() {
       )}
       <div className="flex items-center gap-3 mb-4">
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-theme-1 flex-shrink-0">
-          {candidate.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2)}
+          {(candidate.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2) || 'C')}
         </div>
         <div>
-          <h3 className="text-theme-1 font-semibold text-sm">{candidate.name}</h3>
+          <h3 className="text-theme-1 font-semibold text-sm">{candidate.name || 'Anonymous Candidate'}</h3>
           <p className="text-gray-400 text-xs">{candidate.role}</p>
         </div>
       </div>

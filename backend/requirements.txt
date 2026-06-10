@@ -14,4 +14,11 @@ python-multipart
 supabase
 fpdf2
 stripe
-
+alembic
+cryptography
+celery
+redis
+psycopg2-binary
+prometheus-fastapi-instrumentator
+sentry-sdk
+posthog

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
@@ -20,10 +21,10 @@ const scoreStyle = (s) =>
 function CandidateCard({ c, i, blindReview, navigate }) {
   const displayName = blindReview
     ? `Candidate ${c.id ? c.id.toString().substring(0, 4).toUpperCase() : 'XXXX'}`
-    : c.name;
+    : (c.name || 'Anonymous Candidate');
   const displayInitials = blindReview
     ? '🕵️'
-    : c.name?.split(' ').map((n) => n[0]).join('').slice(0, 2);
+    : (c.name?.split(' ')?.map((n) => n[0])?.join('')?.slice(0, 2) || 'C');
 
   return (
     <motion.div
@@ -94,8 +95,8 @@ export default function JobMatches() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API}/jobs/${id}`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
-      fetch(`${API}/jobs/${id}/matches`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+      apiFetch(`${API}/jobs/${id}`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
+      apiFetch(`${API}/jobs/${id}/matches`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
     ])
       .then(([jobData, matchData]) => { setJob(jobData); setMatches(matchData); })
       .catch(() => setError('Failed to load. Is the backend running?'))
