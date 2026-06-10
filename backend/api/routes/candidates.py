@@ -1047,17 +1047,100 @@ candidates_db = [
 
 
 @router.get("")
-async def get_all_candidates(tenant_id: str = Depends(require_tenant)) -> list[dict]:
+async def get_all_candidates(
+    tenant_id: str = Depends(require_tenant),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=50, ge=1, le=500, description="Results per page"),
+    search: str = Query(default="", description="Search by name or role"),
+    status: str = Query(default="", description="Filter by pipeline status"),
+) -> dict:
     """
-    GET /candidates — returns database candidates for the active tenant context.
+    GET /candidates — returns database candidates for the active tenant context with pagination and filters.
     """
-    from db.supabase_client import fetch_all_candidates
+    from db.session import SessionLocal
+    from db.models import Candidate
+    from db.crypto import decrypt_field
+    from db.supabase_client import _candidate_to_dict
+    from sqlalchemy import desc
+
     try:
-        db_candidates = await fetch_all_candidates()
-        return db_candidates
+        db = SessionLocal()
+        try:
+            query = db.query(Candidate)
+            if tenant_id:
+                query = query.filter(Candidate.organization_id == tenant_id)
+            if status:
+                query = query.filter(Candidate.status == status)
+
+            # Order by score descending
+            query = query.order_by(desc(Candidate.score))
+
+            if search:
+                # If search is provided, we must fetch all matching to decrypt and filter in memory
+                results = query.all()
+                search_lower = search.lower()
+                filtered = []
+                for c in results:
+                    name = decrypt_field(c.name) or ""
+                    role = c.role or ""
+                    if search_lower in name.lower() or search_lower in role.lower():
+                        filtered.append(c)
+                
+                total = len(filtered)
+                pages = (total + limit - 1) // limit if total > 0 else 1
+                offset = (page - 1) * limit
+                paginated_results = filtered[offset : offset + limit]
+                data = [_candidate_to_dict(c) for c in paginated_results]
+            else:
+                total = query.count()
+                pages = (total + limit - 1) // limit if total > 0 else 1
+                offset = (page - 1) * limit
+                results = query.offset(offset).limit(limit).all()
+                data = [_candidate_to_dict(c) for c in results]
+
+            has_next = page < pages
+            has_prev = page > 1
+
+            return {
+                "data": data,
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": pages,
+                "has_next": has_next,
+                "has_prev": has_prev
+            }
+        finally:
+            db.close()
     except Exception as e:
         logger.warning("Database fetch failed, falling back to in-memory: %s", e)
-        return candidates_db
+        # fallback logic
+        filtered_fallback = candidates_db
+        if status:
+            filtered_fallback = [c for c in filtered_fallback if c.get("status") == status]
+        if search:
+            search_lower = search.lower()
+            filtered_fallback = [
+                c for c in filtered_fallback
+                if search_lower in c.get("name", "").lower() or search_lower in c.get("role", "").lower()
+            ]
+        # order by score descending
+        filtered_fallback = sorted(filtered_fallback, key=lambda x: x.get("score", x.get("final_score", 0)), reverse=True)
+        
+        total = len(filtered_fallback)
+        pages = (total + limit - 1) // limit if total > 0 else 1
+        offset = (page - 1) * limit
+        data = filtered_fallback[offset : offset + limit]
+        
+        return {
+            "data": data,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+            "has_next": page < pages,
+            "has_prev": page > 1
+        }
 
 
 @router.post("/seed-demo")

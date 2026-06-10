@@ -80,7 +80,10 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_subscriptions_organization_id'), 'subscriptions', ['organization_id'], unique=True)
-    op.drop_table('analytics')
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    if 'analytics' in inspector.get_table_names():
+        op.drop_table('analytics')
     op.add_column('candidates', sa.Column('organization_id', sa.String(length=36), nullable=False, server_default='default-tenant'))
     op.alter_column('candidates', 'id',
                existing_type=sa.TEXT(),

@@ -115,15 +115,23 @@ export default function Candidates() {
     let timerId = null;
 
     const fetchCandidates = () => {
-      apiFetch(`${API}/candidates`)
+      apiFetch(`${API}/candidates?page=1&limit=200`)
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           if (!isMounted) return;
+          
+          let list = null;
           if (Array.isArray(data)) {
-            setCandidates(data);
+            list = data;
+          } else if (data && Array.isArray(data.data)) {
+            list = data.data;
+          }
+
+          if (list) {
+            setCandidates(list);
             
             // Check if any candidate is still analyzing
-            const isAnyAnalyzing = data.some(c => c.status === 'Analyzing');
+            const isAnyAnalyzing = list.some(c => c.status === 'Analyzing');
             if (isAnyAnalyzing) {
               if (!timerId) {
                 timerId = setInterval(fetchCandidates, 3000);
