@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Cpu } from 'lucide-react';
 
 const AlgorithmLegend = () => {
+  const { pathname } = useLocation();
+  const showOn = ['/candidates', '/analyze', '/dashboard'];
+  if (!showOn.some(p => pathname.startsWith(p))) return null;
+
   const [isOpen, setIsOpen] = useState(false);
 
   const algorithms = [

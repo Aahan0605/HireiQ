@@ -153,7 +153,7 @@ function InterviewModal({ onClose, onUpdateCount }) {
       toast.success(`Schedule optimized: ${result.total_slots} slots confirmed!`);
     } catch (err) {
       console.warn("Backend offline or error:", err);
-      toast.error("Backend error: Running local greedy scheduler.");
+      toast.error("Something went wrong. Running local scheduler.");
       
       const sorted = [...interviews].map(iv => ({
         ...iv,
@@ -598,7 +598,16 @@ export default function Dashboard() {
     // Fetch analytics stats
     apiFetch(`${API}/settings/analytics`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => setAnalytics(data))
+      .then(data => {
+        setAnalytics(data);
+        if (data?.total_candidates === 0) {
+          localStorage.removeItem('hireiq_interviews');
+          localStorage.removeItem('hireiq_shortlist_result');
+          localStorage.removeItem('hireiq_shortlist_pool');
+          setScheduledCount(0);
+          setShortlistCount(0);
+        }
+      })
       .catch(() => setAnalytics(null));
 
     // Load active schedule count from localStorage safely

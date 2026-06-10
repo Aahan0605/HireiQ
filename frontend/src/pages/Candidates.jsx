@@ -141,7 +141,7 @@ export default function Candidates() {
         .catch(() => { 
           if (!isMounted) return;
           setCandidates(getAllCandidates()); 
-          setError('Backend offline — showing local data.'); 
+          setError('Unable to load candidates. Showing demo data.'); 
           if (timerId) {
             clearInterval(timerId);
             timerId = null;
@@ -426,7 +426,7 @@ export default function Candidates() {
     } catch (err) {
       toast.dismiss();
       console.error(err);
-      toast.error("Error deleting candidate(s) from server.");
+      toast.error("Failed to delete candidate(s). Please try again later.");
     }
   };
 

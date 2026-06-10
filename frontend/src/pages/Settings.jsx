@@ -76,10 +76,10 @@ export default function Settings() {
           localStorage.setItem('hireiq_saas_plan', planName);
           toast.success(`Subscription verified! You have been upgraded to ${planName}! 🎉`);
         } else {
-          toast.error("Failed to verify subscription on server.");
+          toast.error("Failed to verify subscription. Please try again later.");
         }
       })
-      .catch(() => toast.error("Failed to verify subscription on server."))
+      .catch(() => toast.error("Failed to verify subscription. Please try again later."))
       .finally(() => {
         localStorage.removeItem('hireiq_saas_pending_plan');
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -175,7 +175,7 @@ export default function Settings() {
       setShowCheckout(false);
       toast.success(`Success! You have been upgraded to the ${selectedPlan} plan! 🎉`);
     } catch {
-      toast.error("Failed to upgrade subscription on server.");
+      toast.error("Failed to update subscription. Please check your billing settings.");
     } finally {
       setCheckoutLoading(false);
     }
@@ -193,7 +193,7 @@ export default function Settings() {
       localStorage.setItem('hireiq_saas_plan', 'Free');
       toast.success("Downgraded back to Free tier.");
     } catch {
-      toast.error("Failed to downgrade subscription on server.");
+      toast.error("Failed to downgrade subscription. Please try again later.");
     }
   };
 

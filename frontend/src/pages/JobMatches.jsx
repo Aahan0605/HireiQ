@@ -99,7 +99,7 @@ export default function JobMatches() {
       apiFetch(`${API}/jobs/${id}/matches`).then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
     ])
       .then(([jobData, matchData]) => { setJob(jobData); setMatches(matchData); })
-      .catch(() => setError('Failed to load. Is the backend running?'))
+      .catch(() => setError('Unable to load job matches. Please refresh the page or try again later.'))
       .finally(() => setLoading(false));
   }, [id]);
 

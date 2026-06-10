@@ -54,7 +54,7 @@ export default function BiasReport() {
         setError('');
       })
       .catch(() => {
-        setError('Backend database empty or offline — showing local seeded analysis.');
+        setError('Unable to load bias report. Showing demo analysis data.');
         setBiasData(DEFAULT_BIAS_DATA);
         const biasedCount = DEFAULT_BIAS_DATA.filter(c => Math.abs(c.full - c.blind) > 3).length;
         setSummary({

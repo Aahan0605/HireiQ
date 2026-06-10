@@ -36,7 +36,7 @@ export default function Jobs() {
     apiFetch(`${API}/jobs`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => { setJobs(data); setError(''); })
-      .catch(() => setError('Failed to load jobs. Is the backend running?'))
+      .catch(() => setError('Unable to load job listings. Please refresh the page or try again later.'))
       .finally(() => setLoading(false));
   };
 
@@ -114,7 +114,7 @@ export default function Jobs() {
       }
       closeModal();
     } catch {
-      alert(`Failed to ${editingJob ? 'update' : 'create'} job. Is the backend running?`);
+      alert(`Failed to ${editingJob ? 'update' : 'create'} job. Please try again later.`);
     } finally {
       setSubmitting(false);
     }
