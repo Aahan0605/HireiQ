@@ -90,7 +90,7 @@ export default function SignIn() {
               <div className="mb-1 flex items-center justify-between">
                 <label htmlFor="password" className="block text-sm font-medium text-text-1">Password</label>
                 {!isRegistering && (
-                  <a href="#" className="text-xs text-violet hover:text-white transition-colors">Forgot password?</a>
+                  <Link to="/forgot-password" className="text-xs text-violet hover:text-emerald-400 transition-colors">Forgot password?</Link>
                 )}
               </div>
               <input

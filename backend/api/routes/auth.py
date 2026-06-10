@@ -5,13 +5,13 @@ import asyncio
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
 from api.core.security import verify_password, get_password_hash, create_access_token
 from api.core.dependencies import get_current_user
 from db.supabase_client import save_user, fetch_user_by_email
 from db.session import SessionLocal
 from db.models import User
-from api.core.email import send_verification_email
+from api.core.email import send_verification_email, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -38,6 +38,23 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @validator('new_password')
+    def password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Must contain a letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Must contain a digit')
+        return v
 
 class Token(BaseModel):
     access_token: str
@@ -201,3 +218,36 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
         "email": current_user["email"],
         "role": current_user.get("role", "Recruiter")
     }
+
+@router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    """Always return 200 to prevent email enumeration."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == req.email).first()
+        if user:
+            token = secrets.token_urlsafe(32)
+            user.password_reset_token = token
+            user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+            db.commit()
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+            reset_link = f"{frontend_url}/reset-password?token={token}"
+            asyncio.create_task(send_password_reset_email(req.email, reset_link))
+    finally:
+        db.close()
+    return {"message": "If that email exists, a reset link has been sent."}
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.password_reset_token == req.token).first()
+        if not user or user.password_reset_expires < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+        user.hashed_password = get_password_hash(req.new_password)
+        user.password_reset_token = None
+        user.password_reset_expires = None
+        db.commit()
+        return {"message": "Password reset successfully. You can now sign in."}
+    finally:
+        db.close()
