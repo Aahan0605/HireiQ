@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
-import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X } from 'lucide-react';
+import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import SkillGapCard from '../components/SkillGapCard';
@@ -59,6 +59,7 @@ export default function CandidateProfile() {
   const [qaList, setQaList] = useState([]);
   const [qaLoading, setQaLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
@@ -180,27 +181,33 @@ export default function CandidateProfile() {
 
   // Fetch candidate details dynamically
   useEffect(() => {
-    setLoading(true);
-    apiFetch(`${API}/candidates/${id}`)
-      .then(r => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
-      })
-      .then(data => {
+    const fetchCandidate = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await apiFetch(`${API}/candidates/${id}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError('Candidate not found. They may have been deleted.');
+          } else {
+            setError('Failed to load profile. Please try again.');
+          }
+          setLoading(false);
+          return;
+        }
+        const data = await res.json();
         setCandidate(data);
         if (data.qa) {
           setQaList(data.qa);
         }
-      })
-      .catch(() => {
-        // fallback to local data
-        const localCand = getCandidateById(id) || getCandidateById('1');
-        setCandidate(localCand);
-        if (localCand?.qa) {
-          setQaList(localCand.qa);
-        }
-      })
-      .finally(() => setLoading(false));
+      } catch (err) {
+        setError(err.message || 'Failed to load candidate profile.');
+        setLoading(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCandidate();
   }, [id]);
 
   // Fetch GitHub stats once we know the candidate's github handle
@@ -216,22 +223,36 @@ export default function CandidateProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 text-emerald-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400 text-sm">Loading candidate profile data...</p>
+      <div className="min-h-screen bg-page px-6 py-8 sm:px-10 lg:py-12">
+        <div className="mx-auto max-w-4xl space-y-6 animate-pulse">
+          <div className="h-8 w-48 bg-white/10 rounded-xl" />
+          <div className="h-40 rounded-2xl bg-white/5 border border-white/5" />
+          <div className="grid grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-24 rounded-2xl bg-white/5 border border-white/5" />
+            ))}
+          </div>
+          <div className="h-64 rounded-2xl bg-white/5 border border-white/5" />
         </div>
       </div>
     );
   }
 
-  if (!candidate) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-[#0d0d1a] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-5xl mb-4">🔍</p>
-          <h1 className="text-2xl font-bold text-white mb-3">Candidate Not Found</h1>
-          <Link to="/candidates" className="text-emerald-400 hover:text-emerald-300 text-sm">← Back to Candidates</Link>
+      <div className="min-h-screen bg-page flex items-center justify-center px-6">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="mx-auto h-14 w-14 rounded-2xl bg-rose-500/10 flex items-center justify-center text-rose-400">
+            <AlertCircle className="h-7 w-7" />
+          </div>
+          <h2 className="font-display text-xl font-bold text-theme-1">Profile Unavailable</h2>
+          <p className="text-theme-2 text-sm">{error}</p>
+          <button
+            onClick={() => navigate('/candidates')}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-5 text-white text-sm font-semibold transition-all"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Candidates
+          </button>
         </div>
       </div>
     );
