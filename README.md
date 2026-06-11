@@ -139,7 +139,8 @@ HireiQ/
 │   │   └── routes/       # Auth, Candidates, Jobs, Reports, Settings
 │   ├── db/               # Supabase Connector & Local SQLite Hybrid Layer
 │   ├── algorithms/       # Greedy Scheduler, Knapsack Shortlist, BFS Skill Graph
-│   └── parser/           # PDF Plumber resume parser & Feature extraction
+│   ├── parser/           # PDF Plumber resume parser & Feature extraction
+│   └── scratch/          # Development scratch, integration tests & seed scripts
 ├── frontend/
 │   └── src/
 │       ├── context/      # Global Authentication State Provider
@@ -147,6 +148,9 @@ HireiQ/
 │       ├── components/   # ConstellationBackground, MagneticCard, HeroSection
 │       └── pages/        # Dashboard, Candidates (List + Kanban), Analyze, Settings (Scoring + Billing), Landing
 └── data/                 # Sample resumes and job descriptions
+
+> [!NOTE]
+> The `backend/scratch/` directory contains development utilities, seeding modules, and integration test scripts (e.g. `test_checkout.py`, `test_members.py`) for verifying server routing and DB migrations. It is excluded in `.gitignore` and not intended for production deployment.
 ```
 
 ---

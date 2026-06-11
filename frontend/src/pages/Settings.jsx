@@ -33,10 +33,6 @@ export default function Settings() {
   // Billing SaaS states
   const [plan, setPlan] = useState(() => localStorage.getItem('hireiq_saas_plan') || 'Free');
   const [quotaUsed, setQuotaUsed] = useState(0);
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCVC, setCardCVC] = useState('');
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
@@ -167,11 +163,13 @@ export default function Settings() {
       .catch(() => toast.error("Failed to verify subscription. Please try again later."))
       .finally(() => {
         localStorage.removeItem('hireiq_saas_pending_plan');
-        window.history.replaceState({}, document.title, window.location.pathname);
+        const newUrl = window.location.pathname + '?tab=billing' + (window.location.hash || '');
+        window.history.replaceState({}, document.title, newUrl);
       });
-    } else if (params.get('checkout') === 'cancel') {
+    } else if (params.get('checkout') === 'cancel' || params.get('checkout') === 'cancelled') {
       toast.info("Subscription checkout was cancelled.");
-      window.history.replaceState({}, document.title, window.location.pathname);
+      const newUrl = window.location.pathname + '?tab=billing' + (window.location.hash || '');
+      window.history.replaceState({}, document.title, newUrl);
     }
   }, []);
 
@@ -207,64 +205,36 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleInitiateCheckout = async (planName) => {
+  const handleInitiateCheckout = (planName) => {
     setSelectedPlan(planName);
+    setShowCheckout(true);
+  };
+
+  const handleUpgrade = async () => {
     setCheckoutLoading(true);
     try {
-      // Store pending plan name locally to activate on successful redirect back
-      localStorage.setItem('hireiq_saas_pending_plan', planName);
-      
-      const res = await apiFetch(`${API}/settings/billing/create-checkout-session`, {
+      localStorage.setItem('hireiq_saas_pending_plan', selectedPlan);
+      const res = await apiFetch(`${API}/billing/create-checkout-session?plan_name=${selectedPlan}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan_name: planName,
-          success_url: window.location.origin + '/settings?checkout=success',
-          cancel_url: window.location.origin + '/settings?checkout=cancel'
-        })
+        headers: { 'Content-Type': 'application/json' }
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      if (data.url && data.url.includes('stripe.com')) {
-        // Redirect to Stripe Checkout page
-        window.location.href = data.url;
-      } else {
-        // Fallback to beautiful local credit card mock form
-        setShowCheckout(true);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to initiate Stripe Checkout.");
       }
-    } catch {
-      // Fallback on error / offline
-      setShowCheckout(true);
+      const data = await res.json();
+      if (data.checkout_url || data.url) {
+        window.location.href = data.checkout_url || data.url;
+      } else {
+        toast.error("Checkout session was created but no redirect URL was returned.");
+      }
+    } catch (err) {
+      toast.error(err.message || "Unable to reach Stripe checkout. Please try again later.");
     } finally {
       setCheckoutLoading(false);
     }
   };
 
-  const handleSubscribe = async (e) => {
-    e.preventDefault();
-    if (!cardNumber || !cardHolder || !cardExpiry || !cardCVC) {
-      toast.error("Please fill in all payment fields.");
-      return;
-    }
-    setCheckoutLoading(true);
-    try {
-      const res = await apiFetch(`${API}/settings/billing/update-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_name: selectedPlan })
-      });
-      if (!res.ok) throw new Error();
-      setPlan(selectedPlan);
-      localStorage.setItem('hireiq_saas_plan', selectedPlan);
-      localStorage.removeItem('hireiq_saas_pending_plan');
-      setShowCheckout(false);
-      toast.success(`Success! You have been upgraded to the ${selectedPlan} plan! 🎉`);
-    } catch {
-      toast.error("Failed to update subscription. Please check your billing settings.");
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
 
   const handleResetPlan = async () => {
     try {
@@ -597,122 +567,60 @@ export default function Settings() {
                   className="bg-card border border-white/10 rounded-xl p-6 relative overflow-hidden"
                 >
                   <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                    <CreditCard size={150} className="text-emerald-400" />
+                    <Zap size={150} className="text-emerald-400" />
                   </div>
                   
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-white">💳 Checkout</h3>
-                      <p className="text-xs text-gray-400">Billing details for {selectedPlan} subscription package</p>
+                      <h3 className="text-lg font-semibold text-white">⚡ Upgrade Plan</h3>
+                      <p className="text-xs text-gray-400">Secure subscription checkout via Stripe</p>
                     </div>
                     <button onClick={() => setShowCheckout(false)} className="text-gray-400 hover:text-white text-xs">✕ Cancel</button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Visual Credit Card Preview */}
-                    <div className="flex flex-col justify-center items-center">
-                      <div className="w-full max-w-[280px] h-44 bg-gradient-to-br from-emerald-600 via-emerald-800 to-indigo-900 rounded-xl p-5 text-white flex flex-col justify-between shadow-xl relative overflow-hidden">
-                        {/* Chip & Brand */}
-                        <div className="flex justify-between items-center">
-                          <div className="w-10 h-7 bg-yellow-400/20 rounded-md border border-yellow-400/30 flex items-center justify-center font-bold text-[9px] text-yellow-300">CHIP</div>
-                          <div className="font-display font-bold italic text-sm tracking-wider">HireiQ {selectedPlan}</div>
-                        </div>
-                        {/* Number */}
-                        <div className="text-base tracking-widest font-mono select-none my-2">
-                          {cardNumber || '•••• •••• •••• ••••'}
-                        </div>
-                        {/* Holder & Expiry */}
-                        <div className="flex justify-between text-[10px] font-mono">
-                          <div className="max-w-[170px] truncate">
-                            <span className="text-[8px] text-white/50 block">CARDHOLDER</span>
-                            <span className="uppercase">{cardHolder || 'CARDHOLDER NAME'}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[8px] text-white/50 block">EXPIRES</span>
-                            <span>{cardExpiry || 'MM/YY'}</span>
-                          </div>
-                        </div>
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-5 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <div>
+                        <span className="text-xs text-gray-400 uppercase tracking-wider">Selected Tier</span>
+                        <h4 className="text-xl font-bold text-white mt-1">{selectedPlan} Plan</h4>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-gray-400 uppercase tracking-wider">Price</span>
+                        <p className="text-xl font-bold text-emerald-400 mt-1">
+                          {selectedPlan === 'Pro' ? '$79' : selectedPlan === 'Business' ? '$149' : 'Custom'}
+                          <span className="text-xs text-gray-400 font-normal"> / mo</span>
+                        </p>
                       </div>
                     </div>
+                    
+                    <p className="text-xs text-gray-300 leading-relaxed">
+                      You will be redirected to Stripe's secure hosted billing page to complete your payment. 
+                      Once verified, you will be automatically returned here and upgraded to the {selectedPlan} plan.
+                    </p>
+                  </div>
 
-                    {/* Inputs form */}
-                    <form onSubmit={handleSubscribe} className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-1">Cardholder Name</label>
-                        <input 
-                          type="text" 
-                          required
-                          placeholder="e.g. John Doe"
-                          value={cardHolder} 
-                          onChange={e => setCardHolder(e.target.value)}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-400 mb-1">Card Number</label>
-                        <input 
-                          type="text" 
-                          required
-                          maxLength="19"
-                          placeholder="4000 1234 5678 9010"
-                          value={cardNumber} 
-                          onChange={e => {
-                            // simple formatting space
-                            const val = e.target.value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim();
-                            setCardNumber(val);
-                          }}
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors font-mono"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-400 mb-1">Expiration (MM/YY)</label>
-                          <input 
-                            type="text" 
-                            required
-                            maxLength="5"
-                            placeholder="12/28"
-                            value={cardExpiry} 
-                            onChange={e => {
-                              let val = e.target.value.replace(/\D/g, '');
-                              if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2, 4);
-                              setCardExpiry(val);
-                            }}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-400 mb-1">CVC / CVV</label>
-                          <input 
-                            type="password" 
-                            required
-                            maxLength="3"
-                            placeholder="•••"
-                            value={cardCVC} 
-                            onChange={e => setCardCVC(e.target.value.replace(/\D/g, ''))}
-                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none transition-colors font-mono"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={checkoutLoading}
-                        className="w-full mt-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow active:scale-95 disabled:opacity-50"
-                      >
-                        {checkoutLoading ? (
-                          <>
-                            <RefreshCw size={14} className="animate-spin" /> Upgrading Plan...
-                          </>
-                        ) : (
-                          <>
-                            Subscribe to {selectedPlan} plan
-                          </>
-                        )}
-                      </button>
-                    </form>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setShowCheckout(false)}
+                      className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-semibold transition-all border border-white/10"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleUpgrade}
+                      disabled={checkoutLoading}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow active:scale-95 disabled:opacity-50"
+                    >
+                      {checkoutLoading ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" /> Redirecting to Stripe...
+                        </>
+                      ) : (
+                        <>
+                          Proceed to Stripe Checkout
+                        </>
+                      )}
+                    </button>
                   </div>
                 </motion.div>
               )}

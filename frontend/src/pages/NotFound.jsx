@@ -21,16 +21,12 @@ export default function NotFound() {
           <Compass className="h-8 w-8 animate-spin-slow" />
         </div>
 
-        <h1 className="font-display text-7xl font-black tracking-tight text-white md:text-8xl">
-          404
+        <h1 className="font-display text-4xl font-black tracking-tight text-white md:text-5xl">
+          Page not found
         </h1>
-        
-        <h2 className="mt-4 font-display text-xl font-bold tracking-wide text-violet">
-          Lost in Space
-        </h2>
 
         <p className="mt-4 text-sm leading-relaxed text-gray-400">
-          The candidate, job, or dashboard you are looking for has either relocated or never stepped foot in this sector of the galaxy.
+          The page you're looking for doesn't exist or has been moved.
         </p>
 
         <div className="mt-8 flex flex-col gap-4">

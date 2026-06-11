@@ -1,0 +1,16 @@
+Senior Full-Stack Engineer — Platform Team
+
+We are looking for a Senior Full-Stack Engineer to join our Platform team. You will own end-to-end features across our React frontend and Node.js/Python backend services.
+
+Required Skills: React, TypeScript, Node.js, PostgreSQL, REST APIs, Docker
+Preferred Skills: Python, FastAPI, Redis, Kubernetes, AWS
+Experience Required: 4+ years
+Education: Bachelor's in Computer Science or equivalent
+Employment Type: Full-time
+Location: Remote (US/EU preferred)
+
+Responsibilities:
+- Design and build scalable web application features
+- Review code and mentor junior engineers
+- Collaborate with product on technical feasibility
+- Own services from design through deployment

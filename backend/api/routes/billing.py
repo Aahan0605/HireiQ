@@ -156,9 +156,9 @@ async def stripe_webhook(request: Request):
                 items = stripe_sub.get("items", {}).get("data", [])
                 if items:
                     price_id = items[0].get("price", {}).get("id")
-                    price_pro = os.getenv("STRIPE_PRICE_PRO_ID", "price_1MockProPriceID")
-                    price_biz = os.getenv("STRIPE_PRICE_BUSINESS_ID", "price_1MockBusinessPriceID")
-                    price_ent = os.getenv("STRIPE_PRICE_ENTERPRISE_ID", "price_1MockEnterprisePriceID")
+                    price_pro = os.getenv("STRIPE_PRICE_PRO") or os.getenv("STRIPE_PRICE_PRO_ID", "price_1MockProPriceID")
+                    price_biz = os.getenv("STRIPE_PRICE_BUSINESS") or os.getenv("STRIPE_PRICE_BUSINESS_ID", "price_1MockBusinessPriceID")
+                    price_ent = os.getenv("STRIPE_PRICE_ENTERPRISE") or os.getenv("STRIPE_PRICE_ENTERPRISE_ID", "price_1MockEnterprisePriceID")
                     
                     if price_id == price_pro:
                         sub.plan_name = "Pro"
@@ -250,3 +250,72 @@ def get_webhook_audit_logs(db: Session = Depends(SessionLocal)):
         "status": e.status,
         "error_message": e.error_message
     } for e in events]
+
+
+@router.post("/create-checkout-session", dependencies=[Depends(require_permission(Permission.MANAGE_BILLING))])
+async def create_checkout_session(
+    plan_name: str,
+    tenant_id: str = Depends(require_tenant),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a Stripe Checkout session mapping the plan_name to configured price IDs,
+    associating with organization tenant ID and existing Stripe customer if available.
+    """
+    if not stripe.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stripe API is not configured on this server."
+        )
+        
+    price_id = (
+        os.getenv(f"STRIPE_PRICE_{plan_name.upper()}")
+        or os.getenv(f"STRIPE_PRICE_{plan_name.upper()}_ID")
+    )
+    if not price_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid plan name or price not configured for {plan_name}"
+        )
+        
+    db = SessionLocal()
+    stripe_customer_id = None
+    try:
+        sub = db.query(Subscription).filter(Subscription.organization_id == tenant_id).first()
+        if sub:
+            stripe_customer_id = sub.stripe_customer_id
+    finally:
+        db.close()
+        
+    # Build checkout parameters
+    checkout_params = {
+        "payment_method_types": ["card"],
+        "line_items": [{
+            "price": price_id,
+            "quantity": 1
+        }],
+        "mode": "subscription",
+        "client_reference_id": tenant_id,
+        "metadata": {
+            "plan_name": plan_name,
+            "organization_id": tenant_id
+        },
+        "success_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/settings?tab=billing&checkout=success",
+        "cancel_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/settings?tab=billing&checkout=cancel"
+    }
+    
+    if stripe_customer_id:
+        checkout_params["customer"] = stripe_customer_id
+    else:
+        # Fallback to current user's email if not a Stripe customer yet
+        checkout_params["customer_email"] = current_user.get("email")
+        
+    try:
+        session = stripe.checkout.Session.create(**checkout_params)
+        return {"url": session.url, "checkout_url": session.url}
+    except Exception as e:
+        logger.error("Failed to create Stripe Checkout session: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Stripe Checkout error: {str(e)}"
+        )

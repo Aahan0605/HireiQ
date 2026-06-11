@@ -11,21 +11,21 @@ export default function Landing() {
   const testimonials = [
     {
       name: "Sarah Jenkins",
-      role: "CTO, NetScale",
+      role: "CTO, TalentForge",
       quote: "HireiQ transformed our engineering hiring process. We identified our top React architect within minutes using their interactive skill graphs.",
       stars: 5,
       avatar: "SJ"
     },
     {
       name: "Dave Miller",
-      role: "Engineering Lead, WebFlow",
+      role: "Engineering Lead, StackHire",
       quote: "The GitHub sync feature is a game-changer. We no longer have to manually audit portfolios; we get direct signals on code frequency and stars.",
       stars: 5,
       avatar: "DM"
     },
     {
       name: "Elena Rostova",
-      role: "VP of People, AlphaTech",
+      role: "VP of People, Meridian Labs",
       quote: "Highly accurate scoring and deterministic weighting. The match rates saved our recruiters over 20 hours a week of manual filtering.",
       stars: 5,
       avatar: "ER"
@@ -172,7 +172,7 @@ export default function Landing() {
                 <div>
                   <div className="flex gap-1 mb-4">
                     {Array(t.stars).fill(0).map((_, i) => (
-                      <Star key={i} size={13} className="fill-yellow-400 text-yellow-400" />
+                      <Star key={i} size={16} className="fill-yellow-400 text-yellow-400" />
                     ))}
                   </div>
                   <p className="text-gray-300 text-xs italic leading-relaxed mb-6">"{t.quote}"</p>

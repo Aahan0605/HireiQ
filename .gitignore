@@ -42,3 +42,8 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+# Development scratch directories
+scratch/
+**/scratch/
+backend/scratch/
