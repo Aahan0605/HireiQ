@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
 import { apiFetch } from '../lib/apiFetch';
+import EmptyState from '../components/EmptyState';
 
 const API = '/api/v1';
 
@@ -474,30 +475,32 @@ export default function Candidates() {
         )}
 
         {/* Controls */}
-        <div className="mb-5 flex flex-col sm:flex-row gap-3">
+        <div className="mb-5 flex flex-col xl:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Search by name or role..."
               value={search} onChange={e => setSearch(e.target.value)}
               className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
           </div>
-          <button onClick={handleSort}
-            className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
-            ↓ Sort by Score
-          </button>
-          <button onClick={handleShortlist}
-            className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
-            ⭐ Optimal Shortlist
-          </button>
-          <button onClick={() => setBlindReview(!blindReview)}
-            className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-              blindReview
-                ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/25 shadow-glow-red'
-                : 'border-black/10 dark:border-white/10 bg-card text-gray-300 hover:bg-white/5'
-            }`}>
-            🕵️ Blind Mode: {blindReview ? 'ON' : 'OFF'}
-          </button>
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex flex-wrap gap-2 items-center">
+            <button onClick={handleSort}
+              className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
+              ↓ Sort by Score
+            </button>
+            <button onClick={handleShortlist}
+              className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
+              ⭐ Optimal Shortlist
+            </button>
+            <button onClick={() => setBlindReview(!blindReview)}
+              className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                blindReview
+                  ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/25 shadow-glow-red'
+                  : 'border-black/10 dark:border-white/10 bg-card text-gray-300 hover:bg-white/5'
+              }`}>
+              🕵️ Blind Mode: {blindReview ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 xl:ml-auto">
             <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
               Import CSV
               <input 
@@ -612,7 +615,7 @@ export default function Candidates() {
         {/* View Mode Switching */}
         {viewMode === 'kanban' ? (
           /* Kanban View */
-          <div className="flex gap-4 overflow-x-auto pb-6 pt-2 select-none min-h-[520px]">
+          <div className="flex flex-col md:flex-row gap-4 overflow-x-auto md:overflow-x-visible pb-6 pt-2 select-none min-h-[520px]">
             {KANBAN_STAGES.map(stage => {
               const stageCandidates = filtered.filter(c => getKanbanStage(c) === stage.key);
 
@@ -624,7 +627,7 @@ export default function Candidates() {
                     const id = e.dataTransfer.getData('text/plain');
                     handleUpdateStage(id, stage.key);
                   }}
-                  className={`flex-shrink-0 w-80 rounded-2xl border p-4 flex flex-col gap-3 min-h-[450px] transition-all ${stage.color}`}
+                  className={`flex-shrink-0 w-full md:w-80 rounded-2xl border p-4 flex flex-col gap-3 min-h-[350px] md:min-h-[450px] transition-all ${stage.color}`}
                 >
                   {/* Stage Header */}
                   <div className="flex justify-between items-center mb-1">
@@ -689,11 +692,20 @@ export default function Candidates() {
               Array(4).fill(0).map((_, i) => (
                 <div key={i} className="h-16 rounded-xl border border-black/10 dark:border-white/10 bg-card animate-pulse" />
               ))
+            ) : candidates.length === 0 ? (
+              <EmptyState 
+                icon="FileSearch"
+                title="No candidates uploaded yet"
+                description="Upload resumes to start ranking, scoring, and analyzing candidate profiles."
+                actionLabel="Analyze Resume"
+                onAction={() => navigate('/analyze')}
+              />
             ) : filtered.length === 0 ? (
-              <div className="py-20 text-center">
-                <p className="text-4xl mb-3">🔍</p>
-                <p className="text-gray-400">No candidates match your search</p>
-              </div>
+              <EmptyState 
+                icon="Search"
+                title="No matching candidates"
+                description="We couldn't find any candidate profiles matching your search or filters. Try adjusting your settings."
+              />
             ) : (
               filtered.map(c => {
                 const score = Math.round(c?.final_score || c?.score || 0);
@@ -714,7 +726,7 @@ export default function Candidates() {
                         navigate(`/candidate/${c?.id}`);
                       }
                     }}
-                    className={`flex items-center justify-between p-4 bg-card border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer ${
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-card border rounded-xl hover:border-emerald-500/30 transition-all cursor-pointer gap-4 sm:gap-0 ${
                       isShortlisted ? 'ring-2 ring-yellow-400 ring-offset-1 ring-offset-[#0d0d1a] border-yellow-500/30' :
                       isSelected    ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-black/10 dark:border-white/10'
                     }`}>
@@ -728,14 +740,14 @@ export default function Candidates() {
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-theme-1 text-sm font-bold flex-shrink-0">
                         {displayInitials}
                       </div>
-                      <div>
-                        <p className="text-theme-1 text-sm font-semibold">{displayName}</p>
-                        <p className="text-gray-400 text-xs">{c?.role}</p>
+                      <div className="min-w-0">
+                        <p className="text-theme-1 text-sm font-semibold truncate">{displayName}</p>
+                        <p className="text-gray-400 text-xs truncate">{c?.role}</p>
                       </div>
                     </div>
 
                     {/* Right */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 border-t border-white/5 sm:border-t-0 pt-3 sm:pt-0">
                       {/* Rank delta badge — fades after 3s */}
                       <AnimatePresence>
                         {delta !== undefined && delta !== 0 && (
@@ -752,7 +764,7 @@ export default function Candidates() {
                           Analyzing...
                         </span>
                       ) : (
-                        <span className={`text-xs px-3 py-1 rounded-full font-medium hidden sm:inline ${
+                        <span className={`text-xs px-3 py-1 rounded-full font-medium ${
                           score >= 85 ? 'bg-green-500/20 text-green-400' :
                           score >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
                                         'bg-red-500/20 text-red-400'

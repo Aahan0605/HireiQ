@@ -1,17 +1,18 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import math
 import heapq
 import uuid
+import logging
 from collections import Counter
-from db.supabase_client import save_job, fetch_all_jobs, fetch_job_by_id, delete_job as delete_job_db
 from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, require_permission, Permission
-from db.session import get_db
-from sqlalchemy.orm import Session
 from api.core.limits import check_job_creation_limit, increment_jobs_created
+from db import get_supabase
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/jobs",
@@ -19,88 +20,114 @@ router = APIRouter(
     dependencies=[Depends(require_tenant)]
 )
 
-
 class JobCreate(BaseModel):
     title: str
-    department: str
-    location: str
-    employment_type: str
-    experience_required: int
+    department: str = "Engineering"
+    location: str = "Remote"
+    employment_type: str = "Full-time"
+    experience_required: int = 0
     description: str
     required_skills: str  # comma-separated
-    status: str           # Open / Closed / Draft
+    status: str = "Open"
 
+def _job_to_dict(j: dict) -> dict:
+    if not j:
+        return {}
+    # Convert required_skills array to comma-separated string if it is a list
+    req_skills = j.get("required_skills")
+    if isinstance(req_skills, list):
+        j["required_skills"] = ",".join(req_skills)
+    # Map recruiter_id to organization_id for frontend backward compatibility
+    j["organization_id"] = j.get("recruiter_id")
+    # Set defaults for fields not in new jobs table
+    j.setdefault("company", "HireIQ Corp")
+    j.setdefault("department", "Engineering")
+    j.setdefault("employment_type", "Full-time")
+    j.setdefault("location", "Remote")
+    j.setdefault("experience_required", j.get("min_experience", 0))
+    j.setdefault("salary_range", "")
+    j.setdefault("status", "Open")
+    return j
 
-async def _seed_if_empty(tenant_id: str):
-    """Seeds default jobs into the database if empty."""
-    existing = await fetch_all_jobs()
+async def fetch_all_jobs(recruiter_id: str) -> list[dict]:
+    supabase = get_supabase()
+    res = supabase.table("jobs").select("*").eq("recruiter_id", recruiter_id).execute()
+    return [_job_to_dict(j) for j in res.data]
+
+async def fetch_job_by_id(job_id: str, recruiter_id: str) -> dict | None:
+    supabase = get_supabase()
+    res = supabase.table("jobs").select("*").eq("id", job_id).eq("recruiter_id", recruiter_id).execute()
+    return _job_to_dict(res.data[0]) if res.data else None
+
+async def save_job(job: dict, recruiter_id: str) -> dict:
+    supabase = get_supabase()
+    req_skills = job.get("required_skills", "")
+    if isinstance(req_skills, str):
+        req_skills_list = [s.strip() for s in req_skills.split(",") if s.strip()]
+    else:
+        req_skills_list = req_skills
+        
+    db_record = {
+        "title": job.get("title"),
+        "description": job.get("description"),
+        "required_skills": req_skills_list,
+        "min_experience": job.get("experience_required", 0),
+        "recruiter_id": recruiter_id
+    }
+    
+    if "id" in job and job["id"] and not str(job["id"]).startswith("seed-"):
+        # update
+        res = supabase.table("jobs").update(db_record).eq("id", job["id"]).eq("recruiter_id", recruiter_id).execute()
+    else:
+        # insert
+        if "id" in job and not str(job["id"]).startswith("seed-"):
+            db_record["id"] = job["id"]
+        res = supabase.table("jobs").insert(db_record).execute()
+        
+    return _job_to_dict(res.data[0]) if res.data else {}
+
+async def _seed_if_empty(recruiter_id: str):
+    existing = await fetch_all_jobs(recruiter_id)
     if existing:
         return
     seed_jobs = [
         {
-            "id": f"seed-1-{tenant_id}",
             "title": "Senior Frontend Engineer",
-            "department": "Engineering",
-            "location": "Remote",
-            "employment_type": "Full-time",
             "experience_required": 3,
             "description": "We need a strong frontend engineer to build scalable UI components",
             "required_skills": "React,TypeScript,Next.js,CSS,Testing,Webpack",
-            "status": "Open",
         },
         {
-            "id": f"seed-2-{tenant_id}",
             "title": "Backend Python Developer",
-            "department": "Engineering",
-            "location": "Bangalore",
-            "employment_type": "Full-time",
             "experience_required": 2,
             "description": "Backend developer for our core API and data pipeline",
             "required_skills": "Python,FastAPI,PostgreSQL,Docker,Redis,CI/CD",
-            "status": "Open",
         },
         {
-            "id": f"seed-3-{tenant_id}",
             "title": "ML Engineer",
-            "department": "AI/ML",
-            "location": "Remote",
-            "employment_type": "Full-time",
             "experience_required": 2,
             "description": "ML engineer to build and deploy machine learning models",
             "required_skills": "Python,PyTorch,Scikit-learn,MLflow,Statistics,Spark",
-            "status": "Open",
         },
         {
-            "id": f"seed-4-{tenant_id}",
             "title": "Fullstack Developer",
-            "department": "Product",
-            "location": "Hybrid",
-            "employment_type": "Full-time",
             "experience_required": 2,
             "description": "Fullstack engineer to work across frontend and backend systems",
             "required_skills": "React,Node.js,PostgreSQL,Docker,TypeScript,REST APIs",
-            "status": "Open",
         },
     ]
     for job in seed_jobs:
-        await save_job(job)
-
+        await save_job(job, recruiter_id)
 
 def _cosine_similarity(text_a: str, text_b: str) -> float:
-    """
-    Compute TF-IDF cosine similarity between two text strings.
-    Time Complexity: O(n + m) where n, m are token counts.
-    """
     tokens_a = text_a.lower().split()
     tokens_b = text_b.lower().split()
     if not tokens_a or not tokens_b:
         return 0.0
 
-    # Term frequency vectors
     freq_a = Counter(tokens_a)
     freq_b = Counter(tokens_b)
 
-    # Dot product over shared vocabulary
     vocab = set(freq_a) | set(freq_b)
     dot = sum(freq_a.get(w, 0) * freq_b.get(w, 0) for w in vocab)
     mag_a = math.sqrt(sum(v * v for v in freq_a.values()))
@@ -108,106 +135,126 @@ def _cosine_similarity(text_a: str, text_b: str) -> float:
 
     return dot / (mag_a * mag_b) if (mag_a * mag_b) else 0.0
 
-
 # ── CRUD ──────────────────────────────────────────────────────
 
 @router.get("")
 async def get_jobs(tenant_id: str = Depends(require_tenant)):
-    await _seed_if_empty(tenant_id)
-    return await fetch_all_jobs()
-
+    try:
+        await _seed_if_empty(tenant_id)
+        return await fetch_all_jobs(tenant_id)
+    except Exception as e:
+        logger.error(f"Error in GET /jobs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch jobs. Please try again.")
 
 @router.post("", status_code=201, dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
-async def create_job(job: JobCreate, tenant_id: str = Depends(require_tenant), db: Session = Depends(get_db)):
-    check_job_creation_limit(db, tenant_id)
-    record = {
-        **job.model_dump(),
-        "id": str(uuid.uuid4()),
-        "created_at": datetime.now().isoformat(),
-        "company": "HireIQ Corp"
-    }
-    res = await save_job(record)
-    increment_jobs_created(db, tenant_id)
-    return res
-
+async def create_job(job: JobCreate, tenant_id: str = Depends(require_tenant)):
+    try:
+        check_job_creation_limit(None, tenant_id)
+        record = {
+            **job.model_dump(),
+            "id": str(uuid.uuid4()),
+            "company": "HireIQ Corp"
+        }
+        res = await save_job(record, tenant_id)
+        increment_jobs_created(None, tenant_id)
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in POST /jobs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create job. Please try again.")
 
 @router.get("/{job_id}")
 async def get_job(job_id: str, tenant_id: str = Depends(require_tenant)):
-    job = await fetch_job_by_id(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
+    try:
+        job = await fetch_job_by_id(job_id, tenant_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in GET /jobs/{job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch job. Please try again.")
 
 @router.put("/{job_id}", dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
 async def update_job(job_id: str, job: JobCreate, tenant_id: str = Depends(require_tenant)):
-    existing = await fetch_job_by_id(job_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Job not found")
-    record = {
-        **job.model_dump(),
-        "id": job_id,
-        "company": existing.get("company", "HireIQ Corp")
-    }
-    return await save_job(record)
-
+    try:
+        existing = await fetch_job_by_id(job_id, tenant_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Job not found")
+        record = {
+            **job.model_dump(),
+            "id": job_id,
+            "company": existing.get("company", "HireIQ Corp")
+        }
+        return await save_job(record, tenant_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in PUT /jobs/{job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update job. Please try again.")
 
 @router.delete("/{job_id}", dependencies=[Depends(require_permission(Permission.CREATE_JOB))])
 async def delete_job(job_id: str, tenant_id: str = Depends(require_tenant)):
-    existing = await fetch_job_by_id(job_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Job not found")
-    await delete_job_db(job_id)
-    return {"status": "deleted"}
-
+    try:
+        existing = await fetch_job_by_id(job_id, tenant_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Job not found")
+        await delete_job_db(job_id, tenant_id)
+        return {"status": "deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in DELETE /jobs/{job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete job. Please try again.")
 
 # ── MATCHING ──────────────────────────────────────────────────
 
 @router.get("/{job_id}/matches")
 async def job_matches(job_id: str, tenant_id: str = Depends(require_tenant)):
-    """
-    Rank all candidates for a job using TF-IDF cosine similarity + Max-Heap.
-    Time Complexity: O(n log n) — TF-IDF scoring O(n*m) + Max-Heap ranking O(n log n)
-    """
-    from db.supabase_client import fetch_all_candidates
+    try:
+        job = await fetch_job_by_id(job_id, tenant_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
 
-    job = await fetch_job_by_id(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        job_text = job["description"] + " " + job["required_skills"].replace(",", " ")
+        job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
 
-    job_text = job["description"] + " " + job["required_skills"].replace(",", " ")
-    job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
+        supabase = get_supabase()
+        res = supabase.table("candidates").select("*").eq("recruiter_id", tenant_id).execute()
+        candidates_list = res.data
 
-    candidates_list = await fetch_all_candidates()
-    max_heap: list = []
+        max_heap = []
 
-    for c in candidates_list:
-        # Build candidate text from skills + summary
-        cand_skills_list = c.get("skills", [])
-        cand_text = " ".join(cand_skills_list) + " " + c.get("summary", "")
-        cand_skills = {s.lower() for s in cand_skills_list}
+        for c in candidates_list:
+            cand_skills_list = c.get("skills", [])
+            cand_text = " ".join(cand_skills_list) + " " + (c.get("raw_text") or "")
+            cand_skills = {s.lower() for s in cand_skills_list}
 
-        # TF-IDF cosine similarity score (0–100)
-        sim = _cosine_similarity(job_text, cand_text)
-        score = min(100, int(sim * 100))
+            sim = _cosine_similarity(job_text, cand_text)
+            score = min(100, int(sim * 100))
 
-        matched = sorted(job_skills & cand_skills)
-        missing = sorted(job_skills - cand_skills)
+            matched = sorted(job_skills & cand_skills)
+            missing = sorted(job_skills - cand_skills)
 
-        item = {
-            "id": c["id"],
-            "name": c["name"],
-            "role": c.get("role", ""),
-            "match_score": score,
-            "matched_skills": matched,
-            "missing_skills": missing,
-        }
-        # Push negative score for max-heap behaviour using heapq (min-heap)
-        heapq.heappush(max_heap, (-score, c["id"], item))
+            item = {
+                "id": c["id"],
+                "name": c.get("full_name") or c.get("name") or "Unnamed Candidate",
+                "role": c.get("career_tier", "Software Engineer"),
+                "match_score": score,
+                "matched_skills": matched,
+                "missing_skills": missing,
+            }
+            heapq.heappush(max_heap, (-score, c["id"], item))
 
-    # Pop all to get descending order
-    ranked = []
-    while max_heap:
-        ranked.append(heapq.heappop(max_heap)[2])
+        ranked = []
+        while max_heap:
+            ranked.append(heapq.heappop(max_heap)[2])
 
-    return ranked
+        return ranked
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in GET /jobs/{job_id}/matches: {e}")
+        raise HTTPException(status_code=500, detail="Failed to compute job matches.")

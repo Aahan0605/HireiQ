@@ -21,8 +21,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     if user_id is None:
         raise credentials_exception
         
-    from db.supabase_client import fetch_user_by_id
-    user = await fetch_user_by_id(user_id)
+    from db import get_supabase
+    supabase = get_supabase()
+    res = supabase.table("recruiters").select("*").eq("id", user_id).execute()
+    user = res.data[0] if res.data else None
     if user is None:
         raise credentials_exception
         
@@ -38,5 +40,7 @@ async def get_optional_current_user(token: str = Depends(oauth2_scheme)) -> dict
     user_id = decode_access_token(token)
     if user_id is None:
         return None
-    from db.supabase_client import fetch_user_by_id
-    return await fetch_user_by_id(user_id)
+    from db import get_supabase
+    supabase = get_supabase()
+    res = supabase.table("recruiters").select("*").eq("id", user_id).execute()
+    return res.data[0] if res.data else None

@@ -1,9 +1,20 @@
 import React, { useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+
+const DASH_PREFIXES = [
+  '/dashboard', '/analyze', '/candidates', '/candidate',
+  '/settings', '/jobs', '/bias-report', '/compare',
+];
 
 export default function ConstellationBackground() {
   const canvasRef = useRef(null);
+  const { pathname } = useLocation();
+
+  const isAuthPage = DASH_PREFIXES.some(p => pathname.startsWith(p));
 
   useEffect(() => {
+    if (isAuthPage) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -12,8 +23,12 @@ export default function ConstellationBackground() {
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
+    // Respect prefers-reduced-motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     const particles = [];
-    const particleCount = Math.min(60, Math.floor((width * height) / 20000));
+    // If prefers-reduced-motion is true, disable or heavily reduce particles
+    const particleCount = prefersReducedMotion ? 0 : Math.min(60, Math.floor((width * height) / 20000));
     const connectionDistance = 120;
     const mouse = { x: null, y: null, radius: 150 };
 
@@ -24,7 +39,6 @@ export default function ConstellationBackground() {
         this.vx = (Math.random() - 0.5) * 0.4;
         this.vy = (Math.random() - 0.5) * 0.4;
         this.radius = Math.random() * 2 + 1;
-        // Faint glowing colors (mint green / sky blue / violet)
         const colors = ['rgba(16, 185, 129, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(139, 92, 246, 0.4)'];
         this.color = colors[Math.floor(Math.random() * colors.length)];
       }
@@ -36,7 +50,6 @@ export default function ConstellationBackground() {
         if (this.x < 0 || this.x > width) this.vx = -this.vx;
         if (this.y < 0 || this.y > height) this.vy = -this.vy;
 
-        // Mouse interaction: push/pull particles slightly
         if (mouse.x !== null && mouse.y !== null) {
           const dx = mouse.x - this.x;
           const dy = mouse.y - this.y;
@@ -56,7 +69,7 @@ export default function ConstellationBackground() {
         ctx.shadowBlur = 4;
         ctx.shadowColor = this.color;
         ctx.fill();
-        ctx.shadowBlur = 0; // reset
+        ctx.shadowBlur = 0;
       }
     }
 
@@ -81,59 +94,60 @@ export default function ConstellationBackground() {
     };
 
     window.addEventListener('resize', handleResize);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseleave', handleMouseLeave);
+    if (!prefersReducedMotion) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseleave', handleMouseLeave);
+    }
 
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Draw background mesh gradient
       const gradient = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, Math.max(width, height));
       gradient.addColorStop(0, '#0d0d1a');
       gradient.addColorStop(1, '#05050d');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, width, height);
 
-      // Update and draw particles
-      particles.forEach((p) => {
-        p.update();
-        p.draw();
-      });
+      if (!prefersReducedMotion) {
+        particles.forEach((p) => {
+          p.update();
+          p.draw();
+        });
 
-      // Draw connections
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const p1 = particles[i];
-          const p2 = particles[j];
-          const dx = p1.x - p2.x;
-          const dy = p1.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const p1 = particles[i];
+            const p2 = particles[j];
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (dist < connectionDistance) {
-            const alpha = (1 - dist / connectionDistance) * 0.15;
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            // Glowing mesh gradient connection
-            ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
+            if (dist < connectionDistance) {
+              const alpha = (1 - dist / connectionDistance) * 0.15;
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+            }
           }
         }
+        animationFrameId = requestAnimationFrame(animate);
       }
-
-      animationFrameId = requestAnimationFrame(animate);
     };
 
     animate();
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, []);
+  }, [isAuthPage]);
+
+  if (isAuthPage) return null;
 
   return (
     <canvas

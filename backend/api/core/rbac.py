@@ -2,8 +2,7 @@ import contextvars
 from enum import Enum
 from fastapi import Depends, HTTPException, status, Header
 from api.core.dependencies import get_current_user
-from db.session import SessionLocal
-from db.models import OrganizationMember, Organization
+from db import get_supabase
 
 # Thread-local / Async-safe context variables
 tenant_context = contextvars.ContextVar("tenant_id", default=None)
@@ -27,7 +26,7 @@ ROLE_PERMISSIONS = {
 }
 
 def get_tenant_id() -> str | None:
-    """Get active tenant ID from request context."""
+    """Get active tenant ID (recruiter ID) from request context."""
     return tenant_context.get()
 
 async def require_tenant(
@@ -36,63 +35,12 @@ async def require_tenant(
 ) -> str:
     """
     FastAPI dependency that extracts and validates the tenant ID.
-    Scopes the request to a specific organization.
+    Scopes the request to a specific recruiter (the active tenant).
     """
-    db = SessionLocal()
-    try:
-        # If tenant header is not specified, try to find default user workspace
-        active_tenant = x_tenant_id
-        if not active_tenant:
-            member = db.query(OrganizationMember).filter(OrganizationMember.user_id == current_user["id"]).first()
-            if member:
-                active_tenant = member.organization_id
-        
-        if not active_tenant:
-            # Create a default personal organization if they don't belong to one
-            # to make onboarding frictionless
-            import uuid
-            org_id = str(uuid.uuid4())
-            new_org = Organization(id=org_id, name="Personal Workspace", billing_tier="Free")
-            new_member = OrganizationMember(
-                id=str(uuid.uuid4()),
-                organization_id=org_id,
-                user_id=current_user["id"],
-                role="Owner"
-            )
-            # Create default subscription
-            from db.models import Subscription
-            new_sub = Subscription(
-                id=str(uuid.uuid4()),
-                organization_id=org_id,
-                plan_name="Free",
-                status="active",
-                cv_parses_used=0,
-                jobs_created_used=0
-            )
-            db.add(new_org)
-            db.add(new_member)
-            db.add(new_sub)
-            db.commit()
-            active_tenant = org_id
-
-        # Verify user is member of organization
-        member = db.query(OrganizationMember).filter(
-            OrganizationMember.organization_id == active_tenant,
-            OrganizationMember.user_id == current_user["id"]
-        ).first()
-
-        if not member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have access to this organization."
-            )
-
-        # Set thread-local context variables
-        tenant_context.set(active_tenant)
-        user_role_context.set(member.role)
-        return active_tenant
-    finally:
-        db.close()
+    active_tenant = current_user["id"]
+    tenant_context.set(active_tenant)
+    user_role_context.set(current_user.get("role", "Owner"))
+    return active_tenant
 
 def require_permission(required_perm: Permission):
     """Factory dependency for enforcing RBAC permissions."""

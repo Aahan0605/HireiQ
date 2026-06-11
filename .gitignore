@@ -76,3 +76,6 @@ debug_*.py
 *.dump
 *.sqlite
 *.db
+
+# Supabase CLI temp files
+supabase/.temp/

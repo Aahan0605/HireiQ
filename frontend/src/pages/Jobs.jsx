@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, MapPin, Clock, Trash2, Edit2, X } from 'lucide-react';
 import { apiFetch } from '../lib/apiFetch';
+import EmptyState from '../components/EmptyState';
 
 const API = '/api/v1';
 
@@ -166,15 +167,20 @@ export default function Jobs() {
               <div key={i} className="h-44 rounded-2xl border border-black/10 dark:border-white/10 bg-card animate-pulse" />
             ))}
           </div>
+        ) : jobs.length === 0 ? (
+          <EmptyState 
+            icon="Briefcase"
+            title="No job listings posted yet"
+            description="Create job descriptions to match and rank incoming resumes against your requirements."
+            actionLabel="Post Your First Job"
+            onAction={openCreate}
+          />
         ) : filtered.length === 0 ? (
-          <div className="py-24 text-center">
-            <p className="text-5xl mb-4">💼</p>
-            <p className="text-theme-1 font-semibold text-lg mb-2">No job listings yet</p>
-            <button onClick={openCreate}
-              className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl transition-all">
-              Post Your First Job
-            </button>
-          </div>
+          <EmptyState 
+            icon="Search"
+            title="No matching jobs"
+            description="We couldn't find any job listings matching your search or filters. Try adjusting your settings."
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {filtered.map((job, i) => {

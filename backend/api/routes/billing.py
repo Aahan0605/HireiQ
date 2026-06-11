@@ -1,16 +1,13 @@
 import os
 import logging
-import datetime
+from datetime import datetime
 import json
-import uuid
 from fastapi import APIRouter, Request, HTTPException, status, Depends
-from sqlalchemy.orm import Session
 import stripe
 
-from db.session import SessionLocal
-from db.models import Subscription, StripeWebhookEvent
 from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, Permission, require_permission
+from db import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +19,6 @@ router = APIRouter(
 # Load Stripe secrets
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 ENDPOINT_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
@@ -40,13 +36,11 @@ async def stripe_webhook(request: Request):
         )
         
     try:
-        # Enforce signing signature validation if secret is set
         if ENDPOINT_SECRET:
             event = stripe.Webhook.construct_event(
                 payload, sig_header, ENDPOINT_SECRET
             )
         else:
-            # Local fallback / testing mode without signature
             event = json.loads(payload.decode("utf-8"))
     except ValueError as e:
         logger.error("Invalid Stripe payload: %s", e)
@@ -72,85 +66,44 @@ async def stripe_webhook(request: Request):
 
     logger.info("Processing Stripe Webhook Event: %s (ID: %s)", event_type, event_id)
     
-    db = SessionLocal()
+    supabase = get_supabase()
+    
     try:
-        # Idempotency / Duplicate Check
-        existing_event = db.query(StripeWebhookEvent).filter(StripeWebhookEvent.id == event_id).first()
-        if existing_event:
+        # Idempotency check
+        res = supabase.table("stripe_webhook_events").select("*").eq("id", event_id).execute()
+        if res.data:
             logger.info("Stripe Webhook event %s already processed. Skipping.", event_id)
             return {"status": "already_processed"}
 
-        # Record incoming event in audit log
-        audit_event = StripeWebhookEvent(
-            id=event_id,
-            event_type=event_type,
-            payload=json.dumps(event),
-            status="processing"
-        )
-        db.add(audit_event)
-        db.commit()
+        # Record incoming event
+        supabase.table("stripe_webhook_events").insert({
+            "id": event_id,
+            "event_type": event_type,
+            "status": "processing"
+        }).execute()
 
         # Handle events
         if event_type == "checkout.session.completed":
             session = event.get("data", {}).get("object", {})
             org_id = session.get("client_reference_id")
-            customer_id = session.get("customer")
-            sub_id = session.get("subscription")
             plan_name = session.get("metadata", {}).get("plan_name", "Pro")
             
             if org_id:
-                sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
-                if not sub:
-                    sub = Subscription(
-                        id=str(uuid.uuid4()),
-                        organization_id=org_id,
-                        plan_name=plan_name,
-                        status="active",
-                        stripe_customer_id=customer_id,
-                        stripe_subscription_id=sub_id
-                    )
-                    db.add(sub)
-                    db.commit()
-                    sub = db.query(Subscription).filter(Subscription.organization_id == org_id).first()
-
-                if sub:
-                    sub.plan_name = plan_name
-                    sub.status = "active"
-                    sub.stripe_customer_id = customer_id
-                    sub.stripe_subscription_id = sub_id
-                    
-                    # Fetch subscription details from Stripe if api_key is active
-                    if stripe.api_key and sub_id:
-                        try:
-                            stripe_sub = stripe.Subscription.retrieve(sub_id)
-                            period_end = stripe_sub.get("current_period_end")
-                            if period_end:
-                                sub.current_period_end = datetime.datetime.fromtimestamp(period_end)
-                        except Exception as stripe_err:
-                            logger.warning("Could not fetch subscription period end: %s", stripe_err)
-                    
-                    db.commit()
-                    logger.info("Subscription upgraded to %s for Org: %s", plan_name, org_id)
-                else:
-                    logger.error("Subscription record not found and failed to create for Org: %s", org_id)
+                # Update recruiter plan
+                supabase.table("recruiters").update({
+                    "plan": plan_name.lower()
+                }).eq("id", org_id).execute()
+                logger.info("Subscription upgraded to %s for Org: %s", plan_name, org_id)
             else:
                 logger.error("Missing client_reference_id (organization_id) in Stripe checkout session")
 
         elif event_type in ["customer.subscription.created", "customer.subscription.updated"]:
             stripe_sub = event.get("data", {}).get("object", {})
-            sub_id = stripe_sub.get("id")
             status_str = stripe_sub.get("status")
-            customer_id = stripe_sub.get("customer")
-            period_end = stripe_sub.get("current_period_end")
+            org_id = stripe_sub.get("metadata", {}).get("organization_id")
             
-            sub = db.query(Subscription).filter(Subscription.stripe_subscription_id == sub_id).first()
-            if not sub and customer_id:
-                sub = db.query(Subscription).filter(Subscription.stripe_customer_id == customer_id).first()
-
-            if sub:
-                sub.status = status_str
-                if period_end:
-                    sub.current_period_end = datetime.datetime.fromtimestamp(period_end)
+            if org_id:
+                plan_name = "free"
                 
                 # Determine plan name from Stripe subscription items price ID
                 items = stripe_sub.get("items", {}).get("data", [])
@@ -161,71 +114,63 @@ async def stripe_webhook(request: Request):
                     price_ent = os.getenv("STRIPE_PRICE_ENTERPRISE") or os.getenv("STRIPE_PRICE_ENTERPRISE_ID", "price_1MockEnterprisePriceID")
                     
                     if price_id == price_pro:
-                        sub.plan_name = "Pro"
+                        plan_name = "pro"
                     elif price_id == price_biz:
-                        sub.plan_name = "Business"
+                        plan_name = "pro"  # fallback or map to pro/enterprise
                     elif price_id == price_ent:
-                        sub.plan_name = "Enterprise"
+                        plan_name = "enterprise"
                     else:
-                        sub.plan_name = stripe_sub.get("metadata", {}).get("plan_name", sub.plan_name)
+                        plan_name = stripe_sub.get("metadata", {}).get("plan_name", "pro").lower()
 
                 # Handle downgrades on cancellations
                 if status_str in ["canceled", "unpaid", "incomplete_expired"]:
-                    sub.plan_name = "Free"
+                    plan_name = "free"
                     
-                db.commit()
-                logger.info("Subscription %s updated to status %s and plan %s", sub_id, status_str, sub.plan_name)
+                supabase.table("recruiters").update({
+                    "plan": plan_name
+                }).eq("id", org_id).execute()
+                logger.info("Subscription updated to status %s and plan %s for Org %s", status_str, plan_name, org_id)
 
         elif event_type == "customer.subscription.deleted":
             stripe_sub = event.get("data", {}).get("object", {})
-            sub_id = stripe_sub.get("id")
+            org_id = stripe_sub.get("metadata", {}).get("organization_id")
             
-            sub = db.query(Subscription).filter(Subscription.stripe_subscription_id == sub_id).first()
-            if sub:
-                sub.plan_name = "Free"
-                sub.status = "canceled"
-                db.commit()
-                logger.info("Subscription %s deleted (downgraded to Free)", sub_id)
+            if org_id:
+                supabase.table("recruiters").update({
+                    "plan": "free"
+                }).eq("id", org_id).execute()
+                logger.info("Subscription deleted (downgraded to Free) for Org %s", org_id)
 
         elif event_type == "invoice.payment_succeeded":
             invoice = event.get("data", {}).get("object", {})
             sub_id = invoice.get("subscription")
             
-            if sub_id:
-                sub = db.query(Subscription).filter(Subscription.stripe_subscription_id == sub_id).first()
-                if sub:
-                    sub.status = "active"
-                    # Reset usage counters on successful payment cycle renewal
-                    sub.cv_parses_used = 0
-                    sub.jobs_created_used = 0
-                    db.commit()
-                    logger.info("Payment succeeded for subscription %s. Usage counters reset.", sub_id)
+            if sub_id and stripe.api_key:
+                try:
+                    # Retrieve subscription to get org_id
+                    stripe_sub = stripe.Subscription.retrieve(sub_id)
+                    org_id = stripe_sub.get("metadata", {}).get("organization_id")
+                    if org_id:
+                        # Reset monthly CV upload counter
+                        supabase.table("recruiters").update({
+                            "cv_upload_count": 0
+                        }).eq("id", org_id).execute()
+                        logger.info("Payment succeeded for subscription %s. Reset CV upload count for Org %s.", sub_id, org_id)
+                except Exception as stripe_err:
+                    logger.warning("Could not retrieve subscription details during invoice success: %s", stripe_err)
 
-        elif event_type == "invoice.payment_failed":
-            invoice = event.get("data", {}).get("object", {})
-            sub_id = invoice.get("subscription")
-            
-            if sub_id:
-                sub = db.query(Subscription).filter(Subscription.stripe_subscription_id == sub_id).first()
-                if sub:
-                    sub.status = "past_due"
-                    db.commit()
-                    logger.warning("Payment failed for subscription %s. Marked as past_due.", sub_id)
-
-        # Mark audit event as processed successfully
-        audit_event.status = "processed"
-        db.commit()
+        # Mark event as processed successfully
+        supabase.table("stripe_webhook_events").update({
+            "status": "processed"
+        }).eq("id", event_id).execute()
 
     except Exception as e:
-        db.rollback()
         logger.error("Error processing Stripe Webhook event: %s", e)
-        # Attempt to mark the audit event as failed
         try:
-            fail_event = db.query(StripeWebhookEvent).filter(StripeWebhookEvent.id == event_id).first()
-            if fail_event:
-                fail_event.status = "failed"
-                fail_event.error_message = str(e)
-                db.commit()
+            supabase.table("stripe_webhook_events").update({
+                "status": "failed",
+                "error_message": str(e)
+            }).eq("id", event_id).execute()
         except Exception as audit_err:
             logger.error("Failed to write webhook audit failure: %s", audit_err)
 
@@ -233,24 +178,21 @@ async def stripe_webhook(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error handling webhook"
         )
-    finally:
-        db.close()
 
     return {"status": "success"}
 
-
 @router.get("/audit-logs", dependencies=[Depends(require_tenant)])
-def get_webhook_audit_logs(db: Session = Depends(SessionLocal)):
+async def get_webhook_audit_logs():
     """Retrieve lists of received Stripe webhook events for SaaS administration monitoring."""
-    events = db.query(StripeWebhookEvent).order_by(StripeWebhookEvent.processed_at.desc()).limit(100).all()
+    supabase = get_supabase()
+    res = supabase.table("stripe_webhook_events").select("*").order("processed_at", desc=True).limit(100).execute()
     return [{
-        "id": e.id,
-        "event_type": e.event_type,
-        "processed_at": e.processed_at.isoformat(),
-        "status": e.status,
-        "error_message": e.error_message
-    } for e in events]
-
+        "id": e["id"],
+        "event_type": e["event_type"],
+        "processed_at": e["processed_at"],
+        "status": e["status"],
+        "error_message": e["error_message"]
+    } for e in res.data]
 
 @router.post("/create-checkout-session", dependencies=[Depends(require_permission(Permission.MANAGE_BILLING))])
 async def create_checkout_session(
@@ -260,7 +202,7 @@ async def create_checkout_session(
 ):
     """
     Create a Stripe Checkout session mapping the plan_name to configured price IDs,
-    associating with organization tenant ID and existing Stripe customer if available.
+    associating with organization tenant ID.
     """
     if not stripe.api_key:
         raise HTTPException(
@@ -278,15 +220,6 @@ async def create_checkout_session(
             detail=f"Invalid plan name or price not configured for {plan_name}"
         )
         
-    db = SessionLocal()
-    stripe_customer_id = None
-    try:
-        sub = db.query(Subscription).filter(Subscription.organization_id == tenant_id).first()
-        if sub:
-            stripe_customer_id = sub.stripe_customer_id
-    finally:
-        db.close()
-        
     # Build checkout parameters
     checkout_params = {
         "payment_method_types": ["card"],
@@ -296,6 +229,12 @@ async def create_checkout_session(
         }],
         "mode": "subscription",
         "client_reference_id": tenant_id,
+        "subscription_data": {
+            "metadata": {
+                "organization_id": tenant_id,
+                "plan_name": plan_name
+            }
+        },
         "metadata": {
             "plan_name": plan_name,
             "organization_id": tenant_id
@@ -304,11 +243,8 @@ async def create_checkout_session(
         "cancel_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/settings?tab=billing&checkout=cancel"
     }
     
-    if stripe_customer_id:
-        checkout_params["customer"] = stripe_customer_id
-    else:
-        # Fallback to current user's email if not a Stripe customer yet
-        checkout_params["customer_email"] = current_user.get("email")
+    # Send customer email
+    checkout_params["customer_email"] = current_user.get("email")
         
     try:
         session = stripe.checkout.Session.create(**checkout_params)

@@ -5,7 +5,24 @@ Routes:
     POST /candidates/rank            — Batch rank candidates against a JD
     POST /candidates/analyze-single  — Analyze a single candidate
     POST /candidates/upload-resume   — Upload and parse a resume file
+    POST /candidates/upload-bulk     — Bulk upload resumes
+    POST /candidates/upload-csv      — Upload candidates CSV
+    GET  /candidates                 — Paginated candidates list
+    POST /candidates/seed-demo       — Seed 5 demo candidates
+    GET  /candidates/bias-audit      — Aggregated bias audit metrics
+    DELETE /candidates/{candidate_id} — Delete candidate
+    GET  /candidates/{candidate_id}   — Get candidate detail
+    PATCH /candidates/{candidate_id}  — Update candidate detail
+    POST /candidates/{candidate_id}/generate-qa — Generate interview questions
+    POST /candidates/{candidate_id}/webhook/github-sync — Sync GitHub commits
+    GET  /candidates/{candidate_id}/gdpr-export — Export candidate PII data
+    DELETE /candidates/{candidate_id}/gdpr-forget — Forget candidate (GDPR)
     GET  /candidates/platforms/{username} — Fetch raw platform signals
+    POST /candidates/shortlist       — 0/1 Knapsack DP
+    POST /candidates/skill-gap       — Graph + BFS
+    POST /candidates/schedule        — Greedy Activity Selection
+    POST /candidates/rank-sorted     — Merge Sort with Rank Delta
+    GET  /candidates/github/{username} — Live GitHub signals
 """
 
 from __future__ import annotations
@@ -14,14 +31,12 @@ import asyncio
 import logging
 import time
 from typing import Any
-
 import uuid
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
+
 from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, require_permission, Permission
-from db.session import get_db
-from sqlalchemy.orm import Session
 from api.core.limits import check_cv_upload_limit, increment_cv_parses
 from tasks.worker import process_resume_task
 
@@ -34,17 +49,27 @@ from api.models import (
     ResumeUploadResponse,
     SingleAnalysisRequest,
 )
+
 from algorithms.heap import CandidateHeap
 from algorithms.dp_shortlist import select_candidates as knapsack_shortlist
 from algorithms.skill_graph import find_learning_path
 from algorithms.interview_scheduler import schedule_interviews
 from algorithms.merge_rank import merge_sort_candidates
-from engine.bias_auditor import audit_bias, run_batch_bias_audit, create_blind_features
+from engine.bias_auditor import audit_bias, run_batch_bias_audit
 from engine.score_fusion import compute_full_candidate_score
 from parser.resume_parser import async_extract_text as parse_resume_text
 from parser.feature_extractor import extract_features
 from signals.github_signal import fetch_github_signals
 from signals.coding_signal import fetch_codeforces, fetch_codechef, fetch_leetcode
+from db.supabase_client import (
+    get_supabase,
+    save_candidate,
+    fetch_candidate_by_id,
+    delete_candidate,
+    fetch_all_candidates,
+    log_analytics_event,
+    _candidate_to_dict
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +79,74 @@ router = APIRouter(
     dependencies=[Depends(require_tenant)]
 )
 
+def build_ai_summary(name: str, features: dict, job_matches: list, final_score: int) -> str:
+    # 1. Experience tier
+    exp = features.get("experience", 0.0)
+    if exp >= 8.0:
+        tier = "Senior Leadership / Principal Tier"
+    elif exp >= 4.0:
+        tier = "Mid-Senior Level Specialist"
+    elif exp >= 1.5:
+        tier = "Independent Professional / Mid-Level"
+    elif exp > 0.0:
+        tier = "Early Career / Associate Level"
+    else:
+        tier = "Entry Level / Student"
+
+    # 2. Match percentage
+    match_pct = 0
+    if job_matches:
+        match_pct = round(job_matches[0].get("tfidf_score", 0))
+
+    # 3. Strengths
+    skills = features.get("skills", [])
+    certs = features.get("certifications", [])
+    strengths_list = []
+    if skills:
+        strengths_list.append(f"proficiency in {', '.join(skills[:3])}")
+    if certs:
+        strengths_list.append(f"holds certifications: {', '.join(certs[:2])}")
+    if exp > 0:
+        strengths_list.append(f"{exp} years of industry experience")
+    
+    if len(strengths_list) >= 2:
+        strengths_str = f"{strengths_list[0]} and {strengths_list[1]}"
+    elif strengths_list:
+        strengths_str = strengths_list[0]
+    else:
+        strengths_str = "core engineering capabilities"
+
+    # 4. Weakness/Gap
+    education = features.get("education", "unknown")
+    if education == "unknown":
+        gap = "no formal degree detected on resume"
+    elif len(skills) < 5:
+        gap = "a relatively narrow technical stack"
+    else:
+        gap = "opportunities to expand domain certifications"
+
+    # 5. Verdict
+    if final_score >= 85:
+        verdict = "Shortlist"
+    elif final_score >= 65:
+        verdict = "Screening"
+    else:
+        verdict = "No Hire"
+
+    s1 = f"{name} is a {tier} candidate scoring {final_score}/100 overall with a {match_pct}% job match."
+    s2 = f"Key strengths include {strengths_str}."
+    s3 = f"Primary area of attention: {gap}."
+    s4 = f"Verdict: {verdict}."
+    return f"{s1} {s2} {s3} {s4}"
 
 # ─────────────────────────────────────────────────────────────
 # POST /candidates/rank
 # ─────────────────────────────────────────────────────────────
 
-
 @router.post("/rank", response_model=RankingResponse)
 async def rank_candidates(request: RankingRequest) -> RankingResponse:
     """
     Batch-rank candidates against a job description.
-
     Scores all candidates concurrently, ranks them using a max-heap,
     optionally runs a bias audit, and returns the top-K results.
     """
@@ -126,11 +208,7 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
 
     for i, result in enumerate(raw_results):
         if isinstance(result, Exception):
-            logger.error(
-                "Scoring failed for candidate %d: %s",
-                i,
-                str(result),
-            )
+            logger.error("Scoring failed for candidate %d: %s", i, str(result))
             continue
             
         if request.enable_bias_audit and blind_results and not isinstance(blind_results[i], Exception):
@@ -196,11 +274,9 @@ async def rank_candidates(request: RankingRequest) -> RankingResponse:
         processing_time_ms=round(elapsed, 2),
     )
 
-
 # ─────────────────────────────────────────────────────────────
 # POST /candidates/analyze-single
 # ─────────────────────────────────────────────────────────────
-
 
 @router.post("/analyze-single", response_model=CandidateResult)
 async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
@@ -263,368 +339,18 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
         external_signals=result.get("external_signals"),
     )
 
-
 # ─────────────────────────────────────────────────────────────
-# POST /candidates/upload-resume  (single)
-# POST /candidates/upload-bulk    (multiple — up to 1000)
+# POST /candidates/upload-resume (single)
 # ─────────────────────────────────────────────────────────────
-
-
-def build_ai_summary(name: str, features: dict, job_matches: list, final_score: int) -> str:
-    # 1. Experience tier
-    exp = features.get("experience", 0.0)
-    if exp >= 8.0:
-        tier = "Senior Leadership / Principal Tier"
-    elif exp >= 4.0:
-        tier = "Mid-Senior Level Specialist"
-    elif exp >= 1.5:
-        tier = "Independent Professional / Mid-Level"
-    elif exp > 0.0:
-        tier = "Early Career / Associate Level"
-    else:
-        tier = "Entry Level / Student"
-
-    # 2. Match percentage
-    match_pct = 0
-    if job_matches:
-        match_pct = round(job_matches[0].get("tfidf_score", 0))
-
-    # 3. Strengths
-    skills = features.get("skills", [])
-    certs = features.get("certifications", [])
-    strengths_list = []
-    if skills:
-        strengths_list.append(f"proficiency in {', '.join(skills[:3])}")
-    if certs:
-        strengths_list.append(f"holds certifications: {', '.join(certs[:2])}")
-    if exp > 0:
-        strengths_list.append(f"{exp} years of industry experience")
-    
-    if len(strengths_list) >= 2:
-        strengths_str = f"{strengths_list[0]} and {strengths_list[1]}"
-    elif strengths_list:
-        strengths_str = strengths_list[0]
-    else:
-        strengths_str = "core engineering capabilities"
-
-    # 4. Weakness/Gap
-    education = features.get("education", "unknown")
-    if education == "unknown":
-        gap = "no formal degree detected on resume"
-    elif len(skills) < 5:
-        gap = "a relatively narrow technical stack"
-    else:
-        gap = "opportunities to expand domain certifications"
-
-    # 5. Verdict
-    if final_score >= 85:
-        verdict = "Shortlist"
-    elif final_score >= 65:
-        verdict = "Screening"
-    else:
-        verdict = "No Hire"
-
-    s1 = f"{name} is a {tier} candidate scoring {final_score}/100 overall with a {match_pct}% job match."
-    s2 = f"Key strengths include {strengths_str}."
-    s3 = f"Primary area of attention: {gap}."
-    s4 = f"Verdict: {verdict}."
-    return f"{s1} {s2} {s3} {s4}"
-
-
-async def _process_resume(file: UploadFile) -> dict:
-    """Shared processing logic for a single resume file."""
-    import tempfile, os, heapq
-    from algorithms.tfidf import TFIDFVectorizer
-    from algorithms.cosine_similarity import cosine_similarity
-    from .settings import active_weights
-    from db.supabase_client import save_candidate, fetch_all_jobs
-
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-
-    ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
-    allowed_ext = {".pdf", ".txt", ".md", ".docx"}
-    if ext not in allowed_ext:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'.")
-
-    content = await file.read()
-
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
-
-    if ext == ".pdf":
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-        try:
-            text = await parse_resume_text(tmp_path)
-        finally:
-            os.unlink(tmp_path)
-    else:
-        text = content.decode("utf-8", errors="replace")
-
-    if not text or not text.strip():
-        raise HTTPException(status_code=422, detail="Could not extract text from file.")
-
-    features = extract_features(text)
-
-    # Fetch jobs from persistent database instead of removed in-memory list
-    jobs_list = await fetch_all_jobs()
-
-    job_texts = [
-        f"{j['description']} {j['required_skills'].replace(',', ' ')}"
-        for j in jobs_list
-    ]
-
-    job_matches = []
-    final_score = max(55, min(99, len(features.get("skills", [])) * 6))
-
-    if job_texts:
-        corpus = [text] + job_texts
-        vectorizer = TFIDFVectorizer()
-        vectors = vectorizer.fit_transform(corpus)
-        resume_vec = vectors[0]
-
-        heap = []
-        for i, job_vec in enumerate(vectors[1:]):
-            sim = cosine_similarity(resume_vec, job_vec)
-            score = round(sim * 100, 1)
-            job = jobs_list[i]
-            job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
-            resume_skills = {s.lower() for s in features.get("skills", [])}
-            heapq.heappush(heap, (-score, i, {
-                "job_id": job["id"],
-                "job_title": job["title"],
-                "tfidf_score": score,
-                "matched_skills": sorted(job_skills & resume_skills),
-                "missing_skills": sorted(job_skills - resume_skills),
-            }))
-        job_matches = [heapq.heappop(heap)[2] for _ in range(len(heap))]
-
-        w = active_weights
-        total_w = sum(w.get(k, 0) for k in ("resume", "github", "leetcode", "portfolio"))
-        eff_w = w.get("resume", 0.4) / total_w if total_w > 0 else 1.0
-        best = job_matches[0]["tfidf_score"] if job_matches else 0
-        skill_density = min(100, len(features.get("skills", [])) * 6)
-        final_score = max(55, min(99, round((0.6 * best + 0.4 * skill_density) * eff_w)))
-
-    # Build candidate record and persist to Supabase
-    raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
-    name = " ".join(w.capitalize() for w in raw_name.split())
-    email_m = __import__("re").search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
-    github_m = __import__("re").search(r"github\.com/[\w-]+", text, __import__("re").I)
-    linkedin_m = __import__("re").search(r"linkedin\.com/in/[\w-]+", text, __import__("re").I)
-
-    # Calculate blind score using anonymized data
-    blind_score = final_score
-    try:
-        from engine.bias_auditor import compute_blind_score
-        if jobs_list:
-            best_job = jobs_list[0]
-            jd_features = {
-                "required_skills": best_job["required_skills"],
-                "preferred_skills": best_job.get("preferred_skills", ""),
-                "min_experience": best_job.get("experience_required", 0),
-                "max_experience": best_job.get("max_experience", 99),
-            }
-            blind_res = await compute_blind_score(
-                candidate_name=name,
-                resume_text=text,
-                jd_features=jd_features,
-                role_type="backend_engineer" if "backend" in best_job.get("title", "").lower() else "frontend_engineer"
-            )
-            blind_score = round(blind_res.get("final_score", final_score))
-    except Exception as e:
-        logger.warning("Failed to compute blind score for candidate %s: %s", name, e)
-
-    from parser.feature_extractor import generate_resume_insights
-    insights = generate_resume_insights(features, text)
-
-    candidate = {
-        "id": str(uuid.uuid4()),
-        "name": name,
-        "role": "Software Engineer",
-        "email": features.get("email") or (email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com"),
-        "github": github_m.group() if github_m else "",
-        "linkedin": linkedin_m.group() if linkedin_m else "",
-        "location": "Remote",
-        "score": final_score,
-        "blind_score": blind_score,
-        "status": "Strong Match" if final_score > 90 else "Match",
-        "summary": build_ai_summary(name, features, job_matches, final_score),
-        "skills": features.get("skills", []),
-        "experience": [],
-        "jobMatches": job_matches,
-        "radarData": [],
-        "insights": insights,
-    }
-
-    try:
-        await save_candidate(candidate)
-    except Exception as e:
-        logger.warning("Supabase save failed: %s", e)
-
-    return {
-        "filename": file.filename,
-        "text_length": len(text),
-        "extracted_text": text[:5000],
-        "features": features,
-        "tfidf_score": final_score,
-        "job_matches": job_matches,
-        "candidate_id": candidate["id"],
-    }
-
-
-async def background_process_resume_task(candidate_id: str, filename: str, content: bytes):
-    """Run in BackgroundTasks: Parse resume, match, compute blind score, save."""
-    import tempfile, os, heapq, uuid
-    from algorithms.tfidf import TFIDFVectorizer
-    from algorithms.cosine_similarity import cosine_similarity
-    from .settings import active_weights
-    from db.supabase_client import save_candidate, fetch_all_jobs
-    
-    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    text = ""
-    try:
-        if ext == ".pdf":
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(content)
-                tmp_path = tmp.name
-            try:
-                text = await parse_resume_text(tmp_path)
-            finally:
-                os.unlink(tmp_path)
-        else:
-            text = content.decode("utf-8", errors="replace")
-            
-        if not text or not text.strip():
-            logger.warning("No text extracted from %s", filename)
-            # Update status to failed
-            candidate = {
-                "id": candidate_id,
-                "name": filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title(),
-                "status": "Extraction Failed",
-                "summary": "Error: Could not extract text from the upload file."
-            }
-            await save_candidate(candidate)
-            return
-
-        features = extract_features(text)
-        jobs_list = await fetch_all_jobs()
-        job_texts = [
-            f"{j['description']} {j['required_skills'].replace(',', ' ')}"
-            for j in jobs_list
-        ]
-
-        job_matches = []
-        final_score = max(55, min(99, len(features.get("skills", [])) * 6))
-
-        if job_texts:
-            corpus = [text] + job_texts
-            vectorizer = TFIDFVectorizer()
-            vectors = vectorizer.fit_transform(corpus)
-            resume_vec = vectors[0]
-
-            heap = []
-            for i, job_vec in enumerate(vectors[1:]):
-                sim = cosine_similarity(resume_vec, job_vec)
-                score = round(sim * 100, 1)
-                job = jobs_list[i]
-                job_skills = {s.strip().lower() for s in job["required_skills"].split(",")}
-                resume_skills = {s.lower() for s in features.get("skills", [])}
-                heapq.heappush(heap, (-score, i, {
-                    "job_id": job["id"],
-                    "job_title": job["title"],
-                    "tfidf_score": score,
-                    "matched_skills": sorted(job_skills & resume_skills),
-                    "missing_skills": sorted(job_skills - resume_skills),
-                }))
-            job_matches = [heapq.heappop(heap)[2] for _ in range(len(heap))]
-
-            w = active_weights
-            total_w = sum(w.get(k, 0) for k in ("resume", "github", "leetcode", "portfolio"))
-            eff_w = w.get("resume", 0.4) / total_w if total_w > 0 else 1.0
-            best = job_matches[0]["tfidf_score"] if job_matches else 0
-            skill_density = min(100, len(features.get("skills", [])) * 6)
-            final_score = max(55, min(99, round((0.6 * best + 0.4 * skill_density) * eff_w)))
-
-        raw_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
-        name = " ".join(w.capitalize() for w in raw_name.split())
-        email_m = __import__("re").search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
-        github_m = __import__("re").search(r"github\.com/[\w-]+", text, __import__("re").I)
-        linkedin_m = __import__("re").search(r"linkedin\.com/in/[\w-]+", text, __import__("re").I)
-
-        blind_score = final_score
-        try:
-            from engine.bias_auditor import compute_blind_score
-            if jobs_list:
-                best_job = jobs_list[0]
-                jd_features = {
-                    "required_skills": best_job["required_skills"],
-                    "preferred_skills": best_job.get("preferred_skills", ""),
-                    "min_experience": best_job.get("experience_required", 0),
-                    "max_experience": best_job.get("max_experience", 99),
-                }
-                blind_res = await compute_blind_score(
-                    candidate_name=name,
-                    resume_text=text,
-                    jd_features=jd_features,
-                    role_type="backend_engineer" if "backend" in best_job.get("title", "").lower() else "frontend_engineer"
-                )
-                blind_score = round(blind_res.get("final_score", final_score))
-        except Exception as e:
-            logger.warning("Failed to compute blind score for candidate %s: %s", name, e)
-
-        from parser.feature_extractor import generate_resume_insights
-        insights = generate_resume_insights(features, text)
-
-        candidate = {
-            "id": candidate_id,
-            "name": name,
-            "role": "Software Engineer",
-            "email": features.get("email") or (email_m.group() if email_m else f"{raw_name.lower().replace(' ', '.')}@example.com"),
-            "github": github_m.group() if github_m else "",
-            "linkedin": linkedin_m.group() if linkedin_m else "",
-            "location": "Remote",
-            "score": final_score,
-            "blind_score": blind_score,
-            "status": "Strong Match" if final_score > 90 else "Match",
-            "summary": build_ai_summary(name, features, job_matches, final_score),
-            "resume_text": text,
-            "skills": features.get("skills", []),
-            "experience": [],
-            "jobMatches": job_matches,
-            "radarData": [],
-            "insights": insights,
-        }
-        await save_candidate(candidate)
-        
-    except Exception as e:
-        logger.error("Error processing resume in background: %s", e)
-        # Update record with failure
-        try:
-            err_candidate = {
-                "id": candidate_id,
-                "name": filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title(),
-                "status": "Failed",
-                "summary": f"Error during processing: {str(e)}"
-            }
-            await save_candidate(err_candidate)
-        except Exception:
-            pass
-
 
 @router.post("/upload-resume", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
 async def upload_resume(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    tenant_id: str = Depends(require_tenant),
-    db: Session = Depends(get_db)
+    tenant_id: str = Depends(require_tenant)
 ):
-    from db.supabase_client import save_candidate
-    import base64
-    
     # 1. Enforce active tenant quota limits
-    check_cv_upload_limit(db, tenant_id)
+    check_cv_upload_limit(None, tenant_id)
     
     # 2. Create a unique candidate ID
     candidate_id = str(uuid.uuid4())
@@ -643,7 +369,7 @@ async def upload_resume(
         "location": "Remote",
         "score": 0,
         "blind_score": 0,
-        "status": "Analyzing",
+        "status": "Screening",
         "summary": "Analyzing resume, please wait...",
         "skills": [],
         "experience": [],
@@ -652,7 +378,7 @@ async def upload_resume(
     }
     
     # Save placeholder to DB
-    await save_candidate(placeholder)
+    await save_candidate(placeholder, tenant_id)
     
     # 4. Read file content and validate size
     content = await file.read()
@@ -661,6 +387,7 @@ async def upload_resume(
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
     
     # 5. Base64 encode and Enqueue Celery background task (falling back to FastAPI BackgroundTasks if Redis is offline)
+    import base64
     content_b64 = base64.b64encode(content).decode("utf-8")
     try:
         process_resume_task.delay(candidate_id, file.filename, content_b64, tenant_id)
@@ -669,7 +396,7 @@ async def upload_resume(
         background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
     
     # 6. Increment the tenant's parse usage
-    increment_cv_parses(db, tenant_id)
+    increment_cv_parses(None, tenant_id)
     
     return {
         "candidate_id": candidate_id,
@@ -678,26 +405,24 @@ async def upload_resume(
         "message": "Resume uploaded successfully and analysis is running in the background."
     }
 
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/upload-bulk (multiple)
+# ─────────────────────────────────────────────────────────────
 
 @router.post("/upload-bulk", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
 async def upload_bulk(
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
-    tenant_id: str = Depends(require_tenant),
-    db: Session = Depends(get_db)
+    tenant_id: str = Depends(require_tenant)
 ):
-    """
-    Bulk upload up to 1000 resumes concurrently in the background.
-    """
     if len(files) > 1000:
         raise HTTPException(status_code=400, detail="Maximum 1000 files per batch.")
 
-    from db.supabase_client import save_candidate
     import base64
     results = []
 
     for file in files:
-        check_cv_upload_limit(db, tenant_id)
+        check_cv_upload_limit(None, tenant_id)
         
         candidate_id = str(uuid.uuid4())
         raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
@@ -714,14 +439,14 @@ async def upload_bulk(
             "location": "Remote",
             "score": 0,
             "blind_score": 0,
-            "status": "Analyzing",
+            "status": "Screening",
             "summary": "Analyzing resume, please wait...",
             "skills": [],
             "experience": [],
             "jobMatches": [],
             "radarData": [],
         }
-        await save_candidate(placeholder)
+        await save_candidate(placeholder, tenant_id)
         
         content = await file.read()
         content_b64 = base64.b64encode(content).decode("utf-8")
@@ -731,7 +456,7 @@ async def upload_bulk(
             logger.warning("Celery/Redis broker offline. Falling back to FastAPI BackgroundTasks: %s", e)
             background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
         
-        increment_cv_parses(db, tenant_id)
+        increment_cv_parses(None, tenant_id)
         
         results.append({
             "candidate_id": candidate_id,
@@ -744,15 +469,17 @@ async def upload_bulk(
         "results": results
     }
 
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/upload-csv
+# ─────────────────────────────────────────────────────────────
 
 @router.post("/upload-csv")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(file: UploadFile = File(...), tenant_id: str = Depends(require_tenant)):
     """
     Upload a CSV of candidates, parse it, and store into Supabase.
     """
     import csv
     import io
-    from db.supabase_client import save_candidate
 
     content = await file.read()
     text = content.decode("utf-8", errors="replace")
@@ -760,8 +487,6 @@ async def upload_csv(file: UploadFile = File(...)):
     reader = csv.DictReader(io.StringIO(text))
     results = []
     for row in reader:
-        # Expected CSV columns from Export ATS:
-        # Name,Role,Score,Status,Match Percentage,Skills,Location,Experience (Years)
         skills_str = row.get("Skills", "")
         skills = [s.strip() for s in skills_str.split(",") if s.strip()]
         
@@ -775,7 +500,7 @@ async def upload_csv(file: UploadFile = File(...)):
             "name": row.get("Name", "Unknown"),
             "role": row.get("Role", "Candidate"),
             "score": score,
-            "status": row.get("Status", "Match"),
+            "status": row.get("Status", "Screening"),
             "skills": skills,
             "location": row.get("Location", "Remote"),
             "email": f"{row.get('Name', 'unknown').lower().replace(' ', '.')}@example.com",
@@ -785,7 +510,7 @@ async def upload_csv(file: UploadFile = File(...)):
         }
         
         try:
-            await save_candidate(candidate)
+            await save_candidate(candidate, tenant_id)
             results.append({"name": candidate["name"], "status": "success"})
         except Exception as e:
             logger.warning("Supabase save failed for %s: %s", candidate["name"], e)
@@ -796,255 +521,9 @@ async def upload_csv(file: UploadFile = File(...)):
         "results": results
     }
 
-
-@router.post("/upload-resume-legacy")
-async def upload_resume_legacy(file: UploadFile = File(...)):
-    """
-    Upload a resume (PDF/TXT), extract text via PyMuPDF/pdfplumber,
-    run TF-IDF + cosine similarity against all seeded jobs, and return
-    structured features + per-job match scores.
-
-    Algorithm pipeline:
-      1. PDF text extraction  — O(p) where p = pages
-      2. KMP skill detection  — O(n * k) where k = known skills
-      3. TF-IDF vectorisation — O(N * L * V) across corpus
-      4. Cosine similarity    — O(min|A|,|B|) per job
-      5. Max-heap ranking     — O(j log j) where j = number of jobs
-    """
-    import tempfile, os, heapq
-    from algorithms.tfidf import TFIDFVectorizer
-    from algorithms.cosine_similarity import cosine_similarity
-
-    raise HTTPException(status_code=410, detail="Use /upload-resume instead.")
-
-
 # ─────────────────────────────────────────────────────────────
-# GET /candidates/platforms/{username}
+# GET /candidates
 # ─────────────────────────────────────────────────────────────
-
-
-@router.get("/platforms/{username}", response_model=PlatformSignalsResponse)
-async def fetch_platform_signals(
-    username: str,
-    platforms: str = Query(
-        "github",
-        description="Comma-separated platforms: github,codeforces,leetcode,codechef",
-    ),
-) -> PlatformSignalsResponse:
-    """
-    Fetch raw signal data from specified platforms for a given username.
-    """
-    platform_list = [p.strip().lower() for p in platforms.split(",") if p.strip()]
-
-    if not platform_list:
-        raise HTTPException(
-            status_code=400, detail="At least one platform is required."
-        )
-
-    valid_platforms = {"github", "codeforces", "leetcode", "codechef"}
-    invalid = set(platform_list) - valid_platforms
-    if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid platforms: {', '.join(invalid)}. Valid: {', '.join(valid_platforms)}",
-        )
-
-    tasks: dict[str, Any] = {}
-    if "github" in platform_list:
-        tasks["github"] = fetch_github_signals(username)
-    if "codeforces" in platform_list:
-        tasks["codeforces"] = fetch_codeforces(username)
-    if "leetcode" in platform_list:
-        tasks["leetcode"] = fetch_leetcode(username)
-    if "codechef" in platform_list:
-        tasks["codechef"] = fetch_codechef(username)
-
-    keys = list(tasks.keys())
-    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-
-    signals: dict[str, Any] = {}
-    for key, result in zip(keys, results):
-        if isinstance(result, Exception):
-            signals[key] = {"error": str(result)}
-        else:
-            signals[key] = result if result else {}
-
-    return PlatformSignalsResponse(
-        username=username,
-        platforms_queried=platform_list,
-        signals=signals,
-    )
-
-
-# ─────────────────────────────────────────────────────────────
-# POST /candidates/shortlist — 0/1 Knapsack DP
-# ─────────────────────────────────────────────────────────────
-
-
-@router.post("/shortlist")
-async def shortlist_by_budget(request: dict[str, Any]) -> JSONResponse:
-    """
-    Select candidates to maximize total score within budget using 0/1 Knapsack DP.
-    Algorithm: Dynamic Programming (0/1 Knapsack)
-    Time Complexity: O(n × budget), Space: O(n × budget)
-    """
-    candidates = request.get("candidates", [])
-    budget = request.get("budget", 10)
-
-    result = knapsack_shortlist(candidates, budget)
-    return JSONResponse(content=result, status_code=200)
-
-
-# ─────────────────────────────────────────────────────────────
-# POST /candidates/skill-gap — Graph + BFS
-# ─────────────────────────────────────────────────────────────
-
-
-@router.post("/skill-gap")
-async def analyze_skill_gap(request: dict[str, Any]) -> JSONResponse:
-    """
-    Find missing skills and shortest learning path using BFS on skill graph.
-    Algorithm: Graph Traversal + BFS
-    Time Complexity: O(V + E), Space: O(V + E)
-    """
-    from algorithms.skill_graph import build_skill_graph
-
-    current_skills = request.get("current_skills", [])
-    required_skills = request.get("required_skills", [])
-
-    graph = build_skill_graph()
-    result = find_learning_path(current_skills, required_skills, graph)
-    return JSONResponse(content=result, status_code=200)
-
-
-# ─────────────────────────────────────────────────────────────
-# POST /candidates/schedule — Greedy Activity Selection
-# ─────────────────────────────────────────────────────────────
-
-
-@router.post("/schedule")
-async def schedule_interviews_endpoint(request: dict[str, Any]) -> JSONResponse:
-    """
-    Schedule maximum non-overlapping interviews using Greedy Activity Selection.
-    Algorithm: Greedy (Activity Selection)
-    Time Complexity: O(n log n) for sorting, Space: O(n)
-    """
-    candidates = request.get("candidates", [])
-
-    result = schedule_interviews(candidates)
-    return JSONResponse(content=result, status_code=200)
-
-
-# ─────────────────────────────────────────────────────────────
-# POST /candidates/rank-sorted — Merge Sort with Rank Delta
-# ─────────────────────────────────────────────────────────────
-
-
-@router.post("/rank-sorted")
-async def rank_candidates_sorted(request: dict[str, Any]) -> JSONResponse:
-    """
-    Sort candidates by fusion score with rank delta tracking using Merge Sort.
-    Algorithm: Divide & Conquer (Merge Sort)
-    Time Complexity: O(n log n), Space: O(n)
-    """
-    candidates = request.get("candidates", [])
-
-    result = merge_sort_candidates(candidates)
-    return JSONResponse(content=result, status_code=200)
-
-
-# ─────────────────────────────────────────────────────────────
-# GET /candidates/github/{username} — Live GitHub signals
-# ─────────────────────────────────────────────────────────────
-
-@router.get("/github/{username}")
-async def get_github_signals(username: str):
-    """
-    Fetch live GitHub signals for a candidate and return stats + score.
-    Uses fetch_github_signals() (async httpx) + score_github().
-    Time Complexity: O(1) network calls, O(r) repo parsing where r = repo count
-    """
-    from signals.github_signal import fetch_github_signals, score_github, analyze_github_profile
-
-    # Strip github.com/ prefix if the full URL was passed
-    clean = username.strip().replace("https://", "").replace("http://", "")
-    if clean.startswith("github.com/"):
-        clean = clean[len("github.com/"):]
-    clean = clean.strip("/")
-
-    if not clean:
-        return {"error": "Invalid username"}
-
-    signals = await fetch_github_signals(clean)
-    if not signals:
-        return {"error": f"GitHub profile '{clean}' not found or is private"}
-
-    score = score_github(signals)
-    profile_analysis = analyze_github_profile(signals, [], "backend")
-    return {
-        "username":                clean,
-        "score":                   round(score * 100),   # 0-100
-        "account_age_years":       signals.get("account_age_years", 0),
-        "total_repos":             signals.get("total_repos", 0),
-        "original_repos":          signals.get("original_repos", 0),
-        "total_stars":             signals.get("total_stars", 0),
-        "top_repo_stars":          signals.get("top_repo_stars", 0),
-        "languages":               signals.get("languages", []),
-        "commit_frequency_per_week": signals.get("commit_frequency_per_week", 0),
-        "contribution_streak_estimate": signals.get("contribution_streak_estimate", 0),
-        "open_source_prs_estimate": signals.get("open_source_prs_estimate", 0),
-        "has_tests":               signals.get("has_tests", False),
-        "has_readme_ratio":        signals.get("has_readme_ratio", 0),
-        "profile_completeness":    signals.get("profile_completeness", 0),
-        "followers":               signals.get("followers", 0),
-        "raw_bio":                 signals.get("raw_bio", ""),
-        "engineering_score":       round(profile_analysis.get("engineering_score", 0)),
-        "open_source_score":       round(profile_analysis.get("open_source_score", 0)),
-        "project_maturity_score":  round(profile_analysis.get("project_maturity_score", 0)),
-        "verified_skills":         profile_analysis.get("verified_skills", []),
-        "unsupported_claims":      profile_analysis.get("unsupported_claims", []),
-    }
-
-# ── Candidate data store ─────────────────────────────────────
-candidates_db = [
-    {
-        "id": "1", "name": "Alice Chen", "role": "Senior Frontend Engineer",
-        "email": "alice.chen@example.com", "github": "github.com/alicec",
-        "linkedin": "linkedin.com/in/alicechen", "location": "San Francisco, CA",
-        "skills": ["React", "TypeScript", "Next.js", "Tailwind CSS", "CSS", "HTML", "Testing", "Webpack"],
-        "final_score": 94, "score": 94, "status": "Strong Match",
-        "summary": "Alice is a robust front-end specialist with a history of scaling design systems and optimizing web performance.",
-        "analyzed_at": "2024-04-03",
-    },
-    {
-        "id": "2", "name": "Marcus Jones", "role": "Fullstack Engineer",
-        "email": "marcus.j@example.com", "github": "github.com/mjones-dev",
-        "linkedin": "linkedin.com/in/marcusj", "location": "Austin, TX",
-        "skills": ["Node.js", "TypeScript", "React", "PostgreSQL", "Docker", "REST APIs"],
-        "final_score": 88, "score": 88, "status": "Match",
-        "summary": "Marcus possesses a balanced full-stack skill set with deep proficiency in Node.js and TypeScript.",
-        "analyzed_at": "2024-04-03",
-    },
-    {
-        "id": "3", "name": "Sofia Rodriguez", "role": "Backend Lead",
-        "email": "sofia.r@example.com", "github": "github.com/srodrig",
-        "linkedin": "linkedin.com/in/sofiar", "location": "New York, NY",
-        "skills": ["Python", "FastAPI", "Go", "PostgreSQL", "Kubernetes", "AWS", "Docker", "Redis", "CI/CD"],
-        "final_score": 97, "score": 97, "status": "Strong Match",
-        "summary": "Sofia is an exceptional backend lead with expertise in distributed systems and Go.",
-        "analyzed_at": "2024-04-04",
-    },
-    {
-        "id": "7", "name": "Tirth Patel", "role": "Fullstack & Web3 Engineer",
-        "email": "tirth_patel@example.com", "github": "github.com/tirthpatel",
-        "linkedin": "linkedin.com/in/tirthpatel", "location": "Ahmedabad, India",
-        "skills": ["Solidity", "React", "Django", "Node.js", "Web3", "Python", "JavaScript", "TypeScript"],
-        "final_score": 98, "score": 98, "status": "Strong Match",
-        "summary": "Highly skilled B.Tech candidate. Winner of Codeversity National Hackathon at IIT Gandhinagar.",
-        "analyzed_at": "2024-04-05",
-    },
-]
-
 
 @router.get("")
 async def get_all_candidates(
@@ -1057,81 +536,27 @@ async def get_all_candidates(
     """
     GET /candidates — returns database candidates for the active tenant context with pagination and filters.
     """
-    from db.session import SessionLocal
-    from db.models import Candidate
-    from db.crypto import decrypt_field
-    from db.supabase_client import _candidate_to_dict
-    from sqlalchemy import desc
-
     try:
-        db = SessionLocal()
-        try:
-            query = db.query(Candidate)
-            if tenant_id:
-                query = query.filter(Candidate.organization_id == tenant_id)
-            if status:
-                query = query.filter(Candidate.status == status)
+        supabase = get_supabase()
+        query = supabase.table("candidates").select("*, jobs(title)", count="exact").eq("recruiter_id", tenant_id)
 
-            # Order by score descending
-            query = query.order_by(desc(Candidate.score))
-
-            if search:
-                # If search is provided, we must fetch all matching to decrypt and filter in memory
-                results = query.all()
-                search_lower = search.lower()
-                filtered = []
-                for c in results:
-                    name = decrypt_field(c.name) or ""
-                    role = c.role or ""
-                    if search_lower in name.lower() or search_lower in role.lower():
-                        filtered.append(c)
-                
-                total = len(filtered)
-                pages = (total + limit - 1) // limit if total > 0 else 1
-                offset = (page - 1) * limit
-                paginated_results = filtered[offset : offset + limit]
-                data = [_candidate_to_dict(c) for c in paginated_results]
-            else:
-                total = query.count()
-                pages = (total + limit - 1) // limit if total > 0 else 1
-                offset = (page - 1) * limit
-                results = query.offset(offset).limit(limit).all()
-                data = [_candidate_to_dict(c) for c in results]
-
-            has_next = page < pages
-            has_prev = page > 1
-
-            return {
-                "data": data,
-                "total": total,
-                "page": page,
-                "limit": limit,
-                "pages": pages,
-                "has_next": has_next,
-                "has_prev": has_prev
-            }
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("Database fetch failed, falling back to in-memory: %s", e)
-        # fallback logic
-        filtered_fallback = candidates_db
         if status:
-            filtered_fallback = [c for c in filtered_fallback if c.get("status") == status]
+            pipeline_stage = status.lower()
+            query = query.eq("pipeline_stage", pipeline_stage)
+
         if search:
-            search_lower = search.lower()
-            filtered_fallback = [
-                c for c in filtered_fallback
-                if search_lower in c.get("name", "").lower() or search_lower in c.get("role", "").lower()
-            ]
-        # order by score descending
-        filtered_fallback = sorted(filtered_fallback, key=lambda x: x.get("score", x.get("final_score", 0)), reverse=True)
-        
-        total = len(filtered_fallback)
-        pages = (total + limit - 1) // limit if total > 0 else 1
+            query = query.or_(f"full_name.ilike.%{search}%,career_tier.ilike.%{search}%")
+
+        # Order by score descending
+        query = query.order("match_score", desc=True)
+
         offset = (page - 1) * limit
-        data = filtered_fallback[offset : offset + limit]
-        
+        res = query.range(offset, offset + limit - 1).execute()
+
+        total = res.count if res.count is not None else len(res.data)
+        pages = (total + limit - 1) // limit if total > 0 else 1
+        data = [_candidate_to_dict(c) for c in res.data]
+
         return {
             "data": data,
             "total": total,
@@ -1141,16 +566,24 @@ async def get_all_candidates(
             "has_next": page < pages,
             "has_prev": page > 1
         }
+    except Exception as e:
+        logger.error("Database fetch failed in GET /candidates: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database query failed: {str(e)}"
+        )
 
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/seed-demo
+# ─────────────────────────────────────────────────────────────
 
 @router.post("/seed-demo")
 async def seed_demo_candidates(tenant_id: str = Depends(require_tenant)):
     """
     POST /candidates/seed-demo — Seed 5 high-fidelity candidates into the database.
     """
-    from db.supabase_client import save_candidate, fetch_all_candidates
     try:
-        existing = await fetch_all_candidates()
+        existing = await fetch_all_candidates(tenant_id)
         if len(existing) > 0:
             return {"status": "success", "message": "Database already has candidates. Seeding skipped."}
     except Exception:
@@ -1301,35 +734,29 @@ async def seed_demo_candidates(tenant_id: str = Depends(require_tenant)):
     ]
 
     for c in demo_candidates:
-        c["organization_id"] = tenant_id
-        await save_candidate(c)
+        await save_candidate(c, tenant_id)
         
     return {"status": "success", "message": f"Successfully seeded 5 demo candidates for tenant {tenant_id}"}
 
+# ─────────────────────────────────────────────────────────────
+# GET /candidates/bias-audit
+# ─────────────────────────────────────────────────────────────
 
 @router.get("/bias-audit")
-async def get_bias_audit():
+async def get_bias_audit(tenant_id: str = Depends(require_tenant)):
     """
     Get aggregated bias audit metrics across all stored candidates.
     """
-    from db.supabase_client import fetch_all_candidates
     from engine.bias_auditor import audit_bias, run_batch_bias_audit
     
-    try:
-        candidates_list = await fetch_all_candidates()
-        # Merge with in-memory seeded ones not already in DB
-        db_ids = {c["id"] for c in candidates_list}
-        merged_candidates = candidates_list + [c for c in candidates_db if c["id"] not in db_ids]
-    except Exception as e:
-        logger.warning("Supabase fetch failed during bias audit: %s", e)
-        merged_candidates = candidates_db
+    candidates_list = await fetch_all_candidates(tenant_id)
         
     audit_results = []
-    for c in merged_candidates:
+    for c in candidates_list:
         full_score = c.get("score", 0) or c.get("final_score", 0)
         blind_score = c.get("blind_score", full_score)
         
-        # If blind_score is same as full_score, introduce a slight deterministic variation based on ID for visual representation of bias audits
+        # If blind_score is same as full_score, introduce a slight deterministic variation based on ID for visual representation
         if blind_score == 0 or blind_score == full_score:
             h = hash(c["id"]) % 7 - 3  # variance from -3 to +3
             blind_score = max(50, min(100, full_score + h))
@@ -1342,78 +769,52 @@ async def get_bias_audit():
     batch_audit["results"] = audit_results
     return batch_audit
 
+# ─────────────────────────────────────────────────────────────
+# DELETE /candidates/{candidate_id}
+# ─────────────────────────────────────────────────────────────
 
 @router.delete("/{candidate_id}", dependencies=[Depends(require_permission(Permission.DELETE_CANDIDATE))])
 async def delete_candidate_endpoint(candidate_id: str, tenant_id: str = Depends(require_tenant)):
     """
     Delete a candidate by ID.
     """
-    from db.supabase_client import fetch_candidate_by_id, delete_candidate
-    
-    # Check database first
-    candidate = await fetch_candidate_by_id(candidate_id)
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
     if candidate:
-        await delete_candidate(candidate_id)
+        await delete_candidate(candidate_id, tenant_id)
         return {"status": "success", "message": f"Candidate '{candidate.get('name')}' successfully deleted"}
-        
-    # Check in-memory fallback
-    match = next((c for c in candidates_db if c["id"] == candidate_id), None)
-    if not match:
-        raise HTTPException(status_code=404, detail="Candidate not found.")
-        
-    # Remove from local in-memory candidates list if present
-    candidates_db.remove(match)
-    return {"status": "success", "message": f"Candidate '{match.get('name')}' successfully deleted from memory"}
+    raise HTTPException(status_code=404, detail="Candidate not found.")
 
+# ─────────────────────────────────────────────────────────────
+# GET /candidates/{candidate_id}
+# ─────────────────────────────────────────────────────────────
 
 @router.get("/{candidate_id}")
-async def get_candidate(candidate_id: str) -> dict:
-    from db.supabase_client import fetch_candidate_by_id
-    try:
-        candidate = await fetch_candidate_by_id(candidate_id)
-        if candidate:
-            return candidate
-    except Exception as e:
-        logger.warning("Supabase fetch failed: %s", e)
-    # fallback to in-memory
-    match = next((c for c in candidates_db if c["id"] == candidate_id), None)
-    if not match:
+async def get_candidate(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found.")
-    return match
+    return candidate
 
+# ─────────────────────────────────────────────────────────────
+# PATCH /candidates/{candidate_id}
+# ─────────────────────────────────────────────────────────────
 
 @router.patch("/{candidate_id}")
-async def update_candidate(candidate_id: str, payload: dict) -> dict:
-    from db.supabase_client import fetch_candidate_by_id, save_candidate
-    candidate = None
-    try:
-        candidate = await fetch_candidate_by_id(candidate_id)
-    except Exception as e:
-        logger.warning("Supabase fetch failed during patch: %s", e)
-    
-    in_memory = False
+async def update_candidate(candidate_id: str, payload: dict, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
     if not candidate:
-        # Check in-memory database
-        match = next((c for c in candidates_db if c["id"] == candidate_id), None)
-        if not match:
-            raise HTTPException(status_code=404, detail="Candidate not found.")
-        candidate = match
-        in_memory = True
+        raise HTTPException(status_code=404, detail="Candidate not found.")
 
     # Update candidate fields
     for k, v in payload.items():
         candidate[k] = v
 
-    # Save to SQLite database or Supabase database if possible
-    try:
-        await save_candidate(candidate)
-    except Exception as e:
-        logger.warning("Failed to save patched candidate in database: %s", e)
-            
+    await save_candidate(candidate, tenant_id)
     return {"status": "success", "candidate": candidate}
 
-
-# ── FEATURE B: AI-Driven Q&A Generator ──────────────────────────
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/{candidate_id}/generate-qa
+# ─────────────────────────────────────────────────────────────
 
 async def generate_interview_questions_gemini(skills: list[str], missing_skills: list[str], role: str) -> list[dict]:
     import os
@@ -1485,14 +886,11 @@ async def generate_interview_questions_gemini(skills: list[str], missing_skills:
         
     return generate_mock_questions(missing_skills or skills, role)
 
-
 def generate_mock_questions(skills_to_test: list[str], role: str) -> list[dict]:
-    # Mock questions based on the skill gaps to act as a fallback
     questions = []
     default_skills = ["React", "TypeScript", "Python", "Docker", "PostgreSQL", "Next.js"]
     test_list = [s for s in skills_to_test if s] or default_skills
     
-    # Take up to 5 skills
     for s in test_list[:5]:
         questions.append({
             "skill": s,
@@ -1500,7 +898,6 @@ def generate_mock_questions(skills_to_test: list[str], role: str) -> list[dict]:
             "answer": f"A model answer for {s} in a {role} role involves discussing best practices, state management (or database indexes/routing depending on frontend/backend context), performance optimizations (e.g. indexing, tree-shaking, caching), and error handling strategies."
         })
         
-    # If fewer than 5, pad with generic ones
     while len(questions) < 5:
         questions.append({
             "skill": "System Design",
@@ -1509,77 +906,46 @@ def generate_mock_questions(skills_to_test: list[str], role: str) -> list[dict]:
         })
     return questions
 
-
 @router.post("/{candidate_id}/generate-qa")
-async def generate_candidate_qa(candidate_id: str):
+async def generate_candidate_qa(candidate_id: str, tenant_id: str = Depends(require_tenant)):
     """
     Generate 5 customized interview questions and answer blueprints using Gemini API.
     Identifies skill gaps and core skills from the candidate's profile.
     """
-    from db.supabase_client import fetch_candidate_by_id, save_candidate
-
-    # Fetch candidate
-    candidate = await fetch_candidate_by_id(candidate_id)
-    if not candidate:
-        # Check in-memory fallback
-        candidate = next((c for c in candidates_db if c["id"] == candidate_id), None)
-    
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     skills = candidate.get("skills", [])
     role = candidate.get("role", "Software Engineer")
     
-    # We can fetch job matches to find missing skills
-    job_matches_list = candidate.get("jobMatches", candidate.get("job_matches", []))
+    job_matches_list = candidate.get("jobMatches", [])
     missing_skills = []
     if job_matches_list:
-        # Gather missing skills from the best job match
         missing_skills = job_matches_list[0].get("missing_skills", [])
 
     qas = await generate_interview_questions_gemini(skills, missing_skills, role)
-    
-    # Save back to database
     candidate["qa"] = qas
-    try:
-        await save_candidate(candidate)
-    except Exception as e:
-        logger.warning(f"Failed to save generated Q&A back to database: {e}")
-        
+    await save_candidate(candidate, tenant_id)
     return {"qa": qas}
 
-
-# ── FEATURE D: Webhook-Driven GitHub Commit Sync ────────────────
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/{candidate_id}/webhook/github-sync
+# ─────────────────────────────────────────────────────────────
 
 @router.post("/{candidate_id}/webhook/github-sync")
-async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Session = Depends(get_db)):
+async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id: str = Depends(require_tenant)):
     """
     Robust webhook receiver or manual sync trigger. Recalculates candidate scores,
     skill confidence, match breakdowns, and AI summaries using live GitHub signals.
     """
-    import json
-    from datetime import datetime
-    from db.models import Candidate, Job
-    from db.crypto import decrypt_field
-    from db.supabase_client import save_candidate
-    from engine.score_fusion import compute_full_candidate_score
-
-    candidate_obj = db.query(Candidate).filter(Candidate.id == candidate_id).first()
-    candidate_dict = None
-    if candidate_obj:
-        candidate_name = decrypt_field(candidate_obj.name)
-        text = candidate_obj.resume_text or (candidate_name + " " + (candidate_obj.summary or ""))
-        github_url = candidate_obj.github or ""
-        tenant_id = candidate_obj.organization_id
-    else:
-        # fallback to in-memory
-        candidate_dict = next((c for c in candidates_db if c["id"] == candidate_id), None)
-        if not candidate_dict:
-            raise HTTPException(status_code=404, detail="Candidate not found")
-        candidate_name = candidate_dict.get("name", "Unknown")
-        text = candidate_dict.get("resume_text") or (candidate_name + " " + (candidate_dict.get("summary") or ""))
-        github_url = candidate_dict.get("github") or ""
-        tenant_id = candidate_dict.get("organization_id", "default-tenant")
+    candidate_dict = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate_dict:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    candidate_name = candidate_dict.get("name", "Unknown")
+    text = candidate_dict.get("resume_text") or (candidate_name + " " + (candidate_dict.get("summary") or ""))
+    github_url = candidate_dict.get("github") or ""
 
     username = github_url.strip().replace("https://", "").replace("http://", "")
     if username.startswith("github.com/"):
@@ -1590,8 +956,11 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
         raise HTTPException(status_code=400, detail="No GitHub profile set for candidate.")
 
     # Load active jobs for this tenant
-    jobs_list = db.query(Job).filter(Job.organization_id == tenant_id).all()
+    supabase = get_supabase()
+    jobs_res = supabase.table("jobs").select("*").eq("recruiter_id", tenant_id).execute()
+    jobs_list = jobs_res.data
     best_job = jobs_list[0] if jobs_list else None
+    
     role_type = "backend_engineer"
     jd_features = {
         "required_skills": [],
@@ -1602,12 +971,18 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
     }
 
     if best_job:
-        role_type = "backend_engineer" if "backend" in best_job.title.lower() else "frontend_engineer"
+        role_type = "backend_engineer" if "backend" in str(best_job.get("title", "")).lower() else "frontend_engineer"
+        req_skills = best_job.get("required_skills") or []
+        if isinstance(req_skills, str):
+            req_skills_list = [s.strip() for s in req_skills.split(",") if s.strip()]
+        else:
+            req_skills_list = req_skills
+            
         jd_features = {
-            "required_skills": [s.strip() for s in best_job.required_skills.split(",") if s.strip()] if best_job.required_skills else [],
-            "preferred_skills": [s.strip() for s in best_job.preferred_skills.split(",") if s.strip()] if best_job.preferred_skills else [],
-            "min_experience": best_job.experience_required,
-            "max_experience": best_job.max_experience,
+            "required_skills": req_skills_list,
+            "preferred_skills": [],
+            "min_experience": best_job.get("min_experience", 0),
+            "max_experience": 99,
             "education_required": "unknown"
         }
 
@@ -1659,11 +1034,18 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
     job_matches = []
     for job in jobs_list:
         from engine.matcher import compute_match_breakdown
+        
+        req_skills = job.get("required_skills") or []
+        if isinstance(req_skills, str):
+            req_skills_list = [s.strip() for s in req_skills.split(",") if s.strip()]
+        else:
+            req_skills_list = req_skills
+            
         job_jd = {
-            "required_skills": [s.strip() for s in job.required_skills.split(",") if s.strip()] if job.required_skills else [],
-            "preferred_skills": [s.strip() for s in job.preferred_skills.split(",") if s.strip()] if job.preferred_skills else [],
-            "min_experience": job.experience_required,
-            "max_experience": job.max_experience,
+            "required_skills": req_skills_list,
+            "preferred_skills": [],
+            "min_experience": job.get("min_experience", 0),
+            "max_experience": 99,
             "education_required": "unknown"
         }
         match_breakdown = compute_match_breakdown(
@@ -1673,8 +1055,8 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
             linkedin_signals=scoring_res["external_signals"]["linkedin"]
         )
         job_matches.append({
-            "job_id": job.id,
-            "job_title": job.title,
+            "job_id": job["id"],
+            "job_title": job["title"],
             "tfidf_score": match_breakdown["overall_match_percentage"],
             "matched_skills": scoring_res["matched_skills"],
             "missing_skills": scoring_res["missing_skills"],
@@ -1699,48 +1081,24 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
         {"subject": "Maturity", "A": min(100, round(maturity_score)), "fullMark": 100}
     ]
 
-    # Save candidate
-    if candidate_obj:
-        candidate_obj.role = scoring_res["resume_features"].get("role", "Software Engineer")
-        candidate_obj.score = final_score
-        candidate_obj.blind_score = blind_score
-        candidate_obj.status = "Strong Match" if final_score > 85 else "Match"
-        candidate_obj.summary = scoring_res["insights"]["ai_summary"]["executive_summary"]
-        candidate_obj.skills = json.dumps(scoring_res["resume_features"].get("skills", []))
-        candidate_obj.experience = json.dumps(experience_data)
-        candidate_obj.job_matches = json.dumps(job_matches)
-        candidate_obj.radar_data = json.dumps(radar_data)
-        candidate_obj.insights = json.dumps(scoring_res["insights"])
-        try:
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to commit synced candidate data: {e}")
-            raise HTTPException(status_code=500, detail=f"Database commit failed: {str(e)}")
-    else:
-        # in-memory / fallback save
-        candidate_dict["role"] = scoring_res["resume_features"].get("role", "Software Engineer")
-        candidate_dict["score"] = final_score
-        candidate_dict["blind_score"] = blind_score
-        candidate_dict["status"] = "Strong Match" if final_score > 85 else "Match"
-        candidate_dict["summary"] = scoring_res["insights"]["ai_summary"]["executive_summary"]
-        candidate_dict["skills"] = scoring_res["resume_features"].get("skills", [])
-        candidate_dict["experience"] = experience_data
-        candidate_dict["job_matches"] = job_matches
-        candidate_dict["jobMatches"] = job_matches
-        candidate_dict["radar_data"] = radar_data
-        candidate_dict["radarData"] = radar_data
-        candidate_dict["insights"] = scoring_res["insights"]
-        try:
-            await save_candidate(candidate_dict)
-        except Exception as e:
-            logger.error(f"Failed to save candidate in-memory fallback: {e}")
-            raise HTTPException(status_code=500, detail=f"In-memory fallback save failed: {str(e)}")
+    candidate_dict["role"] = scoring_res["resume_features"].get("role", "Software Engineer")
+    candidate_dict["score"] = final_score
+    candidate_dict["blind_score"] = blind_score
+    candidate_dict["status"] = "Strong Match" if final_score > 85 else "Match"
+    candidate_dict["summary"] = scoring_res["insights"]["ai_summary"]["executive_summary"]
+    candidate_dict["skills"] = scoring_res["resume_features"].get("skills", [])
+    candidate_dict["experience"] = experience_data
+    candidate_dict["job_matches"] = job_matches
+    candidate_dict["jobMatches"] = job_matches
+    candidate_dict["radar_data"] = radar_data
+    candidate_dict["radarData"] = radar_data
+    candidate_dict["insights"] = scoring_res["insights"]
+    
+    # Save the updated candidate
+    await save_candidate(candidate_dict, tenant_id)
 
     # Log audit event
-    from db.supabase_client import log_analytics_event
     github_score_pct = round(github_signals.get("score", 0) * 100)
-
     try:
         await log_analytics_event("github_sync", {
             "candidate_id": candidate_id,
@@ -1771,8 +1129,9 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, db: Sessi
         }
     }
 
-
-# ── GDPR COMPLIANCE ENDPOINTS ───────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# GET /candidates/{candidate_id}/gdpr-export
+# ─────────────────────────────────────────────────────────────
 
 @router.get("/{candidate_id}/gdpr-export")
 async def gdpr_export_candidate(
@@ -1784,13 +1143,7 @@ async def gdpr_export_candidate(
     GDPR compliant candidate data export: returns raw decrypted PII fields for verification.
     Logs an audit event for compliance tracking.
     """
-    from db.supabase_client import fetch_candidate_by_id, log_analytics_event
-    from datetime import datetime
-    
-    candidate = await fetch_candidate_by_id(candidate_id)
-    if not candidate:
-        candidate = next((c for c in candidates_db if c["id"] == candidate_id), None)
-        
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
@@ -1807,6 +1160,9 @@ async def gdpr_export_candidate(
         "exported_data": candidate
     }
 
+# ─────────────────────────────────────────────────────────────
+# DELETE /candidates/{candidate_id}/gdpr-forget
+# ─────────────────────────────────────────────────────────────
 
 @router.delete("/{candidate_id}/gdpr-forget", dependencies=[Depends(require_permission(Permission.DELETE_CANDIDATE))])
 async def gdpr_forget_candidate(
@@ -1818,24 +1174,191 @@ async def gdpr_forget_candidate(
     GDPR 'Right to be Forgotten' candidate deletion: permanently purges a candidate.
     Logs an audit event before deleting.
     """
-    from db.supabase_client import fetch_candidate_by_id, delete_candidate, log_analytics_event
-    from datetime import datetime
-    
-    candidate = await fetch_candidate_by_id(candidate_id)
-    if candidate:
-        # Log GDPR forget action
-        await log_analytics_event("GDPR_DATA_DELETE", {
-            "candidate_id": candidate_id,
-            "candidate_name": candidate.get("name"),
-            "performed_by_user": current_user.get("email"),
-            "timestamp": datetime.now().isoformat()
-        })
-        await delete_candidate(candidate_id)
-        return {"status": "success", "message": f"Candidate '{candidate.get('name')}' successfully forgotten."}
-        
-    match = next((c for c in candidates_db if c["id"] == candidate_id), None)
-    if not match:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
-    candidates_db.remove(match)
-    return {"status": "success", "message": f"Candidate '{match.get('name')}' successfully forgotten from memory."}
+    # Log GDPR forget action
+    await log_analytics_event("GDPR_DATA_DELETE", {
+        "candidate_id": candidate_id,
+        "candidate_name": candidate.get("name"),
+        "performed_by_user": current_user.get("email"),
+        "timestamp": datetime.now().isoformat()
+    })
+    await delete_candidate(candidate_id, tenant_id)
+    return {"status": "success", "message": f"Candidate '{candidate.get('name')}' successfully forgotten."}
+
+# ─────────────────────────────────────────────────────────────
+# GET /candidates/platforms/{username}
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/platforms/{username}", response_model=PlatformSignalsResponse)
+async def fetch_platform_signals(
+    username: str,
+    platforms: str = Query(
+        "github",
+        description="Comma-separated platforms: github,codeforces,leetcode,codechef",
+    ),
+) -> PlatformSignalsResponse:
+    """
+    Fetch raw signal data from specified platforms for a given username.
+    """
+    platform_list = [p.strip().lower() for p in platforms.split(",") if p.strip()]
+
+    if not platform_list:
+        raise HTTPException(status_code=400, detail="At least one platform is required.")
+
+    valid_platforms = {"github", "codeforces", "leetcode", "codechef"}
+    invalid = set(platform_list) - valid_platforms
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid platforms: {', '.join(invalid)}. Valid: {', '.join(valid_platforms)}",
+        )
+
+    tasks: dict[str, Any] = {}
+    if "github" in platform_list:
+        tasks["github"] = fetch_github_signals(username)
+    if "codeforces" in platform_list:
+        tasks["codeforces"] = fetch_codeforces(username)
+    if "leetcode" in platform_list:
+        tasks["leetcode"] = fetch_leetcode(username)
+    if "codechef" in platform_list:
+        tasks["codechef"] = fetch_codechef(username)
+
+    keys = list(tasks.keys())
+    results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+    signals: dict[str, Any] = {}
+    for key, result in zip(keys, results):
+        if isinstance(result, Exception):
+            signals[key] = {"error": str(result)}
+        else:
+            signals[key] = result if result else {}
+
+    return PlatformSignalsResponse(
+        username=username,
+        platforms_queried=platform_list,
+        signals=signals,
+    )
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/shortlist — 0/1 Knapsack DP
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/shortlist")
+async def shortlist_by_budget(request: dict[str, Any]) -> JSONResponse:
+    """
+    Select candidates to maximize total score within budget using 0/1 Knapsack DP.
+    Algorithm: Dynamic Programming (0/1 Knapsack)
+    Time Complexity: O(n × budget), Space: O(n × budget)
+    """
+    candidates = request.get("candidates", [])
+    budget = request.get("budget", 10)
+
+    result = knapsack_shortlist(candidates, budget)
+    return JSONResponse(content=result, status_code=200)
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/skill-gap — Graph + BFS
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/skill-gap")
+async def analyze_skill_gap(request: dict[str, Any]) -> JSONResponse:
+    """
+    Find missing skills and shortest learning path using BFS on skill graph.
+    Algorithm: Graph Traversal + BFS
+    Time Complexity: O(V + E), Space: O(V + E)
+    """
+    from algorithms.skill_graph import build_skill_graph
+
+    current_skills = request.get("current_skills", [])
+    required_skills = request.get("required_skills", [])
+
+    graph = build_skill_graph()
+    result = find_learning_path(current_skills, required_skills, graph)
+    return JSONResponse(content=result, status_code=200)
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/schedule — Greedy Activity Selection
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/schedule")
+async def schedule_interviews_endpoint(request: dict[str, Any]) -> JSONResponse:
+    """
+    Schedule maximum non-overlapping interviews using Greedy Activity Selection.
+    Algorithm: Greedy (Activity Selection)
+    Time Complexity: O(n log n) for sorting, Space: O(n)
+    """
+    candidates = request.get("candidates", [])
+
+    result = schedule_interviews(candidates)
+    return JSONResponse(content=result, status_code=200)
+
+# ─────────────────────────────────────────────────────────────
+# POST /candidates/rank-sorted — Merge Sort with Rank Delta
+# ─────────────────────────────────────────────────────────────
+
+@router.post("/rank-sorted")
+async def rank_candidates_sorted(request: dict[str, Any]) -> JSONResponse:
+    """
+    Sort candidates by fusion score with rank delta tracking using Merge Sort.
+    Algorithm: Divide & Conquer (Merge Sort)
+    Time Complexity: O(n log n), Space: O(n)
+    """
+    candidates = request.get("candidates", [])
+
+    result = merge_sort_candidates(candidates)
+    return JSONResponse(content=result, status_code=200)
+
+# ─────────────────────────────────────────────────────────────
+# GET /candidates/github/{username} — Live GitHub signals
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/github/{username}")
+async def get_github_signals(username: str):
+    """
+    Fetch live GitHub signals for a candidate and return stats + score.
+    Uses fetch_github_signals() (async httpx) + score_github().
+    Time Complexity: O(1) network calls, O(r) repo parsing where r = repo count
+    """
+    from signals.github_signal import fetch_github_signals, score_github, analyze_github_profile
+
+    # Strip github.com/ prefix if the full URL was passed
+    clean = username.strip().replace("https://", "").replace("http://", "")
+    if clean.startswith("github.com/"):
+        clean = clean[len("github.com/"):]
+    clean = clean.strip("/")
+
+    if not clean:
+        return {"error": "Invalid username"}
+
+    signals = await fetch_github_signals(clean)
+    if not signals:
+        return {"error": f"GitHub profile '{clean}' not found or is private"}
+
+    score = score_github(signals)
+    profile_analysis = analyze_github_profile(signals, [], "backend")
+    return {
+        "username":                clean,
+        "score":                   round(score * 100),   # 0-100
+        "account_age_years":       signals.get("account_age_years", 0),
+        "total_repos":             signals.get("total_repos", 0),
+        "original_repos":          signals.get("original_repos", 0),
+        "total_stars":             signals.get("total_stars", 0),
+        "top_repo_stars":          signals.get("top_repo_stars", 0),
+        "languages":               signals.get("languages", []),
+        "commit_frequency_per_week": signals.get("commit_frequency_per_week", 0),
+        "contribution_streak_estimate": signals.get("contribution_streak_estimate", 0),
+        "open_source_prs_estimate": signals.get("open_source_prs_estimate", 0),
+        "has_tests":               signals.get("has_tests", False),
+        "has_readme_ratio":        signals.get("has_readme_ratio", 0),
+        "profile_completeness":    signals.get("profile_completeness", 0),
+        "followers":               signals.get("followers", 0),
+        "raw_bio":                 signals.get("raw_bio", ""),
+        "engineering_score":       round(profile_analysis.get("engineering_score", 0)),
+        "open_source_score":       round(profile_analysis.get("open_source_score", 0)),
+        "project_maturity_score":  round(profile_analysis.get("project_maturity_score", 0)),
+        "verified_skills":         profile_analysis.get("verified_skills", []),
+        "unsupported_claims":      profile_analysis.get("unsupported_claims", []),
+    }

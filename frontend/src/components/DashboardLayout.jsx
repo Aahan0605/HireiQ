@@ -184,24 +184,63 @@ export default function DashboardLayout() {
         {mobileOpen && (
           <motion.div
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            className={`md:hidden fixed inset-0 z-40 bg-page pt-20 px-6 transition-colors duration-300`}>
-            <nav className="flex flex-col gap-3">
-              {navItems.map(({ path, label, icon: Icon }) => (
-                <Link key={path} to={path} onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 text-lg font-bold py-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  <Icon className="h-5 w-5" /> {label}
-                </Link>
-              ))}
-              <button
-                onClick={() => {
-                  setMobileOpen(false);
-                  logout();
-                }}
-                className={`flex items-center gap-3 text-lg font-bold py-2 text-red-500`}
-              >
-                <LogOut className="h-5 w-5" /> Sign Out
-              </button>
-            </nav>
+            className={`md:hidden fixed inset-0 z-40 bg-page pt-24 pb-8 px-6 transition-colors duration-300`}>
+            <div className="flex flex-col h-full justify-between">
+              <nav className="flex flex-col gap-3">
+                {navItems.map(({ path, label, icon: Icon }) => (
+                  <Link key={path} to={path} onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-3 text-lg font-bold py-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    <Icon className="h-5 w-5" /> {label}
+                  </Link>
+                ))}
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    logout();
+                  }}
+                  className={`flex items-center gap-3 text-lg font-bold py-2 text-red-500`}
+                >
+                  <LogOut className="h-5 w-5" /> Sign Out
+                </button>
+              </nav>
+
+              <div className="border-t border-white/10 pt-4 space-y-4">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`h-2 w-2 rounded-full ${
+                    workerStatus.status === 'online' ? 'bg-emerald-500 shadow-glow-emerald animate-pulseGlow' : 'bg-amber-500 animate-pulse'
+                  }`} />
+                  <span className="text-gray-400">
+                    {workerStatus.status === 'online' ? 'Worker: Active' : 'Worker: Fallback'}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                    <span>{plan} Usage</span>
+                    <span>{plan === 'Free' ? `${quotaUsed}/5 parses` : `${quotaUsed}/∞ parses`}</span>
+                  </div>
+                  {plan === 'Free' && (
+                    <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                      <div 
+                        className={`h-full rounded-full bg-gradient-to-r ${
+                          quotaUsed >= 5 ? 'from-rose-500 to-red-500' : 'from-emerald-400 to-emerald-600'
+                        }`} 
+                        style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} 
+                      />
+                    </div>
+                  )}
+                  {plan === 'Free' && (
+                    <Link 
+                      to="/settings?tab=billing" 
+                      onClick={() => setMobileOpen(false)}
+                      className="mt-2 block text-center rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 hover:border-emerald-500/60 p-2 text-xs font-semibold text-emerald-400 hover:text-white transition-all shadow-glow-mint"
+                    >
+                      Upgrade to Pro ⚡
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

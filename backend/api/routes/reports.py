@@ -1,28 +1,27 @@
 import io
 import logging
+import csv
 from fpdf import FPDF
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from api.core.dependencies import get_current_user
-from .candidates import candidates_db as SEEDED_CANDIDATES
+from api.core.rbac import require_tenant
 from db.supabase_client import fetch_all_candidates
 
 logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/reports",
     tags=["reports"],
-    dependencies=[Depends(get_current_user)]
+    dependencies=[Depends(require_tenant)]
 )
 
 class CandidateReport(FPDF):
     def header(self):
-        # Logo placeholder or Title
         self.set_font('helvetica', 'B', 24)
         self.set_text_color(33, 37, 41) # Dark gray
         self.cell(0, 20, 'HireIQ ATS Report', border=False, align='L')
         
-        # Date on the right
         self.set_font('helvetica', '', 10)
         self.set_text_color(108, 117, 125) # Muted gray
         self.cell(0, 20, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", border=False, align='R')
@@ -35,17 +34,15 @@ class CandidateReport(FPDF):
         self.cell(0, 10, f'Page {self.page_no()} | HireIQ Intelligence Systems', align='C')
 
 @router.get("/candidates/pdf")
-async def export_candidates_pdf():
+async def export_candidates_pdf(tenant_id: str = Depends(require_tenant)):
     """
-    Generate and return a professional PDF report of all candidates.
+    Generate and return a professional PDF report of all candidates for the tenant.
     """
     try:
-        db_candidates = await fetch_all_candidates()
-        db_ids = {c["id"] for c in db_candidates}
-        all_candidates = db_candidates + [c for c in SEEDED_CANDIDATES if c["id"] not in db_ids]
+        all_candidates = await fetch_all_candidates(tenant_id)
     except Exception as e:
-        logger.warning("Supabase fetch failed during PDF export: %s", e)
-        all_candidates = SEEDED_CANDIDATES
+        logger.error("Supabase fetch failed during PDF export: %s", e)
+        all_candidates = []
 
     # Create PDF object
     pdf = CandidateReport()
@@ -92,25 +89,16 @@ async def export_candidates_pdf():
         headers={"Content-Disposition": "attachment; filename=HireIQ_Candidates_Report.pdf"}
     )
 
-
 @router.get("/candidates/csv")
-async def export_candidates_csv():
+async def export_candidates_csv(tenant_id: str = Depends(require_tenant)):
     """
-    Generate and stream a CSV report of all candidates.
+    Generate and stream a CSV report of all candidates for the tenant.
     """
-    import csv
-    import io
-    from fastapi.responses import StreamingResponse
-    from db.supabase_client import fetch_all_candidates
-    from .candidates import candidates_db as SEEDED_CANDIDATES
-
     try:
-        db_candidates = await fetch_all_candidates()
-        db_ids = {c["id"] for c in db_candidates}
-        all_candidates = db_candidates + [c for c in SEEDED_CANDIDATES if c["id"] not in db_ids]
+        all_candidates = await fetch_all_candidates(tenant_id)
     except Exception as e:
-        logger.warning("Supabase fetch failed during CSV export: %s", e)
-        all_candidates = SEEDED_CANDIDATES
+        logger.error("Supabase fetch failed during CSV export: %s", e)
+        all_candidates = []
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -140,4 +128,3 @@ async def export_candidates_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=HireIQ_Candidates_Report.csv"}
     )
-

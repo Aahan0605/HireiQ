@@ -3,11 +3,42 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, Clock, Edit2, Check, X, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import StatCard from '../components/StatCard';
 import RecentCandidates from '../components/RecentCandidates';
 import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
+
+const PIE_COLORS = ['#10b981', '#06b6d4', '#f59e0b', '#6366f1'];
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-black/90 backdrop-blur-md border border-white/10 p-3 rounded-xl shadow-xl">
+        <p className="text-gray-400 text-xs font-semibold">{label}</p>
+        <p className="text-emerald-400 text-sm font-bold mt-1">
+          {payload[0].name}: {payload[0].value}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-black/90 backdrop-blur-md border border-white/10 p-3 rounded-xl shadow-xl">
+        <p className="text-gray-400 text-xs font-semibold">{payload[0].name}</p>
+        <p className="text-cyan-400 text-sm font-bold mt-1">
+          Candidates: {payload[0].value}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
 
 // ── Initial interview data ─────────────────────────────────
 const INITIAL_INTERVIEWS = [
@@ -817,6 +848,103 @@ export default function Dashboard() {
                   <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${Math.min(100, (shortlistCount / 5) * 100)}%` }} />
                 </div>
               </motion.button>
+            </div>
+
+            {/* Analytics Section */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
+              {/* Hiring Funnel Bar Chart */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
+                className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 flex flex-col justify-between h-96">
+                <div>
+                  <h3 className="text-theme-1 font-semibold text-base">Hiring Funnel</h3>
+                  <p className="text-theme-3 text-xs">Candidates by pipeline stage</p>
+                </div>
+                <div className="h-64 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics?.pipeline_stages || []} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <XAxis dataKey="stage" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                      <Bar dataKey="count" name="Candidates" fill="url(#funnelGradient)" radius={[4, 4, 0, 0]} />
+                      <defs>
+                        <linearGradient id="funnelGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />
+                          <stop offset="100%" stopColor="#059669" stopOpacity={0.2} />
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+
+              {/* Match Score Distribution Bar Chart */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
+                className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 flex flex-col justify-between h-96">
+                <div>
+                  <h3 className="text-theme-1 font-semibold text-base">Score Distribution</h3>
+                  <p className="text-theme-3 text-xs">Candidate counts by match score range</p>
+                </div>
+                <div className="h-64 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics?.score_distribution || []} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <XAxis dataKey="range" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                      <Bar dataKey="count" name="Candidates" fill="url(#scoreGradient)" radius={[4, 4, 0, 0]} />
+                      <defs>
+                        <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.8} />
+                          <stop offset="100%" stopColor="#0891b2" stopOpacity={0.2} />
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+
+              {/* Education Breakdown Pie Chart */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
+                className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 flex flex-col justify-between h-96">
+                <div>
+                  <h3 className="text-theme-1 font-semibold text-base">Education Tiers</h3>
+                  <p className="text-theme-3 text-xs">Breakdown of academic qualifications</p>
+                </div>
+                <div className="h-52 mt-4 relative flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={analytics?.education_breakdown || []}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="count"
+                        nameKey="tier"
+                      >
+                        {(analytics?.education_breakdown || []).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Center Text */}
+                  <div className="absolute flex flex-col items-center justify-center">
+                    <span className="text-theme-3 text-[10px] uppercase tracking-wider font-semibold">Total</span>
+                    <span className="text-theme-1 text-2xl font-bold">{analytics?.total_candidates ?? 0}</span>
+                  </div>
+                </div>
+                {/* Custom Legend */}
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2 text-[11px] text-theme-2">
+                  {(analytics?.education_breakdown || []).map((entry, index) => (
+                    <div key={entry.tier} className="flex items-center gap-1.5 font-medium">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
+                      <span>{entry.tier}: {entry.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
             </div>
 
             {/* Recent Analyses */}

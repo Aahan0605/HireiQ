@@ -57,7 +57,7 @@
 
 ### 📋 Visual Hiring Kanban Board
 *   **Pipeline Management**: Drag-and-drop candidate cards across 6 stages: `Screening` → `Shortlisted` → `Interviewing` → `Offer` → `Hired` / `Rejected`.
-*   **Real-time Persistence**: Stage changes are saved to SQLite/Supabase via PATCH API and localStorage for offline resilience.
+*   **Real-time Persistence**: Stage changes are saved to Supabase via PATCH API and localStorage for offline resilience.
 *   **View Toggle**: Switch between traditional List View and visual Kanban Board with a single click.
 
 ### 🔍 Advanced Recruiter Filters
@@ -88,16 +88,44 @@
 ## 🛠️ Getting Started
 
 ### 📋 Prerequisites
-*   **Node.js** (v18+)
-*   **Python** (3.9+)
+*   **Docker** and **Docker Compose**
+*   **Node.js** (v18+) & **Python** (3.9+) (only for local development without Docker)
 
-### 1️⃣ Clone and Navigate
-```bash
-git clone https://github.com/Aahan0605/HireiQ.git
-cd HireiQ
-```
+### 🐋 Docker Quickstart (Recommended)
 
-### 2️⃣ Initialize the Backend
+1. Clone the repository and navigate to the directory:
+   ```bash
+   git clone https://github.com/Aahan0605/HireiQ.git
+   cd HireiQ
+   ```
+
+2. Create a `.env` file in the root directory and define the required variables (see `.env.example` templates):
+   ```env
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_KEY=your-service-role-key-here
+   GEMINI_API_KEY=your-gemini-api-key-here
+   JWT_SECRET_KEY=change-this-to-a-long-random-string
+   ```
+
+3. Launch the complete platform using Docker Compose:
+   ```bash
+   docker compose up --build
+   ```
+
+4. Seed the demo recruiter workspace (`demo@hireiq.dev` / `Demo1234!`):
+   ```bash
+   docker compose exec backend python scripts/seed_demo.py
+   ```
+
+5. Open your browser and navigate to [http://localhost](http://localhost) (mapped to port 80). Log in with:
+   - **Email**: `demo@hireiq.dev`
+   - **Password**: `Demo1234!`
+
+---
+
+### 💻 Local Development Setup (Manual)
+
+#### 1️⃣ Initialize the Backend
 ```bash
 cd backend
 
@@ -108,7 +136,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Add environment variables (optional for Gemini Q&A)
+# Add environment variables
+echo "SUPABASE_URL=your-supabase-url" >> .env
+echo "SUPABASE_SERVICE_KEY=your-supabase-key" >> .env
 echo "GEMINI_API_KEY=your_gemini_key_here" >> .env
 echo "JWT_SECRET_KEY=your_secure_jwt_secret" >> .env
 
@@ -117,7 +147,7 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 *   **API Docs**: Access [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger page.
 
-### 3️⃣ Initialize the Frontend
+#### 2️⃣ Initialize the Frontend
 Open a new terminal session in the root folder:
 ```bash
 cd frontend
@@ -126,7 +156,6 @@ npm run dev
 ```
 *   **App UI**: Access [http://localhost:6901](http://localhost:6901) on your local browser.
 *   **Sign Up**: Register a new recruiter account directly on the Sign Up page.
-*   **First-time setup**: Register via `/register`. To seed an admin: `python backend/scripts/seed_admin.py --email you@yourdomain.com`
 
 ---
 
@@ -211,7 +240,7 @@ HireIQ is styled with a premium **Glassmorphism & Neon Dark** layout:
 | Layer | Technologies |
 | :--- | :--- |
 | **Frontend** | React 18, Vite 5, Tailwind CSS, Framer Motion, Recharts, Lucide Icons |
-| **Backend** | FastAPI, Python 3.9+, Pydantic, SQLite, Supabase (optional) |
+| **Backend** | FastAPI, Python 3.9+, Pydantic, Supabase PostgreSQL database |
 | **AI/ML** | TF-IDF + Cosine Similarity, Google Gemini API, pdfplumber |
 | **Auth** | JWT (PyJWT), bcrypt password hashing |
 | **Algorithms** | Merge Sort (ranking), Greedy Activity Selection (scheduling), 0/1 Knapsack (shortlisting), BFS (skill graph) |

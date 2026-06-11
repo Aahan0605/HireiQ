@@ -1,482 +1,226 @@
-import json
-import logging
-import uuid
-import datetime
 import os
-from pathlib import Path
-from typing import Any
-from sqlalchemy import desc
-from db.session import SessionLocal, engine
-from db.models import User, Candidate, Job, AuditLog, OrganizationMember, Subscription
-from db.crypto import encrypt_field, decrypt_field
-from api.core.rbac import get_tenant_id
+import uuid
+import logging
+from datetime import datetime
+from functools import lru_cache
+from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
-# Auto-migrate tables on start for local dev fallback (Alembic runs in prod)
-try:
-    from db.models import Base
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database schemas bootstrapped successfully.")
-except Exception as e:
-    logger.error("Failed to auto-migrate database tables: %s", e)
+@lru_cache(maxsize=1)
+def get_supabase() -> Client:
+    url = os.environ.get("SUPABASE_URL")
+    if not url:
+        raise KeyError("SUPABASE_URL environment variable is missing.")
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
+    if not key:
+        raise KeyError("Neither SUPABASE_SERVICE_KEY nor SUPABASE_KEY is set in environment.")
+    return create_client(url, key)
 
-# ─── Helper Deserializers ──────────────────────────────────────
+# ─── Candidate Mappers ───
 
-def _json_loads(v: str | None) -> Any:
-    if not v:
-        return []
-    try:
-        return json.loads(v)
-    except Exception:
-        return []
-
-def _json_dumps(v: Any) -> str:
-    if v is None:
-        return "[]"
-    return json.dumps(v)
-
-def _candidate_to_dict(c: Candidate) -> dict:
-    """Serialize Candidate SQLAlchemy object to dict, decrypting PII fields."""
-    name = decrypt_field(c.name)
-    email = decrypt_field(c.email)
-    resume_text = decrypt_field(c.resume_text)
+def _candidate_to_dict(c: dict) -> dict:
+    """Serialize Supabase candidate dict to frontend format."""
+    if not c:
+        return {}
+        
+    status_map = {
+        "screening": "Screening",
+        "shortlisted": "Shortlisted",
+        "interviewing": "Interviewing",
+        "offer": "Offer",
+        "hired": "Hired",
+        "rejected": "Rejected"
+    }
+    status = status_map.get(c.get("pipeline_stage", ""), "Screening")
     
-    skills = _json_loads(c.skills)
-    experience = _json_loads(c.experience)
-    job_matches = _json_loads(c.job_matches)
-    radar_data = _json_loads(c.radar_data)
-    qa = _json_loads(c.qa)
-    insights = _json_loads(c.insights)
+    # Check if job title is pre-fetched/joined
+    job_title = "Software Engineer"
+    if "jobs" in c and c["jobs"]:
+        if isinstance(c["jobs"], dict):
+            job_title = c["jobs"].get("title", job_title)
+        elif isinstance(c["jobs"], list) and c["jobs"]:
+            job_title = c["jobs"][0].get("title", job_title)
+            
+    job_matches = []
+    if c.get("job_id"):
+        job_matches.append({
+            "job_id": str(c["job_id"]),
+            "job_title": job_title,
+            "tfidf_score": c.get("match_score", 0.0),
+            "matched_skills": c.get("skills") or [],
+            "missing_skills": []
+        })
+        
+    radar_data = [
+        {"subject": "Commit Freq", "A": min(100, (c.get("github_commits_last_year") or 0) // 5), "fullMark": 100},
+        {"subject": "Polyglot", "A": min(100, len(c.get("github_languages") or []) * 15), "fullMark": 100},
+        {"subject": "Stars", "A": min(100, (c.get("github_stars") or 0) * 10), "fullMark": 100},
+        {"subject": "Experience", "A": min(100, (c.get("experience_years") or 0) * 10), "fullMark": 100},
+        {"subject": "ATS Score", "A": round(c.get("ats_score", 0.0) or c.get("match_score", 0.0)), "fullMark": 100}
+    ]
     
+    experience = [
+        {"title": "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
+    ]
+    
+    insights = {
+        "completeness_score": c.get("completeness_score", 0.0),
+        "ats_score": c.get("ats_score", 0.0),
+        "strengths": c.get("key_strengths") or [],
+        "weaknesses": c.get("development_gaps") or [],
+        "concerns": c.get("potential_concerns") or [],
+        "career_progression": "Stable trajectory"
+    }
+    
+    summary = c.get("summary")
+    if not summary:
+        summary = c.get("raw_text", "")[:200] + "..." if c.get("raw_text") else "No summary available."
+        
     return {
-        "id": c.id,
-        "organization_id": c.organization_id,
-        "name": name,
-        "email": email,
-        "role": c.role,
-        "github": c.github,
-        "linkedin": c.linkedin,
-        "location": c.location,
-        "score": c.score,
-        "blind_score": c.blind_score,
-        "status": c.status,
-        "summary": c.summary,
-        "resume_text": resume_text or "",
-        "skills": skills,
+        "id": str(c.get("id")),
+        "organization_id": str(c.get("recruiter_id")),
+        "name": c.get("full_name") or "Unknown",
+        "email": c.get("email") or "",
+        "role": c.get("career_tier") or "Software Engineer",
+        "github": c.get("github_url") or "",
+        "linkedin": "",
+        "location": c.get("location") or "Remote",
+        "score": round(c.get("match_score", 0.0) or 0.0),
+        "blind_score": round(c.get("blind_score", 0.0) or 0.0),
+        "status": status,
+        "summary": summary,
+        "resume_text": c.get("raw_text") or "",
+        "skills": c.get("skills") or [],
         "experience": experience,
         "job_matches": job_matches,
-        "jobMatches": job_matches,  # frontend camelCase compatibility
+        "jobMatches": job_matches,
         "radar_data": radar_data,
-        "radarData": radar_data,    # frontend camelCase compatibility
-        "qa": qa,
+        "radarData": radar_data,
+        "qa": c.get("interview_questions") or [],
         "insights": insights,
-        "analyzed_at": c.analyzed_at.isoformat() if c.analyzed_at else None
+        "analyzed_at": c.get("created_at")
     }
 
-def _job_to_dict(j: Job) -> dict:
-    """Serialize Job SQLAlchemy object to dict."""
-    return {
-        "id": j.id,
-        "organization_id": j.organization_id,
-        "title": j.title,
-        "company": j.company,
-        "department": j.department,
-        "employment_type": j.employment_type,
-        "location": j.location,
-        "description": j.description,
-        "required_skills": j.required_skills,
-        "preferred_skills": j.preferred_skills,
-        "experience_required": j.experience_required,
-        "max_experience": j.max_experience,
-        "salary_range": j.salary_range,
-        "status": j.status,
-        "created_at": j.created_at.isoformat() if j.created_at else None
+# ─── Public API ───
+
+async def fetch_all_candidates(recruiter_id: str = None) -> list[dict]:
+    supabase = get_supabase()
+    query = supabase.table("candidates").select("*, jobs(title)")
+    if recruiter_id:
+        query = query.eq("recruiter_id", recruiter_id)
+    res = query.execute()
+    return [_candidate_to_dict(c) for c in res.data]
+
+async def fetch_candidate_by_id(candidate_id: str, recruiter_id: str = None) -> dict | None:
+    supabase = get_supabase()
+    query = supabase.table("candidates").select("*, jobs(title)").eq("id", candidate_id)
+    if recruiter_id:
+        query = query.eq("recruiter_id", recruiter_id)
+    res = query.execute()
+    return _candidate_to_dict(res.data[0]) if res.data else None
+
+async def delete_candidate(candidate_id: str, recruiter_id: str = None) -> bool:
+    supabase = get_supabase()
+    query = supabase.table("candidates").delete().eq("id", candidate_id)
+    if recruiter_id:
+        query = query.eq("recruiter_id", recruiter_id)
+    query.execute()
+    return True
+
+async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
+    supabase = get_supabase()
+    
+    # Map status to pipeline_stage (lowercase)
+    status_to_stage = {
+        "Screening": "screening",
+        "Shortlisted": "shortlisted",
+        "Interviewing": "interviewing",
+        "Offer": "offer",
+        "Hired": "hired",
+        "Rejected": "rejected"
     }
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#   PUBLIC API — candidates (Scope-Isolated by tenant_id)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def save_candidate(candidate: dict) -> dict:
-    """Upsert a candidate model, encrypting PII fields."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    if not tenant_id:
-        tenant_id = candidate.get("organization_id", "default-tenant")
-
-    try:
-        cand_id = candidate.get("id")
-        existing = db.query(Candidate).filter(Candidate.id == cand_id).first()
+    status_str = candidate.get("status", "Screening")
+    pipeline_stage = status_to_stage.get(status_str, "screening")
+    
+    # Map jobMatches / job_matches to job_id and match_score
+    job_id = None
+    match_score = candidate.get("score") or candidate.get("final_score") or 0.0
+    job_matches = candidate.get("jobMatches") or candidate.get("job_matches") or []
+    if job_matches:
+        job_id = job_matches[0].get("job_id")
+        match_score = job_matches[0].get("tfidf_score") or match_score
         
-        # Encrypt name, email, and resume_text fields
-        enc_name = encrypt_field(candidate.get("name"))
-        enc_email = encrypt_field(candidate.get("email"))
-        if "resume_text" in candidate:
-            enc_resume = encrypt_field(candidate.get("resume_text"))
-        else:
-            enc_resume = existing.resume_text if existing else None
+    insights = candidate.get("insights") or {}
+    
+    db_record = {
+        "full_name": candidate.get("name"),
+        "email": candidate.get("email"),
+        "location": candidate.get("location", "Remote"),
+        "career_tier": candidate.get("role", "Software Engineer"),
+        "skills": candidate.get("skills") or [],
+        "raw_text": candidate.get("resume_text") or "",
+        "match_score": float(match_score),
+        "completeness_score": float(insights.get("completeness_score") or 0.0),
+        "ats_score": float(insights.get("ats_score") or 0.0),
+        "key_strengths": insights.get("strengths") or [],
+        "development_gaps": insights.get("weaknesses") or [],
+        "potential_concerns": insights.get("concerns") or [],
+        "pipeline_stage": pipeline_stage,
+        "github_url": candidate.get("github") or "",
+        "blind_score": float(candidate.get("blind_score") or match_score),
+        "interview_questions": candidate.get("qa") or [],
+        "summary": candidate.get("summary")
+    }
+    
+    # Experience years
+    if "experience_years" in candidate:
+        db_record["experience_years"] = int(candidate["experience_years"])
+    elif candidate.get("experience") and isinstance(candidate["experience"], list) and candidate["experience"]:
+        db_record["experience_years"] = len(candidate["experience"]) * 2 # heuristic fallback
+        
+    # Map recruiter_id
+    r_id = recruiter_id or candidate.get("organization_id") or candidate.get("recruiter_id")
+    if r_id:
+        db_record["recruiter_id"] = r_id
+        
+    if job_id:
+        db_record["job_id"] = job_id
+        
+    cand_id = candidate.get("id")
+    if not cand_id:
+        cand_id = str(uuid.uuid4())
+    db_record["id"] = cand_id
+    
+    res = supabase.table("candidates").upsert(db_record).execute()
+    return _candidate_to_dict(res.data[0]) if res.data else {}
 
-        if existing:
-            existing.organization_id = tenant_id
-            existing.name = enc_name
-            existing.email = enc_email
-            existing.role = candidate.get("role", existing.role)
-            existing.github = candidate.get("github", existing.github)
-            existing.linkedin = candidate.get("linkedin", existing.linkedin)
-            existing.location = candidate.get("location", existing.location)
-            existing.score = candidate.get("score", existing.score)
-            existing.blind_score = candidate.get("blind_score", existing.blind_score)
-            existing.status = candidate.get("status", existing.status)
-            existing.summary = candidate.get("summary", existing.summary)
-            existing.resume_text = enc_resume
-            existing.skills = _json_dumps(candidate.get("skills", _json_loads(existing.skills)))
-            existing.experience = _json_dumps(candidate.get("experience", _json_loads(existing.experience)))
-            existing.job_matches = _json_dumps(candidate.get("jobMatches", candidate.get("job_matches", _json_loads(existing.job_matches))))
-            existing.radar_data = _json_dumps(candidate.get("radarData", candidate.get("radar_data", _json_loads(existing.radar_data))))
-            existing.qa = _json_dumps(candidate.get("qa", _json_loads(existing.qa)))
-            existing.insights = _json_dumps(candidate.get("insights", _json_loads(existing.insights)))
-        else:
-            new_cand = Candidate(
-                id=cand_id or str(uuid.uuid4()),
-                organization_id=tenant_id,
-                name=enc_name,
-                email=enc_email,
-                role=candidate.get("role", "Software Engineer"),
-                github=candidate.get("github", ""),
-                linkedin=candidate.get("linkedin", ""),
-                location=candidate.get("location", "Remote"),
-                score=candidate.get("score", 0),
-                blind_score=candidate.get("blind_score", candidate.get("score", 0)),
-                status=candidate.get("status", "Analyzing"),
-                summary=candidate.get("summary", ""),
-                resume_text=enc_resume if enc_resume is not None else "",
-                skills=_json_dumps(candidate.get("skills", [])),
-                experience=_json_dumps(candidate.get("experience", [])),
-                job_matches=_json_dumps(candidate.get("jobMatches", candidate.get("job_matches", []))),
-                radar_data=_json_dumps(candidate.get("radarData", candidate.get("radar_data", []))),
-                qa=_json_dumps(candidate.get("qa", [])),
-                insights=_json_dumps(candidate.get("insights", {}))
-            )
-            db.add(new_cand)
-            
-        db.commit()
-        return candidate
-    except Exception as e:
-        db.rollback()
-        logger.error("Failed to save candidate: %s", e)
-        raise e
-    finally:
-        db.close()
+# ─── Job Mappers ───
 
-async def fetch_all_candidates() -> list[dict]:
-    """Fetch all candidates belonging to active tenant context, ordered by score descending."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Candidate)
-        if tenant_id:
-            query = query.filter(Candidate.organization_id == tenant_id)
-        results = query.order_by(desc(Candidate.score)).all()
-        return [_candidate_to_dict(c) for c in results]
-    finally:
-        db.close()
+def _job_to_dict(j: dict) -> dict:
+    if not j:
+        return {}
+    req_skills = j.get("required_skills")
+    if isinstance(req_skills, list):
+        j["required_skills"] = ",".join(req_skills)
+    j["organization_id"] = j.get("recruiter_id")
+    j.setdefault("company", "HireIQ Corp")
+    j.setdefault("department", "Engineering")
+    j.setdefault("employment_type", "Full-time")
+    j.setdefault("location", "Remote")
+    j.setdefault("experience_required", j.get("min_experience", 0))
+    j.setdefault("salary_range", "")
+    j.setdefault("status", "Open")
+    return j
 
-async def fetch_candidate_by_id(candidate_id: str) -> dict | None:
-    """Fetch a candidate by ID, scoped to active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Candidate).filter(Candidate.id == candidate_id)
-        if tenant_id:
-            query = query.filter(Candidate.organization_id == tenant_id)
-        c = query.first()
-        return _candidate_to_dict(c) if c else None
-    finally:
-        db.close()
-
-async def delete_candidate(candidate_id: str) -> bool:
-    """Delete candidate from active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Candidate).filter(Candidate.id == candidate_id)
-        if tenant_id:
-            query = query.filter(Candidate.organization_id == tenant_id)
-        candidate = query.first()
-        if candidate:
-            db.delete(candidate)
-            db.commit()
-            return True
-        return False
-    except Exception as e:
-        db.rollback()
-        logger.error("Failed to delete candidate: %s", e)
-        return False
-    finally:
-        db.close()
-
-async def get_candidate_count() -> int:
-    """Count candidates belonging to active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Candidate)
-        if tenant_id:
-            query = query.filter(Candidate.organization_id == tenant_id)
-        return query.count()
-    finally:
-        db.close()
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#   PUBLIC API — jobs (Scope-Isolated by tenant_id)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def save_job(job: dict) -> dict:
-    """Upsert job entity scoped to tenant."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    if not tenant_id:
-        tenant_id = job.get("organization_id", "default-tenant")
-
-    try:
-        job_id = str(job.get("id"))
-        existing = db.query(Job).filter(Job.id == job_id).first()
-        if existing:
-            existing.organization_id = tenant_id
-            existing.title = job.get("title", existing.title)
-            existing.company = job.get("company", existing.company)
-            existing.department = job.get("department", existing.department)
-            existing.employment_type = job.get("employment_type", existing.employment_type)
-            existing.location = job.get("location", existing.location)
-            existing.description = job.get("description", existing.description)
-            existing.required_skills = job.get("required_skills", existing.required_skills)
-            existing.preferred_skills = job.get("preferred_skills", existing.preferred_skills)
-            existing.experience_required = job.get("experience_required", existing.experience_required)
-            existing.max_experience = job.get("max_experience", existing.max_experience)
-            existing.salary_range = job.get("salary_range", existing.salary_range)
-            existing.status = job.get("status", existing.status)
-        else:
-            new_job = Job(
-                id=job_id,
-                organization_id=tenant_id,
-                title=job.get("title"),
-                company=job.get("company", "HireIQ Corp"),
-                department=job.get("department", "Engineering"),
-                employment_type=job.get("employment_type", "Full-time"),
-                location=job.get("location"),
-                description=job.get("description"),
-                required_skills=job.get("required_skills"),
-                preferred_skills=job.get("preferred_skills", ""),
-                experience_required=job.get("experience_required", 0),
-                max_experience=job.get("max_experience", 99),
-                salary_range=job.get("salary_range", ""),
-                status=job.get("status", "Open")
-            )
-            db.add(new_job)
-        db.commit()
-        return job
-    except Exception as e:
-        db.rollback()
-        logger.error("Failed to save job: %s", e)
-        raise e
-    finally:
-        db.close()
-
-async def fetch_all_jobs() -> list[dict]:
-    """Fetch all jobs scoped to active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Job)
-        if tenant_id:
-            query = query.filter(Job.organization_id == tenant_id)
-        results = query.order_by(desc(Job.created_at)).all()
-        return [_job_to_dict(j) for j in results]
-    finally:
-        db.close()
-
-async def fetch_job_by_id(job_id: str) -> dict | None:
-    """Fetch job by ID within active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Job).filter(Job.id == job_id)
-        if tenant_id:
-            query = query.filter(Job.organization_id == tenant_id)
-        j = query.first()
-        return _job_to_dict(j) if j else None
-    finally:
-        db.close()
-
-async def delete_job(job_id: str) -> bool:
-    """Delete a job by ID scoped to active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        query = db.query(Job).filter(Job.id == job_id)
-        if tenant_id:
-            query = query.filter(Job.organization_id == tenant_id)
-        job = query.first()
-        if job:
-            db.delete(job)
-            db.commit()
-            return True
-        return False
-    except Exception as e:
-        db.rollback()
-        logger.error("Failed to delete job: %s", e)
-        return False
-    finally:
-        db.close()
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#   PUBLIC API — users
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def save_user(user: dict) -> dict:
-    """Create or update user account."""
-    db = SessionLocal()
-    try:
-        user_id = user.get("id")
-        existing = db.query(User).filter(User.id == user_id).first()
-        if existing:
-            existing.email = user.get("email", existing.email)
-            existing.hashed_password = user.get("hashed_password", existing.hashed_password)
-            existing.role = user.get("role", existing.role)
-        else:
-            new_user = User(
-                id=user_id,
-                email=user.get("email"),
-                hashed_password=user.get("hashed_password"),
-                role=user.get("role", "Recruiter")
-            )
-            db.add(new_user)
-        db.commit()
-        return user
-    except Exception as e:
-        db.rollback()
-        logger.error("Failed to save user: %s", e)
-        raise e
-    finally:
-        db.close()
-
-async def fetch_user_by_email(email: str) -> dict | None:
-    db = SessionLocal()
-    try:
-        u = db.query(User).filter(User.email == email).first()
-        if not u:
-            return None
-        return {
-            "id": u.id,
-            "email": u.email,
-            "hashed_password": u.hashed_password,
-            "role": u.role,
-            "is_verified": u.is_verified
-        }
-    finally:
-        db.close()
-
-async def fetch_user_by_id(user_id: str) -> dict | None:
-    db = SessionLocal()
-    try:
-        u = db.query(User).filter(User.id == user_id).first()
-        if not u:
-            return None
-        return {
-            "id": u.id,
-            "email": u.email,
-            "hashed_password": u.hashed_password,
-            "role": u.role,
-            "is_verified": u.is_verified
-        }
-    finally:
-        db.close()
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#   PUBLIC API — analytics & status
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async def fetch_all_jobs(recruiter_id: str = None) -> list[dict]:
+    supabase = get_supabase()
+    query = supabase.table("jobs").select("*")
+    if recruiter_id:
+        query = query.eq("recruiter_id", recruiter_id)
+    res = query.execute()
+    return [_job_to_dict(j) for j in res.data]
 
 async def log_analytics_event(event_type: str, payload: dict):
-    db = SessionLocal()
-    tenant_id = get_tenant_id() or "system"
-    try:
-        event = AuditLog(
-            organization_id=tenant_id,
-            action=event_type,
-            ip_address=payload.get("ip_address", "127.0.0.1")
-        )
-        db.add(event)
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.warning("Failed to log audit event: %s", e)
-    finally:
-        db.close()
+    logger.info(f"Analytics Event: {event_type} - {payload}")
 
-async def get_analytics_summary() -> dict:
-    """Summarize stats for active tenant context."""
-    db = SessionLocal()
-    tenant_id = get_tenant_id()
-    try:
-        from db.models import Subscription
-        plan_name = "Free"
-        sub_status = "active"
-        if tenant_id:
-            sub = db.query(Subscription).filter(Subscription.organization_id == tenant_id).first()
-            if sub:
-                plan_name = sub.plan_name
-                sub_status = sub.status
-
-        query = db.query(Candidate)
-        if tenant_id:
-            query = query.filter(Candidate.organization_id == tenant_id)
-        
-        candidates = query.all()
-        total = len(candidates)
-        strong = sum(1 for c in candidates if c.score >= 85)
-        match = sum(1 for c in candidates if 60 <= c.score < 85)
-        weak = sum(1 for c in candidates if c.score < 60)
-        avg_score = sum(c.score for c in candidates) / total if total > 0 else 0
-        
-        # Recent uploads count
-        seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
-        recent = sum(1 for c in candidates if c.analyzed_at and c.analyzed_at >= seven_days_ago)
-        
-        # Top skills aggregation
-        skill_freq = {}
-        for c in candidates:
-            for s in _json_loads(c.skills):
-                skill_freq[s] = skill_freq.get(s, 0) + 1
-        top_skills = sorted(skill_freq.items(), key=lambda x: -x[1])[:10]
-        
-        # Fetch DB stats info
-        db_path = Path(__file__).resolve().parent / "hireiq.db"
-        sqlite_size = round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0
-
-        return {
-            "total_candidates": total,
-            "strong_matches": strong,
-            "matches": match,
-            "weak_matches": weak,
-            "average_score": round(avg_score, 1),
-            "recent_uploads_7d": recent,
-            "top_skills": [{"skill": s, "count": c} for s, c in top_skills],
-            "storage_backend": "postgresql" if "postgresql" in engine.url.drivername else "sqlite",
-            "sqlite_size_mb": sqlite_size,
-            "plan_name": plan_name,
-            "sub_status": sub_status
-        }
-    finally:
-        db.close()
-
-def get_db_status() -> dict:
-    """Settings dashboard health parameters."""
-    db_path = Path(__file__).resolve().parent / "hireiq.db"
-    sqlite_size = round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0
-    return {
-        "supabase_available": "postgresql" in engine.url.drivername,
-        "supabase_url": str(engine.url.host) if engine.url.host else "",
-        "sqlite_path": str(db_path),
-        "sqlite_size_mb": sqlite_size,
-    }

@@ -59,12 +59,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="HireIQ API", version="1.0.0")
 
-@app.on_event("startup")
-def on_startup():
-    from db.session import engine
-    from db.models import Base
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database schema bootstrapped.")
+# No startup database bootstrap needed since we query Supabase directly
 
 # ─── CORS — restrict to known frontend origins in production ───
 _allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:6901,http://localhost:5173").split(",")
@@ -99,6 +94,7 @@ async def add_security_headers(request: Request, call_next):
 # For multi-worker production (gunicorn with multiple workers), replace with
 # a Redis-backed limiter: pip install slowapi and use SlowAPI with RedisStore.
 _rate_store: dict[str, list[float]] = defaultdict(list)
+_upload_rate_store: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 _UPLOAD_RATE_LIMIT = 10  # uploads per minute per IP
 
@@ -107,27 +103,31 @@ async def rate_limit_middleware(request: Request, call_next):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
 
-    # Determine limit — uploads get a stricter limit
     is_upload = "upload" in request.url.path
-    limit = _UPLOAD_RATE_LIMIT if is_upload else _RATE_LIMIT
 
-    # Clean old entries (older than 60 seconds)
-    _rate_store[client_ip] = [t for t in _rate_store[client_ip] if now - t < 60]
+    if is_upload:
+        # Clean old upload entries (older than 60 seconds)
+        _upload_rate_store[client_ip] = [t for t in _upload_rate_store[client_ip] if now - t < 60]
+        if len(_upload_rate_store[client_ip]) >= _UPLOAD_RATE_LIMIT:
+            if not _upload_rate_store[client_ip]:
+                del _upload_rate_store[client_ip]
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many uploads. Please try again later."},
+            )
+        _upload_rate_store[client_ip].append(now)
+    else:
+        # Clean old general entries (older than 60 seconds)
+        _rate_store[client_ip] = [t for t in _rate_store[client_ip] if now - t < 60]
+        if len(_rate_store[client_ip]) >= _RATE_LIMIT:
+            if not _rate_store[client_ip]:
+                del _rate_store[client_ip]
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please try again later."},
+            )
+        _rate_store[client_ip].append(now)
 
-    if len(_rate_store[client_ip]) >= limit:
-        # Cleanup empty IP entries to prevent memory leak
-        if not _rate_store[client_ip]:
-            del _rate_store[client_ip]
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "Too many requests. Please try again later."},
-        )
-
-    # Cleanup empty IP entries to prevent memory leak
-    if not _rate_store[client_ip]:
-        del _rate_store[client_ip]
-
-    _rate_store[client_ip].append(now)
     response = await call_next(request)
     return response
 
@@ -147,6 +147,11 @@ Instrumentator().instrument(app).expose(app)
 @app.get("/")
 def health_check():
     return {"status": "hireiq api operational", "version": "1.0.0"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 
 if __name__ == "__main__":
