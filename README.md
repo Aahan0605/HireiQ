@@ -126,6 +126,7 @@ npm run dev
 ```
 *   **App UI**: Access [http://localhost:6901](http://localhost:6901) on your local browser.
 *   **Sign Up**: Register a new recruiter account directly on the Sign Up page.
+*   **First-time setup**: Register via `/register`. To seed an admin: `python backend/scripts/seed_admin.py --email you@yourdomain.com`
 
 ---
 
