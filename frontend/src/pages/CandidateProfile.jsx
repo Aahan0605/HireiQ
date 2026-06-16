@@ -50,6 +50,24 @@ function QACard({ qa, index }) {
 export default function CandidateProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  const getFormatUrl = (url, type) => {
+    if (!url) return '#';
+    let clean = url.trim();
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+      return clean;
+    }
+    if (clean.toLowerCase().includes(`${type}.com`)) {
+      return `https://${clean}`;
+    }
+    if (type === 'github') {
+      return `https://github.com/${clean}`;
+    }
+    if (type === 'linkedin') {
+      return `https://linkedin.com/in/${clean}`;
+    }
+    return `https://${clean}`;
+  };
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
@@ -706,10 +724,10 @@ HireIQ Hiring Team`
                 ) : (
                   <>
                     {candidate?.location && <div className="flex items-center gap-3 text-gray-300"><MapPin className="h-4 w-4 text-gray-500" />{candidate.location}</div>}
-                    {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" />{candidate.email}</div>}
+                    {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" /><a href={`mailto:${candidate.email}`} className="hover:text-emerald-400 hover:underline transition-all duration-200">{candidate.email}</a></div>}
                     {candidate?.phone    && <div className="flex items-center gap-3 text-gray-300"><Phone className="h-4 w-4 text-gray-500" />{candidate.phone}</div>}
-                    {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" />{candidate.github}</div>}
-                    {candidate?.linkedin && <div className="flex items-center gap-3 text-gray-300"><Linkedin className="h-4 w-4 text-gray-500" />{candidate.linkedin}</div>}
+                    {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" /><a href={getFormatUrl(candidate.github, 'github')} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 hover:underline transition-all duration-200">{candidate.github}</a></div>}
+                    {candidate?.linkedin && <div className="flex items-center gap-3 text-gray-300"><Linkedin className="h-4 w-4 text-gray-500" /><a href={getFormatUrl(candidate.linkedin, 'linkedin')} target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 hover:underline transition-all duration-200">{candidate.linkedin}</a></div>}
                   </>
                 )}
               </div>
