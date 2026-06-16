@@ -227,6 +227,7 @@ async def compute_full_candidate_score(
         missing_skills=missing_skills,
         role_type=role_type,
         github_signals=github_raw,
+        matched_skills=matched_skills,
     )
 
     # ── Build the insights package ──
@@ -662,6 +663,7 @@ def _generate_recruiter_summary(
     missing_skills: list[str],
     role_type: str,
     github_signals: dict | None = None,
+    matched_skills: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Generate a comprehensive, structured AI recruiter summary.
@@ -812,7 +814,21 @@ def _generate_recruiter_summary(
     # Build a highly detailed, professional, and descriptive executive summary
     role_display = role_type.replace("_", " ").title()
     edu_val = resume_features.get("education", "unknown")
-    edu_str = f" with a verified background in {edu_val.upper()}" if edu_val and edu_val != "unknown" else ""
+    edu_map = {
+        "btech": "Bachelor of Technology (B.Tech)",
+        "mtech": "Master of Technology (M.Tech)",
+        "bsc": "Bachelor of Science (B.Sc)",
+        "msc": "Master of Science (M.Sc)",
+        "be": "Bachelor of Engineering (B.E)",
+        "bca": "Bachelor of Computer Applications (BCA)",
+        "mca": "Master of Computer Applications (MCA)",
+        "mba": "Master of Business Administration (MBA)",
+        "phd": "Doctor of Philosophy (Ph.D.)",
+        "bachelors": "Bachelor's Degree",
+        "masters": "Master's Degree",
+    }
+    edu_display = edu_map.get(edu_val.lower(), edu_val.upper())
+    edu_str = f" with a verified background in {edu_display}" if edu_val and edu_val != "unknown" else ""
 
     summary_parts = [
         f"{candidate_name} is a {career_tier} {role_display} candidate{edu_str}, "
@@ -824,6 +840,17 @@ def _generate_recruiter_summary(
     if claimed_skills:
         summary_parts.append(
             f"The candidate's core technological competencies and skills include {', '.join(claimed_skills[:6])}."
+        )
+
+    # Matched and missing JD requirements
+    matched_skills = matched_skills or []
+    if matched_skills:
+        summary_parts.append(
+            f"Regarding job requirements, they directly match key technical skills including {', '.join(matched_skills[:5])}."
+        )
+    if missing_skills:
+        summary_parts.append(
+            f"However, they lack experience or mention of {', '.join(missing_skills[:4])} relative to the target job profile."
         )
 
     if verified:
