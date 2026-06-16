@@ -79,6 +79,33 @@ export default function CandidateProfile() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const [communications, setCommunications] = useState(() => {
+    const saved = localStorage.getItem(`hireiq_communications_${id}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      { provider: 'System', event: 'Profile imported from resume upload', time: 'Today' }
+    ];
+  });
+
+  const addCommunicationLog = (provider, event) => {
+    const newLog = {
+      provider,
+      event,
+      time: 'Just now'
+    };
+    setCommunications(prev => {
+      const updated = [newLog, ...prev];
+      localStorage.setItem(`hireiq_communications_${id}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
@@ -270,6 +297,10 @@ HireIQ Hiring Team`
     const updated = [note, ...notes];
     setNotes(updated);
     localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
+
+    // Log the dispatched email
+    addCommunicationLog('Gmail', `Sent Outreach email: "${emailSubject}"`);
+
     toast.success("Simulated email dispatched successfully!");
     setShowEmailModal(false);
     setSelectedTemplate('');
@@ -642,7 +673,11 @@ HireIQ Hiring Team`
     const promise = new Promise(resolve => setTimeout(resolve, 2000));
     toast.promise(promise, {
       loading: 'Scheduling interview...',
-      success: () => { setIsScheduling(false); return `Interview scheduled! Email sent to ${candidate.email}`; },
+      success: () => { 
+        setIsScheduling(false); 
+        addCommunicationLog('Outlook', 'Scheduled 1st round video panel interview invite');
+        return `Interview scheduled! Email sent to ${candidate.email}`; 
+      },
       error: 'Failed to schedule.',
     });
   };
@@ -1258,64 +1293,6 @@ HireIQ Hiring Team`
               )}
             </MagneticCard>
 
-            {/* Recruiter Copilot */}
-            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f] relative overflow-hidden">
-              <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-4">
-                <Cpu className="text-violet" size={20} />
-                <div>
-                  <h3 className="text-xl font-semibold text-white">Recruiter Copilot</h3>
-                  <p className="text-xs text-gray-500">Generate personalized emails and outreach copy using candidate profile context</p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 mb-4">
-                {[
-                  { type: 'outreach', label: 'Outreach Email' },
-                  { type: 'rejection', label: 'Rejection Email' },
-                  { type: 'offer', label: 'Offer Letter' },
-                  { type: 'notes', label: 'Recruiter Notes' }
-                ].map(btn => (
-                  <button
-                    key={btn.type}
-                    disabled={copilotLoading}
-                    onClick={() => handleGenerateCopilot(btn.type)}
-                    className={`px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 disabled:opacity-50 ${
-                      copilotOutput?.type === btn.type
-                        ? 'border-violet bg-violet/10 text-white'
-                        : 'border-white/10 bg-[#0e0e1a] text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {copilotLoading && copilotType === btn.type ? 'Generating...' : btn.label}
-                  </button>
-                ))}
-              </div>
-
-              {copilotOutput && (
-                <div className="bg-black/30 border border-white/5 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-violet tracking-wider">Generated Output</span>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(copilotOutput.body);
-                        toast.success("Copy copied to clipboard!");
-                      }}
-                      className="text-xs text-emerald-400 hover:underline"
-                    >
-                      Copy Text
-                    </button>
-                  </div>
-                  {copilotOutput.subject && (
-                    <div className="text-xs text-gray-300 font-mono">
-                      <span className="text-gray-500 font-semibold">Subject:</span> {copilotOutput.subject}
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-300 font-mono whitespace-pre-wrap bg-black/20 p-3 rounded-lg border border-white/5 max-h-60 overflow-y-auto leading-relaxed">
-                    {copilotOutput.body}
-                  </div>
-                </div>
-              )}
-            </MagneticCard>
-
             {/* AI Interview Simulation */}
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-white/5 pb-4">
@@ -1444,12 +1421,7 @@ HireIQ Hiring Team`
               </div>
 
               <div className="space-y-4">
-                {[
-                  { provider: 'Gmail', event: 'Sent Outreach email from template "technical-screening"', time: 'Yesterday' },
-                  { provider: 'Outlook', event: 'Scheduled 1st round video panel interview invite', time: '2 days ago' },
-                  { provider: 'Gmail', event: 'Candidate replied: accepted schedule, confirmed availability', time: '3 days ago' },
-                  { provider: 'System', event: 'Profile imported from resume upload', time: '4 days ago' }
-                ].map((log, idx) => (
+                {communications.map((log, idx) => (
                   <div key={idx} className="flex gap-3 text-xs leading-relaxed items-start border-l border-white/5 pl-4 relative ml-2">
                     <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3b3b4f] border-2 border-[#13131f]" />
                     <div className="flex-1">

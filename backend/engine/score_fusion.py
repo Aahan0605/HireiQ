@@ -853,6 +853,7 @@ def _generate_recruiter_summary(
             f"However, they lack experience or mention of {', '.join(missing_skills[:4])} relative to the target job profile."
         )
 
+    verified = trust_result.get("verified_skills", []) if isinstance(trust_result, dict) else []
     if verified:
         summary_parts.append(
             f"Live engineering analytics successfully verified practical usage and competence in {', '.join(verified[:4])}."

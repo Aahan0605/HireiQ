@@ -92,9 +92,7 @@ export default function Candidates() {
   const [selected, setSelected]     = useState(new Set());
   const [shortlisted, setShortlisted] = useState(new Set()); // top-3 highlight
   const [deltas, setDeltas]         = useState({});          // rank delta badges
-  const [blindReview, setBlindReview] = useState(() => {
-    return localStorage.getItem('hireiq_blind_review') === 'true';
-  });
+  const blindReview = false;
   
   // Advanced filters state
   const [showFilters, setShowFilters] = useState(false);
@@ -106,15 +104,14 @@ export default function Candidates() {
   const [activePool, setActivePool] = useState('All');
   const [semanticSearch, setSemanticSearch] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [importLoading, setImportLoading] = useState(false);
 
   const navigate = useNavigate();
   const deltaTimer = useRef(null);
 
-  useEffect(() => {
-    localStorage.setItem('hireiq_blind_review', blindReview);
-  }, [blindReview]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -331,32 +328,75 @@ export default function Candidates() {
     }
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImportFileChange = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
+    const fileList = Array.from(files);
+    
+    // Split into CSVs and PDF/Word Resumes
+    const csvFiles = fileList.filter(f => f.name.toLowerCase().endsWith('.csv'));
+    const resumeFiles = fileList.filter(f => {
+      const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+      return ['.pdf', '.doc', '.docx'].includes(ext);
+    });
+
+    const unsupportedFiles = fileList.filter(f => {
+      const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+      return !['.csv', '.pdf', '.doc', '.docx'].includes(ext);
+    });
+
+    if (unsupportedFiles.length > 0) {
+      toast.error(`Unsupported files ignored: ${unsupportedFiles.map(f => f.name).join(', ')}`);
+    }
 
     try {
-      const response = await apiFetch(`${API}/candidates/upload-csv`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) throw new Error('Failed to upload CSV');
-      
-      const data = await response.json();
-      toast.success(data.message || 'CSV imported successfully!');
+      // 1. Process CSVs
+      for (const csvFile of csvFiles) {
+        const formData = new FormData();
+        formData.append('file', csvFile);
+        const response = await apiFetch(`${API}/candidates/upload-csv`, {
+          method: 'POST',
+          body: formData,
+        });
+        if (!response.ok) throw new Error(`Failed to upload CSV: ${csvFile.name}`);
+        const data = await response.json();
+        toast.success(data.message || `${csvFile.name} imported successfully!`);
+      }
+
+      // 2. Process Resumes
+      if (resumeFiles.length > 0) {
+        let successCount = 0;
+        let failCount = 0;
+        for (const resumeFile of resumeFiles) {
+          const formData = new FormData();
+          formData.append('file', resumeFile);
+          const response = await apiFetch(`${API}/candidates/upload-resume`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+        if (successCount > 0) {
+          toast.success(`Successfully uploaded ${successCount} resume(s) for analysis!`);
+        }
+        if (failCount > 0) {
+          toast.error(`Failed to upload ${failCount} resume(s).`);
+        }
+      }
       
       // Refresh candidates list
-      apiFetch(`${API}/candidates`)
-        .then(r => r.json())
-        .then(data => setCandidates(Array.isArray(data) ? data : getAllCandidates()))
-        .catch(console.error);
-        
+      const r = await apiFetch(`${API}/candidates`);
+      const data = await r.json();
+      setCandidates(Array.isArray(data) ? data : getAllCandidates());
+
     } catch (err) {
-      toast.error(err.message || 'Error uploading CSV');
+      toast.error(err.message || 'Error importing candidates');
     } finally {
       setLoading(false);
       e.target.value = null; // reset input
@@ -581,34 +621,43 @@ export default function Candidates() {
               className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
               ⭐ Optimal Shortlist
             </button>
-            <button onClick={() => setBlindReview(!blindReview)}
-              className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                blindReview
-                  ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/25 shadow-glow-red'
-                  : 'border-black/10 dark:border-white/10 bg-card text-gray-300 hover:bg-white/5'
-              }`}>
-              🕵️ Blind Mode: {blindReview ? 'ON' : 'OFF'}
-            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-3 xl:ml-auto">
+          <div className="flex flex-wrap items-center gap-3 xl:ml-auto relative">
             <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-              Import CSV
+              {loading ? 'Importing...' : 'Import Candidates'}
               <input 
                 type="file" 
-                accept=".csv" 
+                accept=".csv,.pdf,.doc,.docx" 
+                multiple
                 className="hidden" 
-                onChange={handleFileUpload} 
+                onChange={handleImportFileChange} 
                 disabled={loading}
               />
             </label>
-            <button onClick={handleExport}
-              className="px-4 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition-all">
-              Export (PDF)
-            </button>
-            <button onClick={handleExportCSV}
-              className="px-4 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-sm font-medium text-cyan-300 hover:bg-cyan-500/20 transition-all">
-              Export (CSV)
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setShowExportDropdown(!showExportDropdown)}
+                className="px-4 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition-all"
+              >
+                Export Candidates
+              </button>
+              {showExportDropdown && (
+                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-white/10 bg-[#13131f] p-2 shadow-2xl z-20">
+                  <button 
+                    onClick={() => { handleExport(); setShowExportDropdown(false); }} 
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    📄 Export as PDF
+                  </button>
+                  <button 
+                    onClick={() => { handleExportCSV(); setShowExportDropdown(false); }} 
+                    className="w-full text-left px-3 py-2 text-xs font-semibold text-gray-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    📊 Export as CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
