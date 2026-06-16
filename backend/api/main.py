@@ -10,6 +10,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
+from api.core.limiter import limiter
 from .routes import jobs, candidates, settings, reports, auth, billing, members
 
 import sentry_sdk
@@ -57,15 +61,31 @@ def setup_logging():
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# ─── Startup Security Checks ────────────────────────────────────
+jwt_secret = os.getenv("JWT_SECRET_KEY")
+if not jwt_secret:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set.")
+if len(jwt_secret.strip()) < 32:
+    raise RuntimeError("JWT_SECRET_KEY must be at least 32 characters long.")
+
 app = FastAPI(title="HireIQ API", version="1.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # No startup database bootstrap needed since we query Supabase directly
 
 # ─── CORS — restrict to known frontend origins in production ───
-_allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:6901,http://localhost:5173").split(",")
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+_allowed_origins = [o.strip() for o in allowed_origins_raw.split(",") if o.strip()]
+
+# Fail fast if '*' is allowed with allow_credentials=True
+if "*" in _allowed_origins:
+    raise RuntimeError("CORS configuration error: Cannot allow '*' origin when allow_credentials is True.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in _allowed_origins],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,7 +94,7 @@ app.add_middleware(
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").replace(",", " ")
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").replace(",", " ")
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -89,47 +109,7 @@ async def add_security_headers(request: Request, call_next):
     )
     return response
 
-# ─── Global rate limiting (simple in-memory) ────────────────────
-# NOTE: This in-memory rate limiter works for single-process deployments.
-# For multi-worker production (gunicorn with multiple workers), replace with
-# a Redis-backed limiter: pip install slowapi and use SlowAPI with RedisStore.
-_rate_store: dict[str, list[float]] = defaultdict(list)
-_upload_rate_store: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
-_UPLOAD_RATE_LIMIT = 10  # uploads per minute per IP
 
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    client_ip = request.client.host if request.client else "unknown"
-    now = time.time()
-
-    is_upload = "upload" in request.url.path
-
-    if is_upload:
-        # Clean old upload entries (older than 60 seconds)
-        _upload_rate_store[client_ip] = [t for t in _upload_rate_store[client_ip] if now - t < 60]
-        if len(_upload_rate_store[client_ip]) >= _UPLOAD_RATE_LIMIT:
-            if not _upload_rate_store[client_ip]:
-                del _upload_rate_store[client_ip]
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Too many uploads. Please try again later."},
-            )
-        _upload_rate_store[client_ip].append(now)
-    else:
-        # Clean old general entries (older than 60 seconds)
-        _rate_store[client_ip] = [t for t in _rate_store[client_ip] if now - t < 60]
-        if len(_rate_store[client_ip]) >= _RATE_LIMIT:
-            if not _rate_store[client_ip]:
-                del _rate_store[client_ip]
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Too many requests. Please try again later."},
-            )
-        _rate_store[client_ip].append(now)
-
-    response = await call_next(request)
-    return response
 
 
 app.include_router(auth.router,       prefix="/api/v1")

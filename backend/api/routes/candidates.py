@@ -32,8 +32,9 @@ import logging
 import time
 from typing import Any
 import uuid
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
+from api.core.limiter import limiter, get_user_or_ip
 
 from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, require_permission, Permission
@@ -410,7 +411,9 @@ async def upload_resume(
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/upload-bulk", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
+@limiter.limit("5/hour", key_func=get_user_or_ip)
 async def upload_bulk(
+    request: Request,
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     tenant_id: str = Depends(require_tenant)

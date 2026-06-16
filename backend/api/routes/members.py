@@ -9,7 +9,7 @@ from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.email import send_org_invitation_email
 from db import get_supabase
 
-router = APIRouter(prefix="/members", tags=["Team Members"])
+router = APIRouter(prefix="/members", tags=["Team Members"], dependencies=[Depends(require_tenant)])
 
 class InviteRequest(BaseModel):
     email: EmailStr

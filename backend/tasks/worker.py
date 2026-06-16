@@ -155,7 +155,9 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "github_commits_last_year": int(scoring_res.get("external_signals", {}).get("github", {}).get("commit_frequency_per_week", 0) * 52),
             "blind_score": blind_score,
             "resume_filename": filename,
-            "interview_questions": []
+            "interview_questions": [],
+            "insights": scoring_res.get("insights", {}),
+            "summary": scoring_res.get("insights", {}).get("ai_summary", {}).get("executive_summary", "")
         }
         
         if best_job:

@@ -7,6 +7,8 @@ from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
+_checked_first_run = False
+
 @lru_cache(maxsize=1)
 def get_supabase() -> Client:
     url = os.environ.get("SUPABASE_URL")
@@ -15,7 +17,20 @@ def get_supabase() -> Client:
     key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
     if not key:
         raise KeyError("Neither SUPABASE_SERVICE_KEY nor SUPABASE_KEY is set in environment.")
-    return create_client(url, key)
+    client = create_client(url, key)
+    
+    global _checked_first_run
+    if not _checked_first_run:
+        _checked_first_run = True
+        try:
+            res = client.table("recruiters").select("id").limit(1).execute()
+            if not res.data:
+                logger.warning("⚠️ No recruiter accounts found in the database. Please call POST /auth/register to create the first account.")
+                print("⚠️ No recruiter accounts found in the database. Please call POST /auth/register to create the first account.")
+        except Exception as e:
+            logger.error(f"Error checking for existing recruiter accounts: {e}")
+            
+    return client
 
 # ─── Candidate Mappers ───
 
@@ -64,13 +79,44 @@ def _candidate_to_dict(c: dict) -> dict:
         {"title": "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
     ]
     
+    db_insights = c.get("insights") or {}
+    if not isinstance(db_insights, dict):
+        db_insights = {}
+        
+    score = float(c.get("match_score") or 0.0)
+    
+    # Generate fallbacks for nested objects if they are missing
+    if "ai_summary" not in db_insights:
+        db_insights["ai_summary"] = {
+            "executive_summary": c.get("summary") or (c.get("raw_text", "")[:200] + "..." if c.get("raw_text") else "No summary available."),
+            "career_tier": c.get("career_tier") or "Software Engineer",
+            "strengths": c.get("key_strengths") or [],
+            "concerns": c.get("potential_concerns") or [],
+            "interview_focus": [
+                f"Assess proficiency in key strengths: {', '.join((c.get('key_strengths') or [])[:3])}" if c.get("key_strengths") else "Assess core software engineering practices.",
+                f"Address potential concerns: {', '.join((c.get('potential_concerns') or [])[:2])}" if c.get("potential_concerns") else "Discuss past roles and career objectives."
+            ],
+            "verdict": "Strong Hire" if score >= 85 else ("Hire" if score >= 70 else ("Lean Hire" if score >= 55 else "No Hire"))
+        }
+        
+    if "match_breakdown" not in db_insights:
+        db_insights["match_breakdown"] = {
+            "overall_match_percentage": round(score),
+            "skills_match": round(max(0.0, min(100.0, score + 5.0))),
+            "experience_match": min(100, max(40, (c.get("experience_years") or 0) * 10 + 30)),
+            "education_match": 90 if c.get("education_tier") == "phd" else (85 if c.get("education_tier") == "masters" else (75 if c.get("education_tier") == "bachelors" else 60)),
+            "projects_match": 80 if c.get("github_url") else 50,
+            "github_match": min(100, max(20, (c.get("github_commits_last_year") or 0) // 10 + (c.get("github_stars") or 0) * 10)) if c.get("github_url") else 0
+        }
+
     insights = {
         "completeness_score": c.get("completeness_score", 0.0),
         "ats_score": c.get("ats_score", 0.0),
         "strengths": c.get("key_strengths") or [],
         "weaknesses": c.get("development_gaps") or [],
         "concerns": c.get("potential_concerns") or [],
-        "career_progression": "Stable trajectory"
+        "career_progression": "Stable trajectory",
+        **db_insights
     }
     
     summary = c.get("summary")
@@ -170,7 +216,8 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "github_url": candidate.get("github") or "",
         "blind_score": float(candidate.get("blind_score") or match_score),
         "interview_questions": candidate.get("qa") or [],
-        "summary": candidate.get("summary")
+        "summary": candidate.get("summary"),
+        "insights": insights
     }
     
     # Experience years

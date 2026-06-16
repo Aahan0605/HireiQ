@@ -10,16 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # JWT configuration
-# IMPORTANT: In production, always set JWT_SECRET_KEY in .env
-_default_secret = secrets.token_hex(32)  # Random per-process fallback
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "").strip() or _default_secret
-
-if os.getenv("JWT_SECRET_KEY", "").strip() == "":
-    import logging
-    logging.getLogger(__name__).warning(
-        "⚠️  JWT_SECRET_KEY is not set! Using a random per-process secret. "
-        "Tokens will NOT survive server restarts. Set JWT_SECRET_KEY in your .env file."
-    )
+# IMPORTANT: JWT_SECRET_KEY must be set in the environment.
+SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours

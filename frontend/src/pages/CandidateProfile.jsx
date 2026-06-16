@@ -69,28 +69,81 @@ export default function CandidateProfile() {
   const emailTemplates = {
     screening: {
       name: "📅 Schedule Technical Screening",
-      subject: `Interview Invitation - HireIQ Corp`,
-      body: `Hi [Name],\n\nWe were highly impressed by your experience and your matching score on our HireIQ evaluation.\n\nWe would love to schedule a 30-minute technical screening call to learn more about your background. Please let us know your availability for this week.\n\nBest regards,\nRecruitment Team`
+      subject: `Interview Invitation: [Role] - HireIQ Corp`,
+      body: `Dear [Name],
+
+Thank you for your interest in the [Role] position at HireIQ Corp.
+
+Our recruitment and engineering teams recently completed a comprehensive review of your profile and resume. We are pleased to inform you that your qualifications, particularly your strong expertise in [Skills], stood out to us. Our HireIQ platform assessed a [Score]% matching score for your profile, indicating exceptional alignment with our core requirements.
+
+We would love to invite you to a 30-minute technical screening call. This call will be a great opportunity for us to learn more about your career journey, discuss your technical experience, and share details about our engineering culture and the [Role] position.
+
+Please let us know your general availability over the next few business days. If you use a scheduling tool or have specific time slots that work best, please feel free to share them.
+
+We look forward to speaking with you soon!
+
+Best regards,
+HireIQ Recruitment Team`
     },
     assessment: {
       name: "🚀 Onboarding & Skill Assessment",
-      subject: `Skill Evaluation Step - HireIQ Corp`,
-      body: `Hi [Name],\n\nWelcome to the next stage of our interview process. We have generated a skill evaluation assessment based on your resume profile.\n\nPlease complete the task and share your feedback within 3 days.\n\nBest regards,\nRecruitment Team`
+      subject: `Technical Assessment Phase: [Role] - HireIQ Corp`,
+      body: `Dear [Name],
+
+We appreciate your participation in the initial screening phase for the [Role] position. As the next step in our evaluation process, we would like to invite you to complete a take-home technical assessment.
+
+This evaluation is designed to help us understand:
+1. Your approach to system design, scalability, and code architecture.
+2. Code quality, organization, and adherence to modern testing best practices.
+3. Your practical experience implementing solutions with [Skills].
+
+Please allocate approximately 2 to 3 hours of focused time to complete this exercise. Detailed instructions, repository templates, and submission guidelines are available in your candidate dashboard. We kindly request that you submit your completed solution within the next 3 business days.
+
+If you have any questions or require any adjustments during this phase, please do not hesitate to contact us.
+
+Thank you again for your time and dedication. We look forward to reviewing your solution.
+
+Best regards,
+HireIQ Engineering Team`
     },
     rejection: {
       name: "✉️ Polite Rejection",
-      subject: `Update on your application - HireIQ Corp`,
-      body: `Hi [Name],\n\nThank you for your interest in the position and for taking the time to share your profile with us.\n\nWhile your qualifications are impressive, we have decided to move forward with other candidates who more closely match our current requirements. We will keep your profile in our talent pool for future openings.\n\nBest regards,\nRecruitment Team`
+      subject: `Application Update: [Role] - HireIQ Corp`,
+      body: `Dear [Name],
+
+Thank you very much for taking the time to apply for the [Role] position at HireIQ Corp and for participating in our interview process.
+
+Our hiring team was highly impressed by your experience and your technical background, especially your knowledge of [Skills]. We received a large volume of applications from talented professionals, making our decision-making process extremely difficult.
+
+After careful consideration, we have decided to move forward with other candidates whose experience more closely matches the specific specialized requirements of the position at this stage.
+
+We want to thank you again for your patience and transparency throughout this process. We will keep your profile in our talent pool and may reach out if a future position opens up that aligns with your background.
+
+We wish you the absolute best in your future career endeavors and hope our paths cross again.
+
+Best regards,
+HireIQ Hiring Team`
     }
   };
 
   useEffect(() => {
     if (selectedTemplate && emailTemplates[selectedTemplate] && candidate) {
       const templ = emailTemplates[selectedTemplate];
-      setEmailSubject(templ.subject);
-      setEmailBody(templ.body.replace("[Name]", candidate.name || 'Candidate'));
+      const skillsStr = skillsList.slice(0, 4).join(', ') || 'software engineering';
+      const roleStr = candidate.role || 'Software Engineer';
+      const scoreStr = candidate.score || '75';
+
+      const subjectText = templ.subject.replace(/\[Role\]/g, roleStr);
+      const bodyText = templ.body
+        .replace(/\[Name\]/g, candidate.name || 'Candidate')
+        .replace(/\[Role\]/g, roleStr)
+        .replace(/\[Score\]/g, scoreStr)
+        .replace(/\[Skills\]/g, skillsStr);
+
+      setEmailSubject(subjectText);
+      setEmailBody(bodyText);
     }
-  }, [selectedTemplate, candidate]);
+  }, [selectedTemplate, candidate, skillsList]);
 
   const [blindReview] = useState(() => {
     return localStorage.getItem('hireiq_blind_review') === 'true';
@@ -1159,6 +1212,16 @@ export default function CandidateProfile() {
               </div>
 
               <form onSubmit={handleSendEmail} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-gray-400">Recipient Email</label>
+                  <input 
+                    type="text" 
+                    disabled 
+                    value={candidate?.email || 'No email available'}
+                    className="bg-[#0e0e1a]/50 border border-white/5 rounded-xl px-3 py-2 text-xs text-gray-400 outline-none w-full"
+                  />
+                </div>
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-gray-400">Choose Template</label>
                   <select 

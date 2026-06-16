@@ -4,13 +4,14 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, validator
 from api.core.security import verify_password, get_password_hash, create_access_token
 from api.core.dependencies import get_current_user
 from db import get_supabase
 from api.core.email import send_verification_email, send_password_reset_email
+from api.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -151,7 +152,8 @@ async def register(user_in: UserRegister):
     }
 
 @router.post("/login", response_model=Token)
-async def login_json(user_in: UserLogin):
+@limiter.limit("10/15minute")
+async def login_json(request: Request, user_in: UserLogin):
     """Login with JSON payload."""
     try:
         user = await fetch_user_by_email(user_in.email)
