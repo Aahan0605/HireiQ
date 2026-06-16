@@ -180,7 +180,23 @@ async def get_analytics(tenant_id: str = Depends(require_tenant)):
 @router.get("/worker-status")
 def get_worker_status():
     """Check if the Redis broker and Celery worker are online."""
-    from tasks.worker import celery_app
+    import socket
+    from urllib.parse import urlparse
+    from tasks.worker import celery_app, REDIS_URL
+    
+    # Quick socket check to prevent blocking if Redis is offline
+    try:
+        parsed = urlparse(REDIS_URL)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        with socket.create_connection((host, port), timeout=0.1):
+            redis_up = True
+    except Exception:
+        redis_up = False
+
+    if not redis_up:
+        return {"status": "fallback", "message": "Redis broker offline. Using local background tasks fallback."}
+
     try:
         ping_result = celery_app.control.ping(timeout=0.3)
         if ping_result:

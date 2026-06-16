@@ -124,6 +124,10 @@ def _candidate_to_dict(c: dict) -> dict:
             "github_match": min(100, max(20, (c.get("github_commits_last_year") or 0) // 10 + (c.get("github_stars") or 0) * 10)) if c.get("github_url") else 0
         }
 
+    # Strip resume_base64 from insights before sending to frontend
+    # (it's served via the dedicated /candidates/{id}/resume endpoint)
+    db_insights.pop("resume_base64", None)
+
     insights = {
         "completeness_score": c.get("completeness_score", 0.0),
         "ats_score": c.get("ats_score", 0.0),
@@ -150,7 +154,7 @@ def _candidate_to_dict(c: dict) -> dict:
         "summary": summary,
         "experience_years": c.get("experience_years") or 0,
         "resume_text": c.get("raw_text") or "",
-        "resume_base64": db_insights.get("resume_base64") or "",
+        "has_resume_file": bool(db_insights.get("resume_base64")),
         "resume_filename": c.get("resume_filename") or "",
         "skills": c.get("skills") or [],
         "experience": experience,

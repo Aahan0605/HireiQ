@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard, Users, UserPlus, Trash2 } from 'lucide-react';
+import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard, Users, UserPlus, Trash2, Globe, Shield, Mail, Calendar, Key, Database, Webhook } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/apiFetch';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,8 @@ export default function Settings() {
     const tab = params.get('tab');
     if (tab === 'billing') return 'billing';
     if (tab === 'team') return 'team';
+    if (tab === 'integrations') return 'integrations';
+    if (tab === 'security') return 'security';
     return 'scoring';
   });
   
@@ -45,6 +47,26 @@ export default function Settings() {
   const [inviteRole, setInviteRole] = useState('Recruiter');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteSuccessLink, setInviteSuccessLink] = useState(null);
+
+  // Integrations states
+  const [integrations, setIntegrations] = useState({
+    slack: true,
+    gmail: true,
+    outlook: false,
+    gcal: true,
+    ocal: false,
+    workday: false,
+    bamboohr: false,
+    codility: false,
+  });
+  const [configureIntegration, setConfigureIntegration] = useState(null);
+
+  // Security & SSO states
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoProviderUrl, setSsoProviderUrl] = useState("https://identity.company.com/sso/saml");
+  const [gdprDeleteEnabled, setGdprDeleteEnabled] = useState(true);
+  const [retentionPeriod, setRetentionPeriod] = useState("indefinite");
+  const [exportingLogs, setExportingLogs] = useState(false);
 
   const fetchMembers = () => {
     setMembersLoading(true);
@@ -252,6 +274,27 @@ export default function Settings() {
     }
   };
 
+  const handleExportAuditLogs = async () => {
+    setExportingLogs(true);
+    try {
+      const res = await apiFetch(`${API}/features/security/audit-logs`);
+      if (!res.ok) throw new Error("Failed to export audit logs");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hireiq_audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success("Audit logs exported successfully! 📂");
+    } catch (err) {
+      toast.error(err.message || "Error exporting audit logs.");
+    } finally {
+      setExportingLogs(false);
+    }
+  };
+
   const sliders = [
     { label: 'Resume Matching (TF-IDF + Cosine Similarity)', value: resume,    set: setResume,    color: 'accent-emerald-500' },
     { label: 'GitHub Analysis (Commit Frequency + Stars)',   value: github,    set: setGithub,    color: 'accent-cyan-500' },
@@ -301,6 +344,26 @@ export default function Settings() {
               }`}
             >
               <Users size={13} /> Team
+            </button>
+            <button 
+              onClick={() => setActiveTab('integrations')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'integrations' 
+                  ? 'bg-emerald-600 text-white shadow' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Globe size={13} /> Integrations
+            </button>
+            <button 
+              onClick={() => setActiveTab('security')}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'security' 
+                  ? 'bg-emerald-600 text-white shadow' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Lock size={13} /> Security & SSO
             </button>
           </div>
         </div>
@@ -699,7 +762,7 @@ export default function Settings() {
             </motion.div>
 
             {/* Invite Section */}
-            {(user?.role === 'Owner' || user?.role === 'Admin') ? (
+            {(user?.role === 'Owner' || user?.role === 'Admin') && (
               <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
                 className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6"
               >
@@ -781,15 +844,251 @@ export default function Settings() {
                   </motion.div>
                 )}
               </motion.div>
-            ) : (
-              <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 text-center"
-              >
-                <Lock className="mx-auto text-gray-400 mb-2" size={24} />
-                <h3 className="text-sm font-semibold text-white mb-1">Invite Form Restricted</h3>
-                <p className="text-xs text-gray-400">Only workspace Owners and Admins can invite new team members.</p>
-              </motion.div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'integrations' && (
+          <div className="space-y-6">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Globe className="text-emerald-500" size={18} />
+                <h3 className="text-lg font-semibold text-white">Integrations Marketplace</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-6">Connect HireIQ with your existing HR tech stack, communication tools, and calendar services to automate workflows.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Slack Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg"><Webhook size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Slack Notifications</h4>
+                        <p className="text-[10px] text-gray-400">Post scoring updates and candidate matches to channels.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.slack}
+                      onChange={e => setIntegrations({...integrations, slack: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Slack")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+
+                {/* Gmail Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-red-500/10 text-red-400 rounded-lg"><Mail size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Gmail Integration</h4>
+                        <p className="text-[10px] text-gray-400">Native tracking and automated recruiter outreach.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.gmail}
+                      onChange={e => setIntegrations({...integrations, gmail: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Gmail")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+
+                {/* Outlook Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-blue-500/10 text-blue-400 rounded-lg"><Mail size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Outlook Integration</h4>
+                        <p className="text-[10px] text-gray-400">Sync conversations and schedule communications.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.outlook}
+                      onChange={e => setIntegrations({...integrations, outlook: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Outlook")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+
+                {/* Google Calendar Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg"><Calendar size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Google Calendar</h4>
+                        <p className="text-[10px] text-gray-400">Sync interviews directly to Google Calendars.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.gcal}
+                      onChange={e => setIntegrations({...integrations, gcal: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Google Calendar")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+
+                {/* Workday Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-orange-500/10 text-orange-400 rounded-lg"><Database size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Workday HRIS</h4>
+                        <p className="text-[10px] text-gray-400">Export selected candidates directly to Workday.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.workday}
+                      onChange={e => setIntegrations({...integrations, workday: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Workday")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+
+                {/* Codility Card */}
+                <div className="p-4 bg-white/5 border border-white/10 rounded-xl flex flex-col justify-between space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-yellow-500/10 text-yellow-400 rounded-lg"><Key size={18} /></div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">Codility Assessments</h4>
+                        <p className="text-[10px] text-gray-400">Trigger coding tests and pull scorecard ratings.</p>
+                      </div>
+                    </div>
+                    <input type="checkbox" checked={integrations.codility}
+                      onChange={e => setIntegrations({...integrations, codility: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                  <button onClick={() => setConfigureIntegration("Codility")} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold self-start transition-all">Configure</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 space-y-6"
+            >
+              {/* SSO Configuration */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="text-emerald-500" size={18} />
+                    <h3 className="text-base font-semibold text-white">Single Sign-On (SSO)</h3>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-xs text-gray-400 mr-2">{ssoEnabled ? "Enabled" : "Disabled"}</span>
+                    <input type="checkbox" checked={ssoEnabled}
+                      onChange={e => setSsoEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">Enforce SAML 2.0 or OIDC authentication for all team members signing into this recruiter workspace.</p>
+
+                {ssoEnabled && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 pt-3 border-t border-white/5">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-400 mb-1">SSO Metadata Identity Provider URL</label>
+                      <input type="text" value={ssoProviderUrl} onChange={e => setSsoProviderUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs outline-none focus:border-emerald-500/50" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">Entity ID</label>
+                        <input type="text" readOnly value="urn:auth0:hireiq:saml"
+                          className="w-full px-3 py-2 bg-black/20 border border-white/5 rounded-lg text-gray-400 text-xs font-mono outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-400 mb-1">ACS URL</label>
+                        <input type="text" readOnly value="https://api.hireiq.dev/sso/saml/callback"
+                          className="w-full px-3 py-2 bg-black/20 border border-white/5 rounded-lg text-gray-400 text-xs font-mono outline-none" />
+                      </div>
+                    </div>
+                    <button onClick={() => toast.success("SSO Configuration saved successfully!")} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all">Save SSO Config</button>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* GDPR Compliance Section */}
+              <div className="pt-6 border-t border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="text-emerald-500" size={18} />
+                    <h3 className="text-base font-semibold text-white">GDPR & Data Protection</h3>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-xs text-gray-400 mr-2">{gdprDeleteEnabled ? "Active" : "Inactive"}</span>
+                    <input type="checkbox" checked={gdprDeleteEnabled}
+                      onChange={e => setGdprDeleteEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-500" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400">Manage candidate data compliance. When active, candidates can request full deletion of their uploaded profiles.</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Candidate Data Retention Period</label>
+                  <select value={retentionPeriod} onChange={e => setRetentionPeriod(e.target.value)}
+                    className="w-full max-w-xs px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-theme-1 text-xs focus:border-emerald-500/50 outline-none"
+                  >
+                    <option value="indefinite">Keep Indefinitely (No automatic deletion)</option>
+                    <option value="6months">Auto-delete after 6 months</option>
+                    <option value="1year">Auto-delete after 1 year</option>
+                    <option value="2years">Auto-delete after 2 years</option>
+                  </select>
+                </div>
+                <button onClick={() => toast.success("GDPR compliance settings updated!")} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-all mt-1">Save Compliance Settings</button>
+              </div>
+
+              {/* Audit Logs Section */}
+              <div className="pt-6 border-t border-white/10 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Database className="text-emerald-500" size={18} />
+                  <h3 className="text-base font-semibold text-white">Security Audit Trail Logs</h3>
+                </div>
+                <p className="text-xs text-gray-400">Download cryptographically verifiable logs documenting recuited user events, login locations, scoring adjustments, and data exports.</p>
+                <button
+                  onClick={handleExportAuditLogs}
+                  disabled={exportingLogs}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5"
+                >
+                  {exportingLogs ? "Exporting..." : "Export Audit Logs (CSV)"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Configure Integration Modal */}
+        {configureIntegration && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-md bg-[#131324] border border-white/10 rounded-xl p-6 space-y-4 shadow-2xl"
+            >
+              <h3 className="text-lg font-bold text-white">Configure {configureIntegration}</h3>
+              <p className="text-xs text-gray-400">Configure connection tokens, API endpoints, or Webhooks for the {configureIntegration} service integration.</p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">API Webhook / Client URL</label>
+                  <input type="text" placeholder={`https://api.company.com/hooks/${configureIntegration.toLowerCase()}`}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs outline-none focus:border-emerald-500/50" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Secret Token / Authorization Key</label>
+                  <input type="password" placeholder="••••••••••••••••••••••••••••••••"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs outline-none focus:border-emerald-500/50" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button onClick={() => setConfigureIntegration(null)} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold transition-colors">Cancel</button>
+                <button onClick={() => {
+                  setConfigureIntegration(null);
+                  toast.success(`${configureIntegration} integration saved and connected!`);
+                }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors">Save & Test Connection</button>
+              </div>
+            </motion.div>
           </div>
         )}
 

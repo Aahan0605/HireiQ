@@ -32,7 +32,7 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.detail || 'Failed to sign in.');
+        throw new Error(data.detail || data.error || 'Failed to sign in.');
       }
       
       localStorage.setItem('hireiq_token', data.access_token);
@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.detail || 'Failed to register.');
+        throw new Error(data.detail || data.error || 'Failed to register.');
       }
       
       toast.success('Registration successful! You can now sign in.');

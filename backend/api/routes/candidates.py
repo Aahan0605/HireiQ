@@ -816,6 +816,58 @@ async def update_candidate(candidate_id: str, payload: dict, tenant_id: str = De
     return {"status": "success", "candidate": candidate}
 
 # ─────────────────────────────────────────────────────────────
+# GET /candidates/{candidate_id}/resume
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/{candidate_id}/resume")
+async def get_candidate_resume(candidate_id: str, tenant_id: str = Depends(require_tenant)):
+    """
+    Return the original uploaded resume file as a downloadable binary response.
+    Reads resume_base64 from the insights JSONB column directly, decodes it,
+    and streams the raw bytes with the correct Content-Type header.
+    """
+    import base64
+    from fastapi.responses import Response
+
+    supabase = get_supabase()
+
+    # Fetch only the columns we need (insights contains resume_base64, plus resume_filename)
+    query = supabase.table("candidates").select("insights, resume_filename").eq("id", candidate_id)
+    if tenant_id:
+        query = query.eq("recruiter_id", tenant_id)
+    res = query.execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    row = res.data[0]
+    insights = row.get("insights") or {}
+    if not isinstance(insights, dict):
+        insights = {}
+
+    resume_b64 = insights.get("resume_base64")
+    if not resume_b64:
+        raise HTTPException(status_code=404, detail="No resume file stored for this candidate. Please re-upload the resume.")
+
+    filename = row.get("resume_filename") or "resume.pdf"
+    is_pdf = filename.lower().endswith(".pdf")
+    content_type = "application/pdf" if is_pdf else "application/octet-stream"
+
+    try:
+        file_bytes = base64.b64decode(resume_b64)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to decode stored resume data.")
+
+    return Response(
+        content=file_bytes,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Cache-Control": "private, max-age=3600",
+        }
+    )
+
+# ─────────────────────────────────────────────────────────────
 # POST /candidates/{candidate_id}/generate-qa
 # ─────────────────────────────────────────────────────────────
 

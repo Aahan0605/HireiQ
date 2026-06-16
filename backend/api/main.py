@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from api.core.limiter import limiter
-from .routes import jobs, candidates, settings, reports, auth, billing, members
+from .routes import jobs, candidates, settings, reports, auth, billing, members, features
 
 import sentry_sdk
 import posthog
@@ -119,6 +119,7 @@ app.include_router(settings.router,   prefix="/api/v1")
 app.include_router(reports.router,    prefix="/api/v1")
 app.include_router(billing.router,    prefix="/api/v1")
 app.include_router(members.router,    prefix="/api/v1")
+app.include_router(features.router,   prefix="/api/v1")
 
 # ─── Prometheus Monitoring ──────────────────────────────────────
 Instrumentator().instrument(app).expose(app)

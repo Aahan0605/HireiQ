@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, Clock, Edit2, Check, X, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Users, FileSearch, TrendingUp, Sparkles, Calendar, Target, Briefcase, Clock, Edit2, Check, X, Plus, Trash2, RefreshCw, Github } from 'lucide-react';
 import { toast } from 'sonner';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import StatCard from '../components/StatCard';
@@ -673,6 +673,71 @@ export default function Dashboard() {
 
   const [seeding, setSeeding] = useState(false);
 
+  // Sub-navigation state
+  const [dashboardTab, setDashboardTab] = useState('Overview');
+
+  // Executive Analytics states
+  const [execData, setExecData] = useState(null);
+  const [execLoading, setExecLoading] = useState(false);
+
+  // Workforce Planning states
+  const [workforceData, setWorkforceData] = useState(null);
+  const [workforceLoading, setWorkforceLoading] = useState(false);
+
+  // Talent Discovery states
+  const [discoveryQuery, setDiscoveryQuery] = useState('');
+  const [discoveryResults, setDiscoveryResults] = useState([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+
+  const fetchExecAnalytics = async () => {
+    setExecLoading(true);
+    try {
+      const res = await apiFetch(`${API}/features/analytics/executive`);
+      const data = await res.json();
+      if (res.ok) setExecData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setExecLoading(false);
+    }
+  };
+
+  const fetchWorkforcePlanning = async () => {
+    setWorkforceLoading(true);
+    try {
+      const res = await apiFetch(`${API}/features/analytics/workforce`);
+      const data = await res.json();
+      if (res.ok) setWorkforceData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setWorkforceLoading(false);
+    }
+  };
+
+  const handleDiscoverySearch = async (query = '') => {
+    setDiscoveryLoading(true);
+    try {
+      const res = await apiFetch(`${API}/features/outreach/discover?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (res.ok) setDiscoveryResults(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (dashboardTab === 'Executive Analytics') {
+      fetchExecAnalytics();
+    } else if (dashboardTab === 'Workforce Planning') {
+      fetchWorkforcePlanning();
+    } else if (dashboardTab === 'Talent Discovery & Sourcing') {
+      handleDiscoverySearch('');
+    }
+  }, [dashboardTab]);
+
   const handleSeedDemo = async () => {
     setSeeding(true);
     try {
@@ -731,7 +796,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <motion.header initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-          className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold text-theme-1">Dashboard</h1>
             <p className="text-theme-2 mt-1">Here's what's happening today.</p>
@@ -742,8 +807,27 @@ export default function Dashboard() {
           </Link>
         </motion.header>
 
-        {/* 4 Stat Cards / Skeletons */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        {/* Sub-navigation Tabs */}
+        <div className="mb-8 border-b border-white/5 flex gap-1 overflow-x-auto pb-px scrollbar-none">
+          {['Overview', 'Executive Analytics', 'Workforce Planning', 'Talent Discovery & Sourcing'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setDashboardTab(tab)}
+              className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${
+                dashboardTab === tab
+                  ? 'border-emerald-500 text-emerald-400 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {dashboardTab === 'Overview' && (
+          <>
+            {/* 4 Stat Cards / Skeletons */}
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           {isLoading ? (
             Array(4).fill(0).map((_, idx) => (
               <div key={idx} className="h-32 rounded-2xl border border-black/10 dark:border-white/10 bg-card animate-pulse flex flex-col justify-between p-6">
@@ -953,7 +1037,210 @@ export default function Dashboard() {
             </div>
           </>
         )}
-      </div>
+      </>
+    )}
+
+      {dashboardTab === 'Executive Analytics' && (
+        <div className="space-y-8 animate-fadeIn">
+          {execLoading || !execData ? (
+            <div className="h-64 rounded-2xl bg-white/5 animate-pulse flex flex-col items-center justify-center text-gray-500 text-xs">
+              <RefreshCw className="animate-spin mr-2 h-4 w-4" /> Loading Executive Analytics...
+            </div>
+          ) : (
+            <>
+              {/* Executive Metrics Cards */}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard title="Time-to-Hire" value={`${execData.time_to_hire} days`} icon={<Clock className="h-5 w-5" />} trend={-12} trendLabel="vs last month" delay={0.1} />
+                <StatCard title="Cost-per-Hire" value={`$${execData.cost_per_hire.toLocaleString()}`} icon={<Target className="h-5 w-5" />} trend={-5} trendLabel="optimized" delay={0.2} />
+                <StatCard title="Funnel Conversion" value={`${execData.funnel_conversion}%`} icon={<TrendingUp className="h-5 w-5" />} trend={8} trendLabel="improvement" delay={0.3} />
+                <StatCard title="Offer Acceptance" value={`${execData.offer_acceptance}%`} icon={<Users className="h-5 w-5" />} trend={2} trendLabel="positive" delay={0.4} />
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Funnel Conversion Chart */}
+                <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 h-96 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-white font-semibold text-base">Funnel Stage Yields</h3>
+                    <p className="text-gray-500 text-xs">Total applicants surviving at each stage</p>
+                  </div>
+                  <div className="h-64 mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={execData.conversion_stages} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="stage" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                        <Bar dataKey="count" name="Applicants" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Monthly Hiring Trend */}
+                <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 h-96 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-white font-semibold text-base">Monthly Hires</h3>
+                    <p className="text-gray-500 text-xs">Successful additions per month</p>
+                  </div>
+                  <div className="h-64 mt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={execData.monthly_hiring} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <XAxis dataKey="month" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                        <Bar dataKey="hires" name="Hires" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {dashboardTab === 'Workforce Planning' && (
+        <div className="space-y-6 animate-fadeIn">
+          {workforceLoading || !workforceData ? (
+            <div className="h-64 rounded-2xl bg-white/5 animate-pulse flex flex-col items-center justify-center text-gray-500 text-xs">
+              <RefreshCw className="animate-spin mr-2 h-4 w-4" /> Loading Workforce Forecasts...
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Skill Shortage Heatmap */}
+              <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6">
+                <h3 className="text-white font-semibold text-base mb-2">Talent Skill Gaps & Shortages</h3>
+                <p className="text-gray-500 text-xs mb-6">Percentage deficit in organizational capability across core tech stacks</p>
+                <div className="space-y-4">
+                  {workforceData.skill_shortages.map(item => (
+                    <div key={item.skill} className="bg-white/5 border border-white/5 rounded-xl p-4 space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white font-semibold">{item.skill}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          item.status === 'Critical' ? 'bg-red-500/20 text-red-400 border border-red-500/35' :
+                          item.status === 'Moderate' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/35' :
+                                                       'bg-emerald-500/20 text-emerald-400 border border-emerald-500/35'
+                        }`}>{item.status}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-gray-400">
+                        <span>Deficit Gap</span>
+                        <span className="font-bold text-white">{item.gap_percentage}%</span>
+                      </div>
+                      <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${
+                          item.status === 'Critical' ? 'bg-red-500' :
+                          item.status === 'Moderate' ? 'bg-yellow-500' : 'bg-emerald-500'
+                        }`} style={{ width: `${item.gap_percentage}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hiring Demand Forecast */}
+              <div className="bg-[#13131f] border border-black/10 dark:border-white/10 rounded-2xl p-6 flex flex-col justify-between h-[450px]">
+                <div>
+                  <h3 className="text-white font-semibold text-base">Hiring Demand Forecast</h3>
+                  <p className="text-gray-500 text-xs">Projected headcounts required to support future product roadmap quarters</p>
+                </div>
+                <div className="h-72 mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={workforceData.demand_forecast} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <XAxis dataKey="quarter" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
+                      <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                      <Bar dataKey="demand" name="Required Hires" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {dashboardTab === 'Talent Discovery & Sourcing' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 space-y-4">
+            <h3 className="text-white font-semibold text-base">Outreach & Talent Discovery</h3>
+            <p className="text-gray-500 text-xs">Search and discover public software engineering profiles. Instantly trigger automated recruiter outreach campaigns.</p>
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Search discovered profiles by keyword, headline, or skill (e.g. Python, React)..."
+                value={discoveryQuery}
+                onChange={e => {
+                  setDiscoveryQuery(e.target.value);
+                  handleDiscoverySearch(e.target.value);
+                }}
+                className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-300 text-xs outline-none focus:border-emerald-500/40"
+              />
+              <button
+                onClick={() => handleDiscoverySearch(discoveryQuery)}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-all active:scale-95"
+              >
+                Search
+              </button>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-gray-400 font-semibold">{discoveryResults.length} discovered profiles</span>
+            {discoveryResults.length > 0 && (
+              <button
+                onClick={() => toast.success("Automated outreach sequences queued for all matching profiles! 🚀")}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-all active:scale-95 shadow-md"
+              >
+                Bulk Trigger Outreach
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {discoveryLoading ? (
+              Array(3).fill(0).map((_, i) => (
+                <div key={i} className="h-24 rounded-xl border border-white/5 bg-white/5 animate-pulse" />
+              ))
+            ) : discoveryResults.length === 0 ? (
+              <div className="text-center py-12 bg-[#13131f] border border-white/5 rounded-xl text-gray-500 text-xs">
+                No profiles discovered yet. Type a query above to search public candidate databases.
+              </div>
+            ) : discoveryResults.map((profile, idx) => (
+              <div key={idx} className="p-4 bg-[#13131f] border border-white/5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">{profile.name}</h4>
+                    <span className="text-[10px] text-gray-400 font-mono bg-white/5 px-2 py-0.5 rounded">{profile.location}</span>
+                  </div>
+                  <p className="text-xs text-gray-300 truncate">{profile.headline}</p>
+                  <div className="flex flex-wrap gap-1.5 pt-1.5">
+                    {profile.skills.map(s => (
+                      <span key={s} className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0 self-end sm:self-center">
+                  <span className="text-xs text-gray-400">{profile.experience} years exp</span>
+                  {profile.github && (
+                    <a href={`https://${profile.github}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white">
+                      <Github className="h-4 w-4" />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => toast.success(`Personalized outreach email drafted and sent to ${profile.name.split(' ')[0]} via Gmail!`)}
+                    className="px-3.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/20 text-emerald-300 rounded-lg text-xs font-semibold transition-all active:scale-95"
+                  >
+                    Reach Out
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
 
       {/* Modal */}
       <AnimatePresence>

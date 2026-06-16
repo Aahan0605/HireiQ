@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Cpu, Loader2 } from 'lucide-react';
+import { Search, Trash2, Cpu, Loader2, Linkedin, Sparkles, Filter, Grid, List, UserPlus, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
@@ -103,6 +103,11 @@ export default function Candidates() {
   const [educationFilter, setEducationFilter] = useState('All');
   const [selectedSkills, setSelectedSkills] = useState(new Set());
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
+  const [activePool, setActivePool] = useState('All');
+  const [semanticSearch, setSemanticSearch] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
 
   const navigate = useNavigate();
   const deltaTimer = useRef(null);
@@ -181,23 +186,74 @@ export default function Candidates() {
   }, [candidates]);
 
   const filtered = candidates.filter(c => {
+    // Search filter
     const matchesSearch = c?.name?.toLowerCase().includes(search.toLowerCase()) ||
-                          c?.role?.toLowerCase().includes(search.toLowerCase());
+                          c?.role?.toLowerCase().includes(search.toLowerCase()) ||
+                          (semanticSearch && (c?.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())));
     
+    // Talent pool filter
+    const stage = getKanbanStage(c);
     const score = Math.round(c?.final_score || c?.score || 0);
-    const matchesScore = score >= minScore;
-    
     const expYears = getExperienceYears(c);
-    const matchesExp = expYears >= minExp;
     
+    let matchesPool = true;
+    if (activePool === 'Inbox') {
+      matchesPool = stage === 'Screening';
+    } else if (activePool === 'Shortlisted') {
+      matchesPool = stage === 'Shortlisted';
+    } else if (activePool === 'Interviewing') {
+      matchesPool = stage === 'Interviewing';
+    } else if (activePool === 'Offer') {
+      matchesPool = stage === 'Offer';
+    } else if (activePool === 'Hired') {
+      matchesPool = stage === 'Hired';
+    } else if (activePool === 'Rejected') {
+      matchesPool = stage === 'Rejected';
+    } else if (activePool === 'Silver Medalists') {
+      matchesPool = score >= 80 && stage !== 'Hired';
+    } else if (activePool === 'Future Pipeline') {
+      matchesPool = score < 80 && expYears >= 3;
+    }
+    
+    const matchesScore = score >= minScore;
+    const matchesExp = expYears >= minExp;
     const eduTier = getEducationTier(c);
     const matchesEdu = educationFilter === 'All' || eduTier === educationFilter;
-    
     const matchesSkills = selectedSkills.size === 0 || 
                           (Array.isArray(c.skills) && Array.from(selectedSkills).every(s => c.skills.includes(s)));
                           
-    return matchesSearch && matchesScore && matchesExp && matchesEdu && matchesSkills;
+    return matchesSearch && matchesPool && matchesScore && matchesExp && matchesEdu && matchesSkills;
   });
+
+  const handleImportLinkedIn = async (e) => {
+    e.preventDefault();
+    if (!linkedinUrl) return;
+    setImportLoading(true);
+    try {
+      const res = await apiFetch(`${API}/features/linkedin-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkedin_url: linkedinUrl })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "LinkedIn Import failed.");
+      }
+      toast.success(`Successfully imported ${data.name} profile from LinkedIn!`);
+      setLinkedinUrl('');
+      setShowImportModal(false);
+      
+      const refRes = await apiFetch(`${API}/candidates?page=1&limit=200`);
+      if (refRes.ok) {
+        const refData = await refRes.json();
+        setCandidates(Array.isArray(refData) ? refData : (refData.data || []));
+      }
+    } catch (err) {
+      toast.error(err.message || "Error importing from LinkedIn.");
+    } finally {
+      setImportLoading(false);
+    }
+  };
 
   // Sort by score using merge sort, compute rank deltas
   const handleSort = () => {
@@ -453,6 +509,10 @@ export default function Candidates() {
             </span>
           </div>
           <div className="flex gap-2">
+            <button onClick={() => setShowImportModal(true)}
+              className="px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/25 transition-all flex items-center gap-1.5 shadow-md">
+              <Linkedin size={15} /> LinkedIn Import
+            </button>
             <button onClick={() => setViewMode(viewMode === 'list' ? 'kanban' : 'list')}
               className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all flex items-center gap-1.5 shadow-md">
               {viewMode === 'list' ? '📋 Kanban View' : '📋 List View'}
@@ -468,6 +528,23 @@ export default function Candidates() {
           </div>
         </div>
 
+        {/* Talent Pool Tabs */}
+        <div className="mb-6 border-b border-white/5 flex gap-1 overflow-x-auto pb-px scrollbar-none">
+          {['All', 'Inbox', 'Shortlisted', 'Interviewing', 'Offer', 'Hired', 'Rejected', 'Silver Medalists', 'Future Pipeline'].map(pool => (
+            <button
+              key={pool}
+              onClick={() => setActivePool(pool)}
+              className={`px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-all border-b-2 -mb-px ${
+                activePool === pool
+                  ? 'border-emerald-500 text-emerald-400 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              {pool}
+            </button>
+          ))}
+        </div>
+
         {error && (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-400 text-sm">
             ⚠️ {error}
@@ -476,11 +553,24 @@ export default function Candidates() {
 
         {/* Controls */}
         <div className="mb-5 flex flex-col xl:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-            <input type="text" placeholder="Search by name or role..."
-              value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
+          <div className="relative flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <input type="text" placeholder="Search by name or role..."
+                value={search} onChange={e => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
+            </div>
+            <button
+              onClick={() => setSemanticSearch(!semanticSearch)}
+              className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                semanticSearch
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 shadow-glow-blue/20'
+                  : 'border-white/10 bg-card text-gray-400 hover:text-white'
+              }`}
+            >
+              <Cpu size={14} className={semanticSearch ? 'text-blue-400 animate-pulse' : ''} />
+              Semantic AI
+            </button>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={handleSort}
@@ -852,6 +942,51 @@ export default function Candidates() {
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* LinkedIn Import Modal */}
+      <AnimatePresence>
+        {showImportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-[#131324] border border-white/10 rounded-xl p-6 space-y-4 shadow-2xl"
+            >
+              <div className="flex items-center gap-2 text-blue-400">
+                <Linkedin size={20} />
+                <h3 className="text-lg font-bold text-white">Import from LinkedIn</h3>
+              </div>
+              <p className="text-xs text-gray-400">Enter a public LinkedIn profile URL to instantly scrape, parse, score, and import the candidate details into HireIQ.</p>
+              
+              <form onSubmit={handleImportLinkedIn} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">LinkedIn Profile URL</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={linkedinUrl}
+                    onChange={e => setLinkedinUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/username"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs outline-none focus:border-blue-500/50 transition-colors" 
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                  <button type="button" onClick={() => setShowImportModal(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold transition-colors">Cancel</button>
+                  <button type="submit" disabled={importLoading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
+                    {importLoading ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      'Start Import'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </motion.div>
