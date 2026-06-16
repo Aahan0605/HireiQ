@@ -139,14 +139,16 @@ def _candidate_to_dict(c: dict) -> dict:
         "organization_id": str(c.get("recruiter_id")),
         "name": c.get("full_name") or "Unknown",
         "email": c.get("email") or "",
+        "phone": c.get("phone") or "",
         "role": c.get("career_tier") or "Software Engineer",
         "github": c.get("github_url") or "",
-        "linkedin": "",
+        "linkedin": db_insights.get("linkedin") or "",
         "location": c.get("location") or "Remote",
         "score": round(c.get("match_score", 0.0) or 0.0),
         "blind_score": round(c.get("blind_score", 0.0) or 0.0),
         "status": status,
         "summary": summary,
+        "experience_years": c.get("experience_years") or 0,
         "resume_text": c.get("raw_text") or "",
         "skills": c.get("skills") or [],
         "experience": experience,
@@ -209,10 +211,13 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         match_score = job_matches[0].get("tfidf_score") or match_score
         
     insights = candidate.get("insights") or {}
+    if "linkedin" in candidate:
+        insights["linkedin"] = candidate["linkedin"]
     
     db_record = {
         "full_name": candidate.get("name"),
         "email": candidate.get("email"),
+        "phone": candidate.get("phone") or "",
         "location": candidate.get("location", "Remote"),
         "career_tier": candidate.get("role", "Software Engineer"),
         "skills": candidate.get("skills") or [],
@@ -234,8 +239,11 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     # Experience years
     if "experience_years" in candidate:
         db_record["experience_years"] = int(candidate["experience_years"])
-    elif candidate.get("experience") and isinstance(candidate["experience"], list) and candidate["experience"]:
-        db_record["experience_years"] = len(candidate["experience"]) * 2 # heuristic fallback
+    elif "experience" in candidate and isinstance(candidate["experience"], list) and candidate["experience"]:
+        # check if the items contain raw strings or objects
+        db_record["experience_years"] = len(candidate["experience"]) * 2
+    else:
+        db_record["experience_years"] = int(candidate.get("experience_years") or 0)
         
     # Map recruiter_id
     r_id = recruiter_id or candidate.get("organization_id") or candidate.get("recruiter_id")

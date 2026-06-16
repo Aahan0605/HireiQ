@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
-import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle } from 'lucide-react';
+import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle, Phone, Edit, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import SkillGapCard from '../components/SkillGapCard';
@@ -65,6 +65,21 @@ export default function CandidateProfile() {
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
+
+  // Edit and Resume modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editGithub, setEditGithub] = useState('');
+  const [editLinkedin, setEditLinkedin] = useState('');
+  const [editSkills, setEditSkills] = useState('');
+  const [editExperienceYears, setEditExperienceYears] = useState(0);
 
   const emailTemplates = {
     screening: {
@@ -228,6 +243,75 @@ HireIQ Hiring Team`
     setSelectedTemplate('');
     setEmailSubject('');
     setEmailBody('');
+  };
+
+  const handleOpenEditModal = () => {
+    if (!candidate) return;
+    setEditName(candidate.name || '');
+    setEditRole(candidate.role || '');
+    setEditEmail(candidate.email || '');
+    setEditPhone(candidate.phone || '');
+    setEditLocation(candidate.location || '');
+    setEditGithub(candidate.github || '');
+    setEditLinkedin(candidate.linkedin || '');
+    setEditSkills(Array.isArray(candidate.skills) ? candidate.skills.join(', ') : candidate.skills || '');
+    setEditExperienceYears(candidate.experience_years || 0);
+    setShowEditModal(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const parsedSkills = editSkills
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const payload = {
+        name: editName,
+        role: editRole,
+        email: editEmail,
+        phone: editPhone,
+        location: editLocation,
+        github: editGithub,
+        linkedin: editLinkedin,
+        skills: parsedSkills,
+        experience_years: parseInt(editExperienceYears) || 0
+      };
+
+      const res = await apiFetch(`${API}/candidates/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update candidate profile');
+      }
+
+      const data = await res.json();
+      const updatedCandidate = data.candidate || data;
+
+      // Update the local state
+      setCandidate(prev => ({
+        ...prev,
+        ...updatedCandidate
+      }));
+
+      toast.success("Candidate profile updated successfully!");
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err.message || "An error occurred while saving the profile.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Fetch open jobs for Recommended Roles section
@@ -578,6 +662,7 @@ HireIQ Hiring Team`
                   <>
                     {candidate?.location && <div className="flex items-center gap-3 text-gray-300"><MapPin className="h-4 w-4 text-gray-500" />{candidate.location}</div>}
                     {candidate?.email    && <div className="flex items-center gap-3 text-gray-300"><Mail className="h-4 w-4 text-gray-500" />{candidate.email}</div>}
+                    {candidate?.phone    && <div className="flex items-center gap-3 text-gray-300"><Phone className="h-4 w-4 text-gray-500" />{candidate.phone}</div>}
                     {candidate?.github   && <div className="flex items-center gap-3 text-gray-300"><Github className="h-4 w-4 text-gray-500" />{candidate.github}</div>}
                     {candidate?.linkedin && <div className="flex items-center gap-3 text-gray-300"><Linkedin className="h-4 w-4 text-gray-500" />{candidate.linkedin}</div>}
                   </>
@@ -595,6 +680,16 @@ HireIQ Hiring Team`
                   className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
                   <Mail className="h-4 w-4" /> Contact Candidate
                 </button>
+                <button onClick={handleOpenEditModal}
+                  className="w-full rounded-xl border border-violet/20 bg-violet/10 px-4 py-2.5 text-sm font-semibold text-violet hover:bg-violet/20 transition-all flex items-center justify-center gap-2">
+                  <Edit className="h-4 w-4" /> Edit Profile
+                </button>
+                {!blindReview && (
+                  <button onClick={() => setShowResumeModal(true)}
+                    className="w-full rounded-xl border border-[#3b3b4f] bg-[#1a1a2e] px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#25253b] transition-all flex items-center justify-center gap-2">
+                    <FileText className="h-4 w-4" /> Check Resume
+                  </button>
+                )}
                 <button onClick={handleDownload}
                   className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                   <Download className="h-4 w-4" /> Download Report
@@ -1282,6 +1377,189 @@ HireIQ Hiring Team`
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {showEditModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setShowEditModal(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#13131f] border border-white/10 rounded-2xl p-6 w-full max-w-2xl shadow-2xl relative space-y-4 my-8">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                  <Edit className="h-5 w-5 text-violet" /> Edit Candidate Profile
+                </h3>
+                <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Full Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      placeholder="e.g. John Doe"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Target Role / Title</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={editRole}
+                      onChange={e => setEditRole(e.target.value)}
+                      placeholder="e.g. Senior Backend Engineer"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Email Address</label>
+                    <input 
+                      type="email" 
+                      required
+                      value={editEmail}
+                      onChange={e => setEditEmail(e.target.value)}
+                      placeholder="e.g. john@example.com"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Phone Number</label>
+                    <input 
+                      type="text" 
+                      value={editPhone}
+                      onChange={e => setEditPhone(e.target.value)}
+                      placeholder="e.g. +1 (555) 019-2834"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Location</label>
+                    <input 
+                      type="text" 
+                      value={editLocation}
+                      onChange={e => setEditLocation(e.target.value)}
+                      placeholder="e.g. San Francisco, CA (or Remote)"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">Years of Experience</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="50"
+                      value={editExperienceYears}
+                      onChange={e => setEditExperienceYears(e.target.value)}
+                      placeholder="e.g. 5"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">GitHub Profile URL or Username</label>
+                    <input 
+                      type="text" 
+                      value={editGithub}
+                      onChange={e => setEditGithub(e.target.value)}
+                      placeholder="e.g. github.com/johndoe"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-semibold text-gray-400">LinkedIn Profile URL or Handle</label>
+                    <input 
+                      type="text" 
+                      value={editLinkedin}
+                      onChange={e => setEditLinkedin(e.target.value)}
+                      placeholder="e.g. linkedin.com/in/johndoe"
+                      className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-gray-400">Skills (Comma-separated list)</label>
+                  <textarea 
+                    rows="2"
+                    value={editSkills}
+                    onChange={e => setEditSkills(e.target.value)}
+                    placeholder="e.g. React, TypeScript, Node.js, Python, PostgreSQL"
+                    className="bg-[#0e0e1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-violet/50 outline-none w-full resize-none font-sans"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+                  <button 
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-violet to-fuchsia-600 font-bold text-white shadow-lg shadow-violet/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 text-xs disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving...</> : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Resume Viewer Modal */}
+      <AnimatePresence>
+        {showResumeModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+            onClick={() => setShowResumeModal(false)}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-[#13131f] border border-white/10 rounded-2xl p-6 w-full max-w-3xl shadow-2xl relative space-y-4 my-8 flex flex-col max-h-[85vh]">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-emerald-400" /> Original Resume Text
+                </h3>
+                <button onClick={() => setShowResumeModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-black/40 border border-white/10 rounded-xl p-5 text-gray-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
+                {candidate?.resume_text || candidate?.resumeText || "No original resume text available for this candidate."}
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-white/5">
+                <button 
+                  type="button"
+                  onClick={() => setShowResumeModal(false)}
+                  className="px-6 py-2 rounded-xl bg-white text-[#0d0d1a] font-bold text-xs hover:scale-[1.02] active:scale-95 transition-all duration-200"
+                >
+                  Close Resume
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
