@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
-import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle, Phone, Edit, FileText } from 'lucide-react';
+import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle, Phone, Edit, FileText, Cpu } from 'lucide-react';
 import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import SkillGapCard from '../components/SkillGapCard';
