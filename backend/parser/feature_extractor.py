@@ -393,23 +393,54 @@ def extract_contact(text: str) -> dict[str, str | None]:
     email_match = re.findall(email_pattern, text)
     email = email_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if email_match else None
 
+    # GitHub URL extraction
+    github = None
     github_pattern = r"github\.com/\s*[\w\-]+(?:\s+[\w\-]+)*"
     github_match = re.findall(github_pattern, text, re.IGNORECASE)
-    github = github_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if github_match else None
+    if github_match:
+        github = github_match[0].replace(" ", "").replace("\t", "").replace("\n", "")
+    else:
+        # Fallback to github: username
+        github_fallback_match = re.search(r"github\s*:\s*([\w\-]+)", text, re.IGNORECASE)
+        if github_fallback_match:
+            github = f"github.com/{github_fallback_match.group(1).strip()}"
 
+    # LinkedIn URL extraction
+    linkedin = None
     linkedin_pattern = r"linkedin\.com/in/\s*[\w\-]+(?:\s+[\w\-]+)*"
     linkedin_match = re.findall(linkedin_pattern, text, re.IGNORECASE)
-    linkedin = linkedin_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if linkedin_match else None
+    if linkedin_match:
+        linkedin = linkedin_match[0].replace(" ", "").replace("\t", "").replace("\n", "")
+    else:
+        # Fallback to linkedin: username or linkedin.com/username
+        linkedin_fallback_match = re.search(r"linkedin\s*:\s*([\w\-]+)", text, re.IGNORECASE)
+        if linkedin_fallback_match:
+            linkedin = f"linkedin.com/in/{linkedin_fallback_match.group(1).strip()}"
+        else:
+            linkedin_alt = re.findall(r"linkedin\.com/([a-zA-Z0-9\-]+)", text, re.IGNORECASE)
+            if linkedin_alt:
+                linkedin = f"linkedin.com/in/{linkedin_alt[0]}"
     
     # Phone number matching pattern supporting international format, brackets, hyphens, and spaces
     phone_pattern = r"\+?\d{1,4}?[\s.-]?\(?\d{1,3}?\)?[\s.-]?\d{1,4}[\s.-]?\d{1,4}[\s.-]?\d{1,9}"
     phone_match = re.findall(phone_pattern, text)
+
+    # Location extraction
+    location = None
+    location_match = re.search(r"(?:location|address|lives in|based in)\s*:\s*([a-zA-Z\s,]+)", text, re.IGNORECASE)
+    if location_match:
+        location = location_match.group(1).strip()
+    else:
+        city_state_match = re.search(r"\b([A-Z][a-zA-Z\s]{2,20}),\s*([A-Z]{2})\b", text)
+        if city_state_match:
+            location = f"{city_state_match.group(1)}, {city_state_match.group(2)}"
 
     return {
         "email": email,
         "github": github,
         "linkedin": linkedin,
         "phone": phone_match[0].strip() if phone_match else None,
+        "location": location,
     }
 
 

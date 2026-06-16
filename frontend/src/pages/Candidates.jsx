@@ -549,10 +549,6 @@ export default function Candidates() {
             </span>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setShowImportModal(true)}
-              className="px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/25 transition-all flex items-center gap-1.5 shadow-md">
-              <Linkedin size={15} /> LinkedIn Import
-            </button>
             <button onClick={() => setViewMode(viewMode === 'list' ? 'kanban' : 'list')}
               className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all flex items-center gap-1.5 shadow-md">
               {viewMode === 'list' ? '📋 Kanban View' : '📋 List View'}
@@ -623,8 +619,9 @@ export default function Candidates() {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-3 xl:ml-auto relative">
-            <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-              {loading ? 'Importing...' : 'Import Candidates'}
+            <label className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 text-sm font-medium text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer m-0 flex items-center gap-1.5 ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <UserPlus size={15} />
+              {loading ? 'Importing...' : 'Import'}
               <input 
                 type="file" 
                 accept=".csv,.pdf,.doc,.docx" 
@@ -639,7 +636,7 @@ export default function Candidates() {
                 onClick={() => setShowExportDropdown(!showExportDropdown)}
                 className="px-4 py-2.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-sm font-medium text-purple-300 hover:bg-purple-500/20 transition-all"
               >
-                Export Candidates
+                Export
               </button>
               {showExportDropdown && (
                 <div className="absolute right-0 mt-2 w-48 rounded-xl border border-white/10 bg-[#13131f] p-2 shadow-2xl z-20">

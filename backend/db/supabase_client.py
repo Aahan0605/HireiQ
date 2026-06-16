@@ -79,9 +79,12 @@ def _candidate_to_dict(c: dict) -> dict:
         {"title": "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
     ]
     
-    db_insights = c.get("insights") or {}
-    if not isinstance(db_insights, dict):
-        db_insights = {}
+    raw_insights = c.get("insights") or {}
+    if not isinstance(raw_insights, dict):
+        raw_insights = {}
+    import copy
+    db_insights = copy.deepcopy(raw_insights)
+    has_resume = bool(db_insights.get("resume_base64"))
         
     score = float(c.get("match_score") or 0.0)
     
@@ -129,14 +132,15 @@ def _candidate_to_dict(c: dict) -> dict:
     db_insights.pop("resume_base64", None)
 
     insights = {
-        "completeness_score": c.get("completeness_score", 0.0),
-        "ats_score": c.get("ats_score", 0.0),
         "strengths": c.get("key_strengths") or [],
         "weaknesses": c.get("development_gaps") or [],
         "concerns": c.get("potential_concerns") or [],
         "career_progression": "Stable trajectory",
         **db_insights
     }
+    insights["completeness_score"] = float(c.get("completeness_score") or 0.0)
+    insights["ats_score"] = float(c.get("ats_score") or 0.0)
+    insights["executive_summary"] = db_insights.get("ai_summary", {}).get("executive_summary") or db_insights.get("executive_summary") or c.get("summary") or ""
         
     return {
         "id": str(c.get("id")),
@@ -154,7 +158,7 @@ def _candidate_to_dict(c: dict) -> dict:
         "summary": summary,
         "experience_years": c.get("experience_years") or 0,
         "resume_text": c.get("raw_text") or "",
-        "has_resume_file": bool(db_insights.get("resume_base64")),
+        "has_resume_file": has_resume,
         "resume_filename": c.get("resume_filename") or "",
         "skills": c.get("skills") or [],
         "experience": experience,
@@ -216,7 +220,25 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         job_id = job_matches[0].get("job_id")
         match_score = job_matches[0].get("tfidf_score") or match_score
         
+    candidate_id = candidate.get("id")
+    existing_insights = {}
+    if candidate_id:
+        try:
+            res = supabase.table("candidates").select("insights").eq("id", candidate_id).execute()
+            if res.data:
+                existing_insights = res.data[0].get("insights") or {}
+        except Exception:
+            pass
+
     insights = candidate.get("insights") or {}
+    if not isinstance(insights, dict):
+        insights = {}
+        
+    if existing_insights and isinstance(existing_insights, dict):
+        for k, v in existing_insights.items():
+            if k not in insights or insights[k] is None:
+                insights[k] = v
+
     if "linkedin" in candidate:
         insights["linkedin"] = candidate["linkedin"]
     
