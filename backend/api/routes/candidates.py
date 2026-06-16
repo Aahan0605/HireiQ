@@ -1011,8 +1011,8 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     else:
         resume_raw_score = 0.7  # fallback 70%
 
-    github_signals = scoring_res.get("external_signals", {}).get("github", {})
-    github_score = github_signals.get("score", 0.0)
+    github_analysis = scoring_res["insights"].get("github_analysis", {})
+    github_score = github_analysis.get("engineering_score", 0.0) / 100.0
     
     # 65% resume + 35% GitHub
     fused_score_pct = (0.65 * resume_raw_score + 0.35 * github_score) * 100
@@ -1101,7 +1101,7 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     await save_candidate(candidate_dict, tenant_id)
 
     # Log audit event
-    github_score_pct = round(github_signals.get("score", 0) * 100)
+    github_score_pct = round(github_analysis.get("engineering_score", 0.0))
     try:
         await log_analytics_event("github_sync", {
             "candidate_id": candidate_id,
@@ -1340,11 +1340,10 @@ async def get_github_signals(username: str):
     if not signals:
         return {"error": f"GitHub profile '{clean}' not found or is private"}
 
-    score = score_github(signals)
     profile_analysis = analyze_github_profile(signals, [], "backend")
     return {
         "username":                clean,
-        "score":                   round(score * 100),   # 0-100
+        "score":                   round(profile_analysis.get("engineering_score", 0.0)),   # 0-100
         "account_age_years":       signals.get("account_age_years", 0),
         "total_repos":             signals.get("total_repos", 0),
         "original_repos":          signals.get("original_repos", 0),

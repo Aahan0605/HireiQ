@@ -456,7 +456,12 @@ def _score_external_signals(
 
     # GitHub
     gh_data = external_signals.get("github", {})
-    scores["github_score"] = score_github(gh_data) if gh_data else 0.0
+    if gh_data:
+        profile_role = role_type.split("_")[0] if "_" in role_type else role_type
+        analysis = analyze_github_profile(gh_data, claimed_skills, profile_role)
+        scores["github_score"] = analysis.get("engineering_score", 0.0) / 100.0
+    else:
+        scores["github_score"] = 0.0
 
     # Competitive coding
     cf_data = external_signals.get("codeforces", {})
