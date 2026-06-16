@@ -389,18 +389,26 @@ def extract_contact(text: str) -> dict[str, str | None]:
 
     Time: O(n) where n = text length
     """
-    email_match = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
-    github_match = re.findall(r"github\.com/[\w\-]+", text, re.IGNORECASE)
-    linkedin_match = re.findall(r"linkedin\.com/in/[\w\-]+", text, re.IGNORECASE)
+    email_pattern = r"[a-zA-Z0-9._%+-]+(?:\s*[a-zA-Z0-9._%+-]+)*\s*@\s*[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,}"
+    email_match = re.findall(email_pattern, text)
+    email = email_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if email_match else None
+
+    github_pattern = r"github\.com/\s*[\w\-]+(?:\s*[\w\-]+)*"
+    github_match = re.findall(github_pattern, text, re.IGNORECASE)
+    github = github_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if github_match else None
+
+    linkedin_pattern = r"linkedin\.com/in/\s*[\w\-]+(?:\s*[\w\-]+)*"
+    linkedin_match = re.findall(linkedin_pattern, text, re.IGNORECASE)
+    linkedin = linkedin_match[0].replace(" ", "").replace("\t", "").replace("\n", "") if linkedin_match else None
     
     # Phone number matching pattern supporting international format, brackets, hyphens, and spaces
     phone_pattern = r"\+?\d{1,4}?[\s.-]?\(?\d{1,3}?\)?[\s.-]?\d{1,4}[\s.-]?\d{1,4}[\s.-]?\d{1,9}"
     phone_match = re.findall(phone_pattern, text)
 
     return {
-        "email": email_match[0] if email_match else None,
-        "github": github_match[0] if github_match else None,
-        "linkedin": linkedin_match[0] if linkedin_match else None,
+        "email": email,
+        "github": github,
+        "linkedin": linkedin,
         "phone": phone_match[0].strip() if phone_match else None,
     }
 
@@ -413,8 +421,9 @@ def _extract_email(text: str) -> str:
     if not text:
         return None
 
-    match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
-    return match.group(0) if match else None
+    pattern = r"[a-zA-Z0-9._%+-]+(?:\s*[a-zA-Z0-9._%+-]+)*\s*@\s*[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,}"
+    match = re.search(pattern, text)
+    return match.group(0).replace(" ", "").replace("\t", "").replace("\n", "") if match else None
 
 
 def _extract_github(text: str) -> str:
@@ -425,14 +434,9 @@ def _extract_github(text: str) -> str:
     if not text:
         return None
 
-    # Look for github.com pattern
-    match = re.search(
-        r"(?:https?://)?(?:www\.)?github\.com/[\w-]+", text, re.IGNORECASE
-    )
-    if match:
-        return match.group(0)
-
-    return None
+    pattern = r"(?:https?://)?(?:www\.)?github\.com/\s*[\w\-]+(?:\s*[\w\-]+)*"
+    match = re.search(pattern, text, re.IGNORECASE)
+    return match.group(0).replace(" ", "").replace("\t", "").replace("\n", "") if match else None
 
 
 def _extract_linkedin(text: str) -> str:
@@ -443,14 +447,9 @@ def _extract_linkedin(text: str) -> str:
     if not text:
         return None
 
-    # Look for linkedin.com/in/ pattern
-    match = re.search(
-        r"(?:https?://)?(?:www\.)?linkedin\.com/in/[\w\-]+", text, re.IGNORECASE
-    )
-    if match:
-        return match.group(0)
-
-    return None
+    pattern = r"(?:https?://)?(?:www\.)?linkedin\.com/in/\s*[\w\-]+(?:\s*[\w\-]+)*"
+    match = re.search(pattern, text, re.IGNORECASE)
+    return match.group(0).replace(" ", "").replace("\t", "").replace("\n", "") if match else None
 
 
 def _extract_experience_from_timeline(text: str) -> list[dict]:
@@ -1377,9 +1376,9 @@ def generate_resume_insights(
     
     if education != "unknown": score_parts += 20
     
-    email_m = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
-    github_m = re.search(r"github\.com/[\w-]+", text, re.I)
-    linkedin_m = re.search(r"linkedin\.com/in/[\w-]+", text, re.I)
+    email_m = re.search(r"[a-zA-Z0-9._%+-]+(?:\s*[a-zA-Z0-9._%+-]+)*\s*@\s*[a-zA-Z0-9.-]+\s*\.\s*[a-zA-Z]{2,}", text)
+    github_m = re.search(r"github\.com/\s*[\w\-]+(?:\s*[\w\-]+)*", text, re.I)
+    linkedin_m = re.search(r"linkedin\.com/in/\s*[\w\-]+(?:\s*[\w\-]+)*", text, re.I)
     
     has_github = github_m or (github_signals and bool(github_signals))
     has_linkedin = linkedin_m or (linkedin_signals and linkedin_signals.get("has_linkedin"))
