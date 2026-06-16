@@ -226,6 +226,7 @@ async def compute_full_candidate_score(
         trust_result=trust_result,
         missing_skills=missing_skills,
         role_type=role_type,
+        github_signals=github_raw,
     )
 
     # ── Build the insights package ──
@@ -660,6 +661,7 @@ def _generate_recruiter_summary(
     trust_result: dict,
     missing_skills: list[str],
     role_type: str,
+    github_signals: dict | None = None,
 ) -> dict[str, Any]:
     """
     Generate a comprehensive, structured AI recruiter summary.
@@ -807,22 +809,54 @@ def _generate_recruiter_summary(
         f"Behavioral: Evaluate leadership and collaboration style for {career_tier} expectations."
     )
 
-    # Build executive summary
+    # Build a highly detailed, professional, and descriptive executive summary
     role_display = role_type.replace("_", " ").title()
+    edu_val = resume_features.get("education", "unknown")
+    edu_str = f" with a verified background in {edu_val.upper()}" if edu_val and edu_val != "unknown" else ""
+
     summary_parts = [
-        f"{candidate_name} is a {career_tier} {role_display} candidate "
-        f"scoring {final_score:.0f}/100 overall with a {match_pct:.0f}% job match."
+        f"{candidate_name} is a {career_tier} {role_display} candidate{edu_str}, "
+        f"demonstrating {experience_years:.1f} years of professional experience. "
+        f"They achieved an overall screening score of {final_score:.0f}/100 with a {match_pct:.0f}% matching alignment to the job description."
     ]
 
-    if strengths:
+    claimed_skills = resume_features.get("skills", [])
+    if claimed_skills:
         summary_parts.append(
-            f"Key strengths include {strengths[0].lower().rstrip('.')}"
-            + (f" and {strengths[1].lower().rstrip('.')}" if len(strengths) > 1 else "")
-            + "."
+            f"The candidate's core technological competencies and skills include {', '.join(claimed_skills[:6])}."
         )
 
+    if verified:
+        summary_parts.append(
+            f"Live engineering analytics successfully verified practical usage and competence in {', '.join(verified[:4])}."
+        )
+
+    projects_list = resume_features.get("projects", [])
+    if projects_list:
+        summary_parts.append(
+            f"Key projects described in their resume include: {', '.join(projects_list[:3])}."
+        )
+
+    achievements_list = resume_features.get("achievements", [])
+    if achievements_list:
+        summary_parts.append(
+            f"Notable achievements and professional highlights include: {', '.join(achievements_list[:2])}."
+        )
+
+    if github_signals:
+        total_repos = github_signals.get("total_repos", 0)
+        total_stars = github_signals.get("total_stars", 0)
+        commit_freq = github_signals.get("commit_frequency_per_week", 0.0) or github_signals.get("commit_frequency", 0.0)
+        github_langs = github_signals.get("languages", [])
+        lang_str = f" in {', '.join(github_langs[:3])}" if github_langs else ""
+        if total_repos > 0:
+            summary_parts.append(
+                f"On GitHub, they exhibit an active coding presence{lang_str} (engineering score: {eng_score:.0f}/100) "
+                f"across {total_repos} repositories with {total_stars} stars, averaging {commit_freq:.1f} commits per week."
+            )
+
     if concerns:
-        summary_parts.append(f"Primary area of attention: {concerns[0].lower()}")
+        summary_parts.append(f"Primary area of attention for recruiting team: {concerns[0].lower()}")
 
     summary_parts.append(f"Verdict: {verdict}.")
 

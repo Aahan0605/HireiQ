@@ -1002,21 +1002,9 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
         logger.error("Scoring engine failed during webhook sync: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to score candidate: {str(e)}")
 
-    # Calculate 65% resume base + 35% live GitHub score fusion
-    breakdown = scoring_res.get("component_breakdown", {})
-    resume_keys = ["resume_skill_match", "resume_experience", "resume_education"]
-    resume_weight_sum = sum(breakdown.get(k, {}).get("weight", 0.0) for k in resume_keys)
-    if resume_weight_sum > 0:
-        resume_raw_score = sum(breakdown.get(k, {}).get("weighted_score", 0.0) for k in resume_keys) / resume_weight_sum
-    else:
-        resume_raw_score = 0.7  # fallback 70%
-
+    github_signals = scoring_res.get("external_signals", {}).get("github", {})
     github_analysis = scoring_res["insights"].get("github_analysis", {})
-    github_score = github_analysis.get("engineering_score", 0.0) / 100.0
-    
-    # 65% resume + 35% GitHub
-    fused_score_pct = (0.65 * resume_raw_score + 0.35 * github_score) * 100
-    final_score = max(0, min(100, round(fused_score_pct)))
+    final_score = round(scoring_res.get("final_score", 0.0))
     blind_score = final_score
 
     # Compute Blind Score using bias auditor
