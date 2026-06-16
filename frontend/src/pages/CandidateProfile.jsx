@@ -129,7 +129,13 @@ HireIQ Hiring Team`
   useEffect(() => {
     if (selectedTemplate && emailTemplates[selectedTemplate] && candidate) {
       const templ = emailTemplates[selectedTemplate];
-      const skillsStr = skillsList.slice(0, 4).join(', ') || 'software engineering';
+      const rawSkills = candidate.skills;
+      const skillsListLocal = Array.isArray(rawSkills)
+        ? rawSkills
+        : typeof rawSkills === 'string'
+        ? rawSkills.split(',').map(s => s.trim())
+        : [];
+      const skillsStr = skillsListLocal.slice(0, 4).join(', ') || 'software engineering';
       const roleStr = candidate.role || 'Software Engineer';
       const scoreStr = candidate.score || '75';
 
@@ -143,7 +149,7 @@ HireIQ Hiring Team`
       setEmailSubject(subjectText);
       setEmailBody(bodyText);
     }
-  }, [selectedTemplate, candidate, skillsList]);
+  }, [selectedTemplate, candidate]);
 
   const [blindReview] = useState(() => {
     return localStorage.getItem('hireiq_blind_review') === 'true';
