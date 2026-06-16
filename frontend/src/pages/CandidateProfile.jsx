@@ -314,6 +314,38 @@ HireIQ Hiring Team`
     }
   };
 
+  const handleCheckResume = () => {
+    if (candidate?.resume_base64) {
+      try {
+        const isPdf = candidate.resume_filename?.toLowerCase()?.endsWith('.pdf') || !candidate.resume_filename;
+        const contentType = isPdf ? 'application/pdf' : 'text/plain';
+        
+        // Convert base64 to blob
+        const sliceSize = 512;
+        const byteCharacters = atob(candidate.resume_base64);
+        const byteArrays = [];
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+          const slice = byteCharacters.slice(offset, offset + sliceSize);
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          byteArrays.push(byteArray);
+        }
+        const blob = new Blob(byteArrays, { type: contentType });
+        const blobURL = URL.createObjectURL(blob);
+        window.open(blobURL, '_blank');
+      } catch (e) {
+        console.error("Failed to generate PDF view: ", e);
+        toast.error("Failed to render PDF view. Falling back to parsed text.");
+        setShowResumeModal(true);
+      }
+    } else {
+      setShowResumeModal(true);
+    }
+  };
+
   // Fetch open jobs for Recommended Roles section
   useEffect(() => {
     apiFetch(`${API}/jobs`)
@@ -685,7 +717,7 @@ HireIQ Hiring Team`
                   <Edit className="h-4 w-4" /> Edit Profile
                 </button>
                 {!blindReview && (
-                  <button onClick={() => setShowResumeModal(true)}
+                  <button onClick={handleCheckResume}
                     className="w-full rounded-xl border border-[#3b3b4f] bg-[#1a1a2e] px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#25253b] transition-all flex items-center justify-center gap-2">
                     <FileText className="h-4 w-4" /> Check Resume
                   </button>

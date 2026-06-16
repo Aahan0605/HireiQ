@@ -150,6 +150,8 @@ def _candidate_to_dict(c: dict) -> dict:
         "summary": summary,
         "experience_years": c.get("experience_years") or 0,
         "resume_text": c.get("raw_text") or "",
+        "resume_base64": db_insights.get("resume_base64") or "",
+        "resume_filename": c.get("resume_filename") or "",
         "skills": c.get("skills") or [],
         "experience": experience,
         "job_matches": job_matches,

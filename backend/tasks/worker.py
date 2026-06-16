@@ -132,6 +132,11 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             edu_tier = edu.lower()
 
         # Update candidate database entity in Supabase
+        insights = scoring_res.get("insights", {})
+        if not isinstance(insights, dict):
+            insights = {}
+        insights["resume_base64"] = content_b64
+
         db_record = {
             "full_name": candidate_name,
             "email": contact.get("email") or f"{candidate_id[:8]}@example.com",
@@ -142,12 +147,12 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "skills": scoring_res.get("resume_features", {}).get("skills", []),
             "raw_text": text,
             "match_score": final_score,
-            "completeness_score": scoring_res.get("insights", {}).get("completeness_score", 80),
-            "ats_score": scoring_res.get("insights", {}).get("ats_score", 75),
+            "completeness_score": insights.get("completeness_score", 80),
+            "ats_score": insights.get("ats_score", 75),
             "career_tier": scoring_res.get("resume_features", {}).get("role", "Software Engineer"),
-            "key_strengths": scoring_res.get("insights", {}).get("ai_summary", {}).get("strengths", []),
-            "development_gaps": scoring_res.get("insights", {}).get("ai_summary", {}).get("gaps", []),
-            "potential_concerns": scoring_res.get("insights", {}).get("ai_summary", {}).get("concerns", []),
+            "key_strengths": insights.get("ai_summary", {}).get("strengths", []),
+            "development_gaps": insights.get("ai_summary", {}).get("gaps", []),
+            "potential_concerns": insights.get("ai_summary", {}).get("concerns", []),
             "pipeline_stage": "screening" if final_score < 85 else "shortlisted",
             "github_url": github_username or "",
             "github_stars": scoring_res.get("external_signals", {}).get("github", {}).get("total_stars", 0),
@@ -156,8 +161,8 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "blind_score": blind_score,
             "resume_filename": filename,
             "interview_questions": [],
-            "insights": scoring_res.get("insights", {}),
-            "summary": scoring_res.get("insights", {}).get("ai_summary", {}).get("executive_summary", "")
+            "insights": insights,
+            "summary": insights.get("ai_summary", {}).get("executive_summary", "")
         }
         
         if best_job:
