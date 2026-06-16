@@ -70,6 +70,8 @@ export default function CandidateProfile() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResumeModal, setShowResumeModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [resumeBlobUrl, setResumeBlobUrl] = useState(null);
+  const [resumeTab, setResumeTab] = useState('pdf');
 
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
@@ -335,15 +337,26 @@ HireIQ Hiring Team`
         }
         const blob = new Blob(byteArrays, { type: contentType });
         const blobURL = URL.createObjectURL(blob);
-        window.open(blobURL, '_blank');
+        setResumeBlobUrl(blobURL);
+        setResumeTab('pdf');
       } catch (e) {
-        console.error("Failed to generate PDF view: ", e);
-        toast.error("Failed to render PDF view. Falling back to parsed text.");
-        setShowResumeModal(true);
+        console.error("Failed to generate PDF Blob:", e);
+        setResumeBlobUrl(null);
+        setResumeTab('text');
       }
     } else {
-      setShowResumeModal(true);
+      setResumeBlobUrl(null);
+      setResumeTab('text');
     }
+    setShowResumeModal(true);
+  };
+
+  const handleCloseResumeModal = () => {
+    if (resumeBlobUrl) {
+      URL.revokeObjectURL(resumeBlobUrl);
+      setResumeBlobUrl(null);
+    }
+    setShowResumeModal(false);
   };
 
   // Fetch open jobs for Recommended Roles section
@@ -1566,27 +1579,60 @@ HireIQ Hiring Team`
         {showResumeModal && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-            onClick={() => setShowResumeModal(false)}>
+            onClick={handleCloseResumeModal}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               onClick={e => e.stopPropagation()}
-              className="bg-[#13131f] border border-white/10 rounded-2xl p-6 w-full max-w-3xl shadow-2xl relative space-y-4 my-8 flex flex-col max-h-[85vh]">
+              className="bg-[#13131f] border border-white/10 rounded-2xl p-6 w-full max-w-4xl shadow-2xl relative space-y-4 my-8 flex flex-col h-[85vh] max-h-[85vh]">
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
                 <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-emerald-400" /> Original Resume Text
+                  <FileText className="h-5 w-5 text-emerald-400" /> Original Resume Viewer
                 </h3>
-                <button onClick={() => setShowResumeModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <button onClick={handleCloseResumeModal} className="text-gray-400 hover:text-white transition-colors">
                   <X size={18} />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-black/40 border border-white/10 rounded-xl p-5 text-gray-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
-                {candidate?.resume_text || candidate?.resumeText || "No original resume text available for this candidate."}
+              {resumeBlobUrl && (
+                <div className="flex gap-2 border-b border-white/5 pb-2">
+                  <button 
+                    type="button"
+                    onClick={() => setResumeTab('pdf')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      resumeTab === 'pdf' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    📄 Original PDF Document
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setResumeTab('text')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      resumeTab === 'text' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    📝 Extracted Text
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 flex flex-col min-h-0">
+                {resumeTab === 'pdf' && resumeBlobUrl ? (
+                  <iframe 
+                    src={resumeBlobUrl} 
+                    className="w-full flex-1 rounded-xl border border-white/10 bg-white" 
+                    title="Original Resume PDF"
+                  />
+                ) : (
+                  <div className="flex-1 overflow-y-auto bg-black/40 border border-white/10 rounded-xl p-5 text-gray-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
+                    {candidate?.resume_text || candidate?.resumeText || "No original resume text available for this candidate."}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end pt-3 border-t border-white/5">
                 <button 
                   type="button"
-                  onClick={() => setShowResumeModal(false)}
+                  onClick={handleCloseResumeModal}
                   className="px-6 py-2 rounded-xl bg-white text-[#0d0d1a] font-bold text-xs hover:scale-[1.02] active:scale-95 transition-all duration-200"
                 >
                   Close Resume
