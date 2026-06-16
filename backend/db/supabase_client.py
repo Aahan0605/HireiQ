@@ -85,10 +85,25 @@ def _candidate_to_dict(c: dict) -> dict:
         
     score = float(c.get("match_score") or 0.0)
     
+    summary = c.get("summary")
+    if not summary or "Analyzing resume" in summary or "please wait" in summary:
+        name = c.get("full_name") or "The candidate"
+        role = c.get("career_tier") or "Software Engineer"
+        strengths = c.get("key_strengths") or []
+        gaps = c.get("development_gaps") or []
+        
+        parts = [f"{name} is a {role} candidate with a match score of {round(score)}%."]
+        if strengths:
+            parts.append(f"Key strengths include {strengths[0].lower().rstrip('.')}.")
+        if gaps:
+            parts.append(f"Areas for attention: {gaps[0].lower().rstrip('.')}.")
+        parts.append("Recommended for further technical assessment.")
+        summary = " ".join(parts)
+        
     # Generate fallbacks for nested objects if they are missing
     if "ai_summary" not in db_insights:
         db_insights["ai_summary"] = {
-            "executive_summary": c.get("summary") or (c.get("raw_text", "")[:200] + "..." if c.get("raw_text") else "No summary available."),
+            "executive_summary": summary,
             "career_tier": c.get("career_tier") or "Software Engineer",
             "strengths": c.get("key_strengths") or [],
             "concerns": c.get("potential_concerns") or [],
@@ -118,10 +133,6 @@ def _candidate_to_dict(c: dict) -> dict:
         "career_progression": "Stable trajectory",
         **db_insights
     }
-    
-    summary = c.get("summary")
-    if not summary:
-        summary = c.get("raw_text", "")[:200] + "..." if c.get("raw_text") else "No summary available."
         
     return {
         "id": str(c.get("id")),
