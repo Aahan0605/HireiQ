@@ -344,6 +344,166 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
 # POST /candidates/upload-resume (single)
 # ─────────────────────────────────────────────────────────────
 
+async def _process_resume_inline(candidate_id: str, filename: str, content_b64: str, tenant_id: str):
+    """Async inline resume processing — runs inside FastAPI's event loop when Celery/Redis is offline."""
+    import base64 as b64
+    import tempfile
+
+    supabase = get_supabase()
+    try:
+        content = b64.b64decode(content_b64)
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        text = ""
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            if ext == ".pdf":
+                from parser.resume_parser import extract_text_from_file
+                text = await asyncio.to_thread(extract_text_from_file, tmp_path)
+            else:
+                text = content.decode("utf-8", errors="replace")
+        finally:
+            import os as _os
+            if _os.path.exists(tmp_path):
+                _os.unlink(tmp_path)
+
+        if not text or not text.strip():
+            logger.warning("Extraction returned empty text for candidate: %s", candidate_id)
+            supabase.table("candidates").update({
+                "pipeline_stage": "rejected",
+                "raw_text": "Error: Could not extract text from document."
+            }).eq("id", candidate_id).execute()
+            return
+
+        # Load active jobs for this tenant
+        res_jobs = supabase.table("jobs").select("*").eq("recruiter_id", tenant_id).execute()
+        jobs_list = res_jobs.data
+
+        from parser.feature_extractor import extract_contact
+
+        contact = extract_contact(text)
+        github_username = contact.get("github")
+        if github_username:
+            github_username = github_username.split("github.com/")[-1].split("/")[0]
+
+        best_job = jobs_list[0] if jobs_list else None
+        role_type = "backend_engineer"
+        jd_features = {
+            "required_skills": [],
+            "preferred_skills": [],
+            "min_experience": 0,
+            "max_experience": 99,
+            "education_required": "unknown"
+        }
+
+        if best_job:
+            role_type = "backend_engineer" if "backend" in str(best_job.get("title", "")).lower() else "frontend_engineer"
+            req_skills = best_job.get("required_skills") or []
+            if isinstance(req_skills, str):
+                req_skills_list = [s.strip() for s in req_skills.split(",") if s.strip()]
+            else:
+                req_skills_list = req_skills
+
+            jd_features = {
+                "required_skills": req_skills_list,
+                "preferred_skills": [],
+                "min_experience": best_job.get("min_experience", 0),
+                "max_experience": 99,
+                "education_required": "unknown"
+            }
+
+        candidate_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+
+        # Run scoring engine (async — no asyncio.run needed, we're already in an event loop)
+        scoring_res = await compute_full_candidate_score(
+            candidate_name=candidate_name,
+            resume_text=text,
+            jd_features=jd_features,
+            github_username=github_username,
+            role_type=role_type
+        )
+
+        final_score = int(scoring_res.get("final_score", 60))
+        blind_score = final_score
+
+        # Compute Blind Score using bias auditor
+        if best_job:
+            try:
+                from engine.bias_auditor import compute_blind_score
+                blind_res = await compute_blind_score(
+                    candidate_name=candidate_name,
+                    resume_text=text,
+                    jd_features=jd_features,
+                    role_type=role_type
+                )
+                blind_score = int(blind_res.get("final_score", final_score))
+            except Exception as e:
+                logger.warning("Failed to compute blind score: %s", e)
+
+        # Parse education tier
+        edu = scoring_res.get("resume_features", {}).get("education_level", "other")
+        edu_tier = "other"
+        if edu.lower() in ("bachelors", "masters", "phd", "other"):
+            edu_tier = edu.lower()
+
+        # Build insights
+        insights = scoring_res.get("insights", {})
+        if not isinstance(insights, dict):
+            insights = {}
+        insights["resume_base64"] = content_b64
+        if contact.get("linkedin"):
+            insights["linkedin"] = contact.get("linkedin")
+        insights["completeness_score"] = insights.get("completeness_score") or 80
+        insights["ats_score"] = insights.get("ats_score") or 75
+
+        db_record = {
+            "full_name": candidate_name,
+            "email": contact.get("email") or f"{candidate_id[:8]}@example.com",
+            "phone": contact.get("phone", ""),
+            "location": contact.get("location") or "Remote",
+            "experience_years": int(scoring_res.get("resume_features", {}).get("experience_years", 0)),
+            "education_tier": edu_tier,
+            "skills": scoring_res.get("resume_features", {}).get("skills", []),
+            "raw_text": text,
+            "match_score": final_score,
+            "completeness_score": insights.get("completeness_score", 80),
+            "ats_score": insights.get("ats_score", 75),
+            "career_tier": scoring_res.get("resume_features", {}).get("role", "Software Engineer"),
+            "key_strengths": insights.get("ai_summary", {}).get("strengths", []),
+            "development_gaps": insights.get("ai_summary", {}).get("gaps", []),
+            "potential_concerns": insights.get("ai_summary", {}).get("concerns", []),
+            "pipeline_stage": "screening" if final_score < 85 else "shortlisted",
+            "github_url": github_username or "",
+            "github_stars": scoring_res.get("external_signals", {}).get("github", {}).get("total_stars", 0),
+            "github_languages": scoring_res.get("external_signals", {}).get("github", {}).get("languages", []),
+            "github_commits_last_year": int(scoring_res.get("external_signals", {}).get("github", {}).get("commit_frequency_per_week", 0) * 52),
+            "blind_score": blind_score,
+            "resume_filename": filename,
+            "interview_questions": [],
+            "insights": insights,
+            "summary": insights.get("ai_summary", {}).get("executive_summary", "")
+        }
+
+        if best_job:
+            db_record["job_id"] = best_job["id"]
+
+        supabase.table("candidates").update(db_record).eq("id", candidate_id).execute()
+        logger.info("Successfully processed Candidate ID: %s (inline)", candidate_id)
+
+    except Exception as e:
+        logger.error("Error processing resume inline: %s", e, exc_info=True)
+        try:
+            supabase.table("candidates").update({
+                "pipeline_stage": "rejected",
+                "raw_text": f"Error during parsing: {str(e)}"
+            }).eq("id", candidate_id).execute()
+        except Exception:
+            pass
+
+
 @router.post("/upload-resume", status_code=202, dependencies=[Depends(require_permission(Permission.UPLOAD_RESUME))])
 async def upload_resume(
     background_tasks: BackgroundTasks,
@@ -387,14 +547,11 @@ async def upload_resume(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10 MB.")
     
-    # 5. Base64 encode and Enqueue Celery background task (falling back to FastAPI BackgroundTasks if Redis is offline)
+    # 5. Base64 encode and use FastAPI background tasks for reliable async processing
     import base64
     content_b64 = base64.b64encode(content).decode("utf-8")
-    try:
-        process_resume_task.delay(candidate_id, file.filename, content_b64, tenant_id)
-    except Exception as e:
-        logger.warning("Celery/Redis broker offline. Falling back to FastAPI BackgroundTasks: %s", e)
-        background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
+    
+    background_tasks.add_task(_process_resume_inline, candidate_id, file.filename, content_b64, tenant_id)
     
     # 6. Increment the tenant's parse usage
     increment_cv_parses(None, tenant_id)
@@ -453,11 +610,7 @@ async def upload_bulk(
         
         content = await file.read()
         content_b64 = base64.b64encode(content).decode("utf-8")
-        try:
-            process_resume_task.delay(candidate_id, file.filename, content_b64, tenant_id)
-        except Exception as e:
-            logger.warning("Celery/Redis broker offline. Falling back to FastAPI BackgroundTasks: %s", e)
-            background_tasks.add_task(process_resume_task, candidate_id, file.filename, content_b64, tenant_id)
+        background_tasks.add_task(_process_resume_inline, candidate_id, file.filename, content_b64, tenant_id)
         
         increment_cv_parses(None, tenant_id)
         
@@ -1135,7 +1288,14 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     candidate_dict["jobMatches"] = job_matches
     candidate_dict["radar_data"] = radar_data
     candidate_dict["radarData"] = radar_data
-    candidate_dict["insights"] = scoring_res["insights"]
+    # Merge insights — preserve resume_base64 and other existing data
+    existing_insights = candidate_dict.get("insights") or {}
+    new_insights = scoring_res.get("insights") or {}
+    merged_insights = {**existing_insights, **new_insights}
+    # Preserve resume_base64 from existing insights if new scoring doesn't include it
+    if existing_insights.get("resume_base64") and not new_insights.get("resume_base64"):
+        merged_insights["resume_base64"] = existing_insights["resume_base64"]
+    candidate_dict["insights"] = merged_insights
     
     # Save the updated candidate
     await save_candidate(candidate_dict, tenant_id)
