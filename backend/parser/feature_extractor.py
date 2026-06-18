@@ -395,10 +395,10 @@ def extract_contact(text: str) -> dict[str, str | None]:
 
     # GitHub URL extraction
     github = None
-    github_pattern = r"github\.com/\s*[\w\-]+(?:\s+[\w\-]+)*"
+    github_pattern = r"github\.com/\s*([\w\-]+)"
     github_match = re.findall(github_pattern, text, re.IGNORECASE)
     if github_match:
-        github = github_match[0].replace(" ", "").replace("\t", "").replace("\n", "")
+        github = f"github.com/{github_match[0].strip()}"
     else:
         # Fallback to github: username
         github_fallback_match = re.search(r"github\s*:\s*([\w\-]+)", text, re.IGNORECASE)
@@ -407,10 +407,10 @@ def extract_contact(text: str) -> dict[str, str | None]:
 
     # LinkedIn URL extraction
     linkedin = None
-    linkedin_pattern = r"linkedin\.com/in/\s*[\w\-]+(?:\s+[\w\-]+)*"
+    linkedin_pattern = r"linkedin\.com/in/\s*([\w\-]+)"
     linkedin_match = re.findall(linkedin_pattern, text, re.IGNORECASE)
     if linkedin_match:
-        linkedin = linkedin_match[0].replace(" ", "").replace("\t", "").replace("\n", "")
+        linkedin = f"linkedin.com/in/{linkedin_match[0].strip()}"
     else:
         # Fallback to linkedin: username or linkedin.com/username
         linkedin_fallback_match = re.search(r"linkedin\s*:\s*([\w\-]+)", text, re.IGNORECASE)

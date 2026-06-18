@@ -140,11 +140,11 @@ def _clean_pdf_text(text: str) -> str:
     # Fix ALLCAPS: insert space before uppercase followed by lowercase
     text = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", text)
 
-    # Fix letter-digit: insert space between letters and digits
-    text = re.sub(r"([a-zA-Z])(\d)", r"\1 \2", text)
+    # Fix letter-digit: commented out to avoid corrupting GitHub usernames, emails, etc.
+    # text = re.sub(r"([a-zA-Z])(\d)", r"\1 \2", text)
 
-    # Fix digit-letter: insert space between digits and letters
-    text = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", text)
+    # Fix digit-letter: commented out to avoid corrupting GitHub usernames, emails, etc.
+    # text = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", text)
 
     # Fix period: add space after period before uppercase letter
     text = re.sub(r"\.(\[A-Z])", r". \1", text)

@@ -391,9 +391,15 @@ export default function Candidates() {
       }
       
       // Refresh candidates list
-      const r = await apiFetch(`${API}/candidates`);
+      const r = await apiFetch(`${API}/candidates?page=1&limit=200`);
       const data = await r.json();
-      setCandidates(Array.isArray(data) ? data : getAllCandidates());
+      let list = null;
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data && Array.isArray(data.data)) {
+        list = data.data;
+      }
+      setCandidates(list || getAllCandidates());
 
     } catch (err) {
       toast.error(err.message || 'Error importing candidates');

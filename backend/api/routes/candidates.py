@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 import time
 from typing import Any
 import uuid
@@ -387,7 +388,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         contact = extract_contact(text)
         github_username = contact.get("github")
         if github_username:
-            github_username = github_username.split("github.com/")[-1].split("/")[0]
+            github_username = github_username.split("github.com/")[-1].split("/")[0].strip().replace(" ", "").replace("\t", "")
 
         best_job = jobs_list[0] if jobs_list else None
         role_type = "backend_engineer"
@@ -1158,7 +1159,7 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     username = github_url.strip().replace("https://", "").replace("http://", "")
     if username.startswith("github.com/"):
         username = username[len("github.com/"):]
-    username = username.strip("/")
+    username = username.strip("/").replace(" ", "").replace("\t", "")
 
     if not username:
         raise HTTPException(status_code=400, detail="No GitHub profile set for candidate.")
@@ -1395,7 +1396,7 @@ async def gdpr_forget_candidate(
 # GET /candidates/platforms/{username}
 # ─────────────────────────────────────────────────────────────
 
-@router.get("/platforms/{username}", response_model=PlatformSignalsResponse)
+@router.get("/platforms/{username:path}", response_model=PlatformSignalsResponse)
 async def fetch_platform_signals(
     username: str,
     platforms: str = Query(
@@ -1419,15 +1420,20 @@ async def fetch_platform_signals(
             detail=f"Invalid platforms: {', '.join(invalid)}. Valid: {', '.join(valid_platforms)}",
         )
 
+    clean_username = username.strip().replace("https://", "").replace("http://", "")
+    if clean_username.startswith("github.com/"):
+        clean_username = clean_username[len("github.com/"):]
+    clean_username = clean_username.strip("/").replace(" ", "").replace("\t", "")
+
     tasks: dict[str, Any] = {}
     if "github" in platform_list:
-        tasks["github"] = fetch_github_signals(username)
+        tasks["github"] = fetch_github_signals(clean_username)
     if "codeforces" in platform_list:
-        tasks["codeforces"] = fetch_codeforces(username)
+        tasks["codeforces"] = fetch_codeforces(clean_username)
     if "leetcode" in platform_list:
-        tasks["leetcode"] = fetch_leetcode(username)
+        tasks["leetcode"] = fetch_leetcode(clean_username)
     if "codechef" in platform_list:
-        tasks["codechef"] = fetch_codechef(username)
+        tasks["codechef"] = fetch_codechef(clean_username)
 
     keys = list(tasks.keys())
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -1518,7 +1524,7 @@ async def rank_candidates_sorted(request: dict[str, Any]) -> JSONResponse:
 # GET /candidates/github/{username} — Live GitHub signals
 # ─────────────────────────────────────────────────────────────
 
-@router.get("/github/{username}")
+@router.get("/github/{username:path}")
 async def get_github_signals(username: str):
     """
     Fetch live GitHub signals for a candidate and return stats + score.
@@ -1531,7 +1537,7 @@ async def get_github_signals(username: str):
     clean = username.strip().replace("https://", "").replace("http://", "")
     if clean.startswith("github.com/"):
         clean = clean[len("github.com/"):]
-    clean = clean.strip("/")
+    clean = clean.strip("/").replace(" ", "").replace("\t", "")
 
     if not clean:
         return {"error": "Invalid username"}

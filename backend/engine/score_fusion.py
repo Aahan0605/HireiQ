@@ -860,15 +860,27 @@ def _generate_recruiter_summary(
         )
 
     projects_list = resume_features.get("projects", [])
-    if projects_list:
+    project_titles = []
+    for p in projects_list:
+        if isinstance(p, dict) and p.get("title"):
+            project_titles.append(p["title"])
+        elif isinstance(p, str):
+            project_titles.append(p)
+    if project_titles:
         summary_parts.append(
-            f"Key projects described in their resume include: {', '.join(projects_list[:3])}."
+            f"Key projects described in their resume include: {', '.join(project_titles[:3])}."
         )
 
     achievements_list = resume_features.get("achievements", [])
-    if achievements_list:
+    achievement_texts = []
+    for a in achievements_list:
+        if isinstance(a, dict) and a.get("title"):
+            achievement_texts.append(a["title"])
+        elif isinstance(a, str):
+            achievement_texts.append(a)
+    if achievement_texts:
         summary_parts.append(
-            f"Notable achievements and professional highlights include: {', '.join(achievements_list[:2])}."
+            f"Notable achievements and professional highlights include: {', '.join(achievement_texts[:2])}."
         )
 
     if github_signals:
