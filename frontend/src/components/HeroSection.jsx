@@ -74,20 +74,21 @@ export default function HeroSection() {
 
         <h1 className="mb-8 font-display text-5xl font-bold tracking-tight text-white sm:text-7xl">
           <motion.span variants={customFadeUp} className="block">Hire the best,</motion.span>
-          <motion.span 
-            variants={customFadeUp}
-            animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
-            transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
-            style={prefersReducedMotion ? {} : {
-              background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
-              backgroundSize: "200% auto",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text"
-            }}
-            className={prefersReducedMotion ? "gradient-text block" : "block"}
-          >
-            faster than ever.
+          <motion.span variants={customFadeUp} className="block">
+            <motion.span 
+              animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
+              transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
+              style={prefersReducedMotion ? {} : {
+                background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
+                backgroundSize: "200% auto",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text"
+              }}
+              className={prefersReducedMotion ? "gradient-text block" : "block"}
+            >
+              faster than ever.
+            </motion.span>
           </motion.span>
         </h1>
 

@@ -10,7 +10,6 @@ const MotionLink = motion(Link);
 export default function Landing() {
   const [activeFaq, setActiveFaq] = useState(null);
   const prefersReducedMotion = usePrefersReducedMotion();
-  const [isEntranceComplete, setIsEntranceComplete] = useState(false);
 
   const { ref: showcaseRef, inView: showcaseInView } = useIntersection(0.1);
   const totalCandidatesRef = useCountUp(48, prefersReducedMotion ? 0 : 1.4, showcaseInView);
@@ -243,20 +242,21 @@ export default function Landing() {
 
         <h1 className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance">
           <motion.span variants={itemVariants} className="block">Hire the best,</motion.span>
-          <motion.span 
-            variants={itemVariants}
-            animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
-            transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
-            style={prefersReducedMotion ? {} : {
-              background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
-              backgroundSize: "200% auto",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text"
-            }}
-            className={prefersReducedMotion ? "bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent block" : "block"}
-          >
-            faster than ever.
+          <motion.span variants={itemVariants} className="block">
+            <motion.span 
+              animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
+              transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
+              style={prefersReducedMotion ? {} : {
+                background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
+                backgroundSize: "200% auto",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text"
+              }}
+              className={prefersReducedMotion ? "bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent block" : "block"}
+            >
+              faster than ever.
+            </motion.span>
           </motion.span>
         </h1>
 
@@ -302,16 +302,18 @@ export default function Landing() {
         <motion.div
           ref={showcaseRef}
           variants={cardVariants}
-          onAnimationComplete={() => setIsEntranceComplete(true)}
-          animate={isEntranceComplete && !prefersReducedMotion ? { y: [0, -8, 0] } : "visible"}
-          transition={isEntranceComplete && !prefersReducedMotion ? {
-            duration: 5,
-            repeat: Infinity,
-            ease: "easeInOut"
-          } : undefined}
-          className="w-full max-w-4xl mx-auto border border-white/10 rounded-2xl bg-[#131326]/40 backdrop-blur-md p-6 shadow-2xl relative overflow-hidden"
+          className="w-full max-w-4xl mx-auto"
         >
-          {/* Mock Window Controls */}
+          <motion.div
+            animate={prefersReducedMotion ? {} : { y: [0, -8, 0] }}
+            transition={prefersReducedMotion ? {} : {
+              duration: 5,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="border border-white/10 rounded-2xl bg-[#131326]/40 backdrop-blur-md p-6 shadow-2xl relative overflow-hidden"
+          >
+            {/* Mock Window Controls */}
           <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-4">
             <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
             <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
@@ -384,6 +386,7 @@ export default function Landing() {
               </div>
             </div>
           </div>
+          </motion.div>
         </motion.div>
       </motion.section>
 
