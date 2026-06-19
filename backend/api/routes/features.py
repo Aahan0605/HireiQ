@@ -46,80 +46,12 @@ MOCK_DISCOVERED = [
 
 @router.post("/linkedin-import")
 async def import_linkedin(req: LinkedInImportRequest, tenant_id: str = Depends(require_tenant)):
-    """Simulate importing a candidate profile directly from a LinkedIn URL."""
-    url = req.linkedin_url.strip().lower()
-    if "linkedin.com/in/" not in url:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please provide a valid LinkedIn profile URL (e.g. linkedin.com/in/username)"
-        )
-        
-    # Extract username or mock
-    username = url.split("linkedin.com/in/")[-1].split("/")[0] or "candidate"
-    name = username.replace("-", " ").replace(".", " ").title()
-    email = f"{username.replace('.', '')}@example.com"
-    
-    candidate_id = str(uuid.uuid4())
-    supabase = get_supabase()
-    
-    # Generate high fidelity candidate profile details
-    skills = ["React", "TypeScript", "Node.js", "Tailwind CSS", "PostgreSQL"] if "front" in name.lower() or "design" in name.lower() else ["Python", "FastAPI", "Docker", "PostgreSQL", "AWS"]
-    career_tier = "Senior Software Engineer" if "sr" in name.lower() or "senior" in name.lower() else "Software Engineer"
-    
-    db_record = {
-        "id": candidate_id,
-        "recruiter_id": tenant_id,
-        "full_name": name,
-        "email": email,
-        "phone": "+1 (555) 019-2834",
-        "location": "San Francisco, CA (Hybrid)",
-        "experience_years": 5,
-        "education_tier": "bachelors",
-        "skills": skills,
-        "raw_text": f"LinkedIn imported profile of {name}. Experince in software engineering.",
-        "match_score": 88,
-        "completeness_score": 90,
-        "ats_score": 85,
-        "career_tier": career_tier,
-        "key_strengths": ["Strong architectural design", "Highly collaborative team player"],
-        "development_gaps": ["Could gain more cloud ops experience"],
-        "potential_concerns": [],
-        "pipeline_stage": "screening",
-        "github_url": f"github.com/{username}",
-        "github_stars": 12,
-        "github_languages": ["Python", "TypeScript"],
-        "github_commits_last_year": 140,
-        "blind_score": 89,
-        "resume_filename": f"{username}_linkedin.pdf",
-        "interview_questions": [],
-        "insights": {
-            "linkedin": url,
-            "resume_base64": "",
-            "match_breakdown": {
-                "overall_match_percentage": 88,
-                "skills_match": 90,
-                "experience_match": 85,
-                "education_match": 80,
-                "projects_match": 75,
-                "github_match": 80
-            }
-        },
-        "summary": f"{name} is a highly accomplished {career_tier} with verified experience imported directly from LinkedIn."
-    }
-    
-    if req.job_id:
-        try:
-            db_record["job_id"] = req.job_id
-        except Exception:
-            pass
-            
-    try:
-        supabase.table("candidates").insert(db_record).execute()
-    except Exception as e:
-        logger.error(f"Error creating candidate from LinkedIn import: {e}")
-        raise HTTPException(status_code=500, detail=f"Database save failed: {str(e)}")
-        
-    return {"status": "success", "candidate_id": candidate_id, "name": name, "email": email}
+    """LinkedIn import is not yet implemented. Returns a clear error 
+    instead of fabricating candidate data."""
+    raise HTTPException(
+        status_code=501,
+        detail="LinkedIn import is coming soon. For now, please upload the candidate's resume directly via Analyze."
+    )
 
 @router.post("/copilot/generate")
 async def copilot_generate(req: CopilotGenerateRequest):
@@ -234,6 +166,7 @@ async def get_audit_logs(tenant_id: str = Depends(require_tenant)):
     writer = csv.writer(output)
     
     # Write headers
+    writer.writerow(["# SAMPLE DATA — NOT A REAL AUDIT LOG", "", "", "", "", ""])
     writer.writerow(["Timestamp", "IP Address", "User ID", "Event Type", "Resource Affected", "Status"])
     
     # Generate mock audit logs
@@ -255,13 +188,14 @@ async def get_audit_logs(tenant_id: str = Depends(require_tenant)):
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=hireiq_audit_logs.csv"
+    response.headers["Content-Disposition"] = "attachment; filename=hireiq_SAMPLE_audit_logs.csv"
     return response
 
 @router.get("/analytics/executive")
 async def get_executive_analytics():
     """Return mock executive metrics and funnel conversion data."""
     return {
+        "is_demo_data": True,
         "time_to_hire": 18.5,  # days
         "cost_per_hire": 3250.0,  # USD
         "funnel_conversion": 4.2,  # % conversion from application to hire
@@ -287,6 +221,7 @@ async def get_executive_analytics():
 async def get_workforce_planning():
     """Return mock workforce planning skill shortages and forecasts."""
     return {
+        "is_demo_data": True,
         "skill_shortages": [
             {"skill": "Kubernetes", "gap_percentage": 65, "status": "Critical"},
             {"skill": "React", "gap_percentage": 20, "status": "Stable"},
@@ -305,7 +240,7 @@ async def get_workforce_planning():
 async def discover_outreach(query: Optional[str] = None):
     """Filter mock public talent profiles matching open roles."""
     if not query:
-        return MOCK_DISCOVERED
+        return {"is_demo_data": True, "results": MOCK_DISCOVERED}
         
     query_lower = query.lower()
     filtered = []
@@ -317,4 +252,4 @@ async def discover_outreach(query: Optional[str] = None):
         )
         if match:
             filtered.append(candidate)
-    return filtered
+    return {"is_demo_data": True, "results": filtered}

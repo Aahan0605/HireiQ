@@ -786,6 +786,7 @@ export default function Dashboard() {
   const [discoveryQuery, setDiscoveryQuery] = useState('');
   const [discoveryResults, setDiscoveryResults] = useState([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [discoveryIsDemo, setDiscoveryIsDemo] = useState(false);
 
   const fetchExecAnalytics = async () => {
     setExecLoading(true);
@@ -818,7 +819,10 @@ export default function Dashboard() {
     try {
       const res = await apiFetch(`${API}/features/outreach/discover?query=${encodeURIComponent(query)}`);
       const data = await res.json();
-      if (res.ok) setDiscoveryResults(data);
+      if (res.ok) {
+        setDiscoveryResults(data.results || []);
+        setDiscoveryIsDemo(!!data.is_demo_data);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -1136,6 +1140,14 @@ export default function Dashboard() {
 
       {dashboardTab === 'Executive Analytics' && (
         <div className="space-y-8 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-white">Executive Analytics</h2>
+            {execData?.is_demo_data && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
+                Demo Data
+              </span>
+            )}
+          </div>
           {execLoading || !execData ? (
             <div className="h-64 rounded-2xl bg-white/5 animate-pulse flex flex-col items-center justify-center text-gray-500 text-xs">
               <RefreshCw className="animate-spin mr-2 h-4 w-4" /> Loading Executive Analytics...
@@ -1194,6 +1206,14 @@ export default function Dashboard() {
 
       {dashboardTab === 'Workforce Planning' && (
         <div className="space-y-6 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-white">Workforce Planning</h2>
+            {workforceData?.is_demo_data && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
+                Demo Data
+              </span>
+            )}
+          </div>
           {workforceLoading || !workforceData ? (
             <div className="h-64 rounded-2xl bg-white/5 animate-pulse flex flex-col items-center justify-center text-gray-500 text-xs">
               <RefreshCw className="animate-spin mr-2 h-4 w-4" /> Loading Workforce Forecasts...
@@ -1255,7 +1275,14 @@ export default function Dashboard() {
       {dashboardTab === 'Talent Discovery & Sourcing' && (
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 space-y-4">
-            <h3 className="text-white font-semibold text-base">Outreach & Talent Discovery</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-white font-semibold text-base">Outreach & Talent Discovery</h3>
+              {discoveryIsDemo && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
+                  Demo Data
+                </span>
+              )}
+            </div>
             <p className="text-gray-500 text-xs">Search and discover public software engineering profiles. Instantly trigger automated recruiter outreach campaigns.</p>
             
             <div className="flex gap-2">

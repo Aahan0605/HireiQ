@@ -22,6 +22,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import AcceptInvite from './pages/AcceptInvite';
 
 const DASH_PREFIXES = [
   '/dashboard', '/analyze', '/candidates', '/candidate',
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
 
         {/* All dashboard pages share the sidebar layout */}
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>

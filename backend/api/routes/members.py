@@ -9,7 +9,7 @@ from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.email import send_org_invitation_email
 from db import get_supabase
 
-router = APIRouter(prefix="/members", tags=["Team Members"], dependencies=[Depends(require_tenant)])
+router = APIRouter(prefix="/members", tags=["Team Members"])
 
 class InviteRequest(BaseModel):
     email: EmailStr
@@ -97,3 +97,83 @@ async def remove_member(member_id: str, tenant_id: str = Depends(require_tenant)
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to remove member: {str(e)}")
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class AcceptInviteRequest(PydanticBaseModel):
+    token: str
+    password: str  # required only if the invited email has no existing account
+
+@router.get("/invite/{token}", dependencies=[])
+async def get_invite_details(token: str):
+    """Public endpoint — lets the accept-invite page show who/what org invited them before login."""
+    supabase = get_supabase()
+    res = supabase.table("organization_invitations").select("*").eq("token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invitation not found or already used.")
+    invite = res.data[0]
+
+    expires_at = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00")) if isinstance(invite["expires_at"], str) else invite["expires_at"]
+    if expires_at < datetime.utcnow().replace(tzinfo=expires_at.tzinfo) if expires_at.tzinfo else expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="This invitation has expired.")
+
+    existing_user = supabase.table("recruiters").select("id").eq("email", invite["email"]).execute()
+
+    return {
+        "email": invite["email"],
+        "role": invite["role"],
+        "company": invite["company"],
+        "account_exists": bool(existing_user.data),
+    }
+
+@router.post("/invite/{token}/accept", dependencies=[])
+async def accept_invite(token: str, req: AcceptInviteRequest):
+    """Public endpoint — redeems an invite token. Creates a new recruiter account 
+    if one doesn't exist for that email, or attaches the existing account to the company."""
+    supabase = get_supabase()
+    res = supabase.table("organization_invitations").select("*").eq("token", token).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invitation not found or already used.")
+    invite = res.data[0]
+
+    expires_at = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00")) if isinstance(invite["expires_at"], str) else invite["expires_at"]
+    now = datetime.utcnow().replace(tzinfo=expires_at.tzinfo) if expires_at.tzinfo else datetime.utcnow()
+    if expires_at < now:
+        raise HTTPException(status_code=400, detail="This invitation has expired.")
+
+    existing = supabase.table("recruiters").select("*").eq("email", invite["email"]).execute()
+
+    from api.core.security import get_password_hash, create_access_token
+
+    if existing.data:
+        # Existing account — just attach to the company and update role
+        user = existing.data[0]
+        supabase.table("recruiters").update({
+            "company": invite["company"],
+            "role": invite["role"],
+        }).eq("id", user["id"]).execute()
+        user_id = user["id"]
+    else:
+        # New account — require a password to create one
+        if not req.password or len(req.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters to create your account.")
+        new_id = str(uuid.uuid4())
+        supabase.table("recruiters").insert({
+            "id": new_id,
+            "email": invite["email"],
+            "hashed_password": get_password_hash(req.password),
+            "role": invite["role"],
+            "company": invite["company"],
+            "created_at": datetime.utcnow().isoformat(),
+        }).execute()
+        user_id = new_id
+
+    # Delete the invitation so it can't be reused
+    supabase.table("organization_invitations").delete().eq("token", token).execute()
+
+    access_token = create_access_token(subject=user_id)
+    return {
+        "message": "Invitation accepted. Welcome to the team!",
+        "access_token": access_token,
+        "user": {"id": user_id, "email": invite["email"], "role": invite["role"]},
+    }
