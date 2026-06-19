@@ -26,8 +26,8 @@ def get_supabase() -> Client:
         try:
             res = client.table("recruiters").select("id").limit(1).execute()
             if not res.data:
-                logger.warning("⚠️ No recruiter accounts found in the database. Please call POST /auth/register to create the first account.")
-                print("⚠️ No recruiter accounts found in the database. Please call POST /auth/register to create the first account.")
+                logger.warning("No users found. POST /auth/register to create the first account.")
+                print("No users found. POST /auth/register to create the first account.")
         except Exception as e:
             logger.error(f"Error checking for existing recruiter accounts: {e}")
             
@@ -48,7 +48,8 @@ def _candidate_to_dict(c: dict) -> dict:
         "hired": "Hired",
         "rejected": "Rejected"
     }
-    status = status_map.get(c.get("pipeline_stage", ""), "Screening")
+    stage_val = c.get("stage") or c.get("pipeline_stage") or "screening"
+    status = status_map.get(stage_val.lower(), "Screening")
     
     # Check if job title is pre-fetched/joined
     job_title = "Software Engineer"
@@ -159,6 +160,7 @@ def _candidate_to_dict(c: dict) -> dict:
         "score": round(c.get("match_score", 0.0) or 0.0),
         "blind_score": round(c.get("blind_score", 0.0) or 0.0),
         "status": status,
+        "stage": stage_val,
         "summary": summary,
         "experience_years": c.get("experience_years") or 0,
         "resume_text": c.get("raw_text") or "",
@@ -274,6 +276,7 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "development_gaps": insights.get("weaknesses") or [],
         "potential_concerns": insights.get("concerns") or [],
         "pipeline_stage": pipeline_stage,
+        "stage": pipeline_stage,
         "github_url": github_val,
         "github_stars": github_stars,
         "github_languages": github_langs,

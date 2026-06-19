@@ -435,36 +435,23 @@ export default function Candidates() {
   const handleUpdateStage = async (id, stageKey) => {
     // 1. Update in local memory state
     setCandidates(prev => 
-      prev.map(c => c.id === id ? { ...c, status: stageKey } : c)
+      prev.map(c => c.id === id ? { ...c, status: stageKey, stage: stageKey.toLowerCase() } : c)
     );
 
-    // 2. Update in localStorage safely
+    // 2. Make PATCH request to backend
     try {
-      const STORAGE_KEY = 'hireiq_dynamic_candidates';
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const stored = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(stored)) {
-        const updatedStored = stored.map(c => c.id === id ? { ...c, status: stageKey } : c);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStored));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
-    // 3. Make PATCH request to backend
-    try {
-      const res = await apiFetch(`${API}/candidates/${id}`, {
+      const res = await apiFetch(`${API}/candidates/${id}/stage`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: stageKey })
+        body: JSON.stringify({ stage: stageKey.toLowerCase() })
       });
       if (!res.ok) throw new Error('Backend failed to patch candidate stage');
       toast.success('Candidate status updated successfully.');
     } catch (err) {
       console.error(err);
-      // Silent fail if backend offline since local/session is updated
+      toast.error('Failed to update status on server.');
     }
   };
 
@@ -472,31 +459,18 @@ export default function Candidates() {
     const selectedIds = Array.from(selected);
     // 1. Update local state
     setCandidates(prev => 
-      prev.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey } : c)
+      prev.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey, stage: stageKey.toLowerCase() } : c)
     );
-
-    // 2. Update localStorage safely
-    try {
-      const STORAGE_KEY = 'hireiq_dynamic_candidates';
-      const raw = localStorage.getItem(STORAGE_KEY);
-      const stored = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(stored)) {
-        const updatedStored = stored.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey } : c);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStored));
-      }
-    } catch (e) {
-      console.error(e);
-    }
 
     toast.loading(`Updating ${selectedIds.length} candidate(s)...`);
     
-    // 3. Concurrently patch backend
+    // 2. Concurrently patch backend
     try {
       await Promise.all(selectedIds.map(id => 
-        apiFetch(`${API}/candidates/${id}`, {
+        apiFetch(`${API}/candidates/${id}/stage`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: stageKey })
+          body: JSON.stringify({ stage: stageKey.toLowerCase() })
         })
       ));
       toast.dismiss();
@@ -504,6 +478,7 @@ export default function Candidates() {
       setSelected(new Set());
     } catch (err) {
       toast.dismiss();
+      toast.error('Failed to update some candidate statuses on server.');
       console.error(err);
     }
   };

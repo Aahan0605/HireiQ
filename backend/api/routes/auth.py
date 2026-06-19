@@ -152,7 +152,7 @@ async def register(user_in: UserRegister):
     }
 
 @router.post("/login", response_model=Token)
-@limiter.limit("60/15minute")
+@limiter.limit("10/15minute")
 async def login_json(request: Request, user_in: UserLogin):
     """Login with JSON payload."""
     try:

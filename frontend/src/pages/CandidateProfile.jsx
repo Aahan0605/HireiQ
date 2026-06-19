@@ -218,24 +218,16 @@ HireIQ Hiring Team`
     return localStorage.getItem('hireiq_blind_review') === 'true';
   });
 
-  const [notes, setNotes] = useState(() => {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(`hireiq_notes_${id}`) || '[]');
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [notes, setNotes] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(5);
   const [interviewerName, setInterviewerName] = useState('Senior Interviewer');
 
-  const handleAddNote = (e) => {
+  const handleAddNote = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const note = {
-      id: Date.now().toString(),
+    const noteData = {
       author: interviewerName,
       comment: newComment,
       rating: newRating,
@@ -248,29 +240,51 @@ HireIQ Hiring Team`
       })
     };
 
-    const updated = [note, ...notes];
-    setNotes(updated);
-    localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
-    setNewComment('');
-    toast.success('Feedback recorded!');
+    try {
+      const res = await apiFetch(`${API}/candidates/${id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noteData)
+      });
+      if (res.ok) {
+        const savedNote = await res.json();
+        setNotes(prev => [savedNote, ...prev]);
+        setNewComment('');
+        toast.success('Feedback recorded!');
+      } else {
+        toast.error('Failed to record feedback.');
+      }
+    } catch (err) {
+      toast.error('Network error recording feedback.');
+    }
   };
 
-  const handleDeleteNote = (noteId) => {
-    const updated = notes.filter(n => n.id !== noteId);
-    setNotes(updated);
-    localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
-    toast.success('Feedback deleted.');
+  const handleDeleteNote = async (noteId) => {
+    try {
+      const res = await apiFetch(`${API}/candidates/${id}/notes/${noteId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setNotes(prev => prev.filter(n => n.id !== noteId));
+        toast.success('Feedback deleted.');
+      } else {
+        toast.error('Failed to delete feedback.');
+      }
+    } catch (err) {
+      toast.error('Network error deleting feedback.');
+    }
   };
 
-  const handleSendEmail = (e) => {
+  const handleSendEmail = async (e) => {
     e.preventDefault();
     if (!emailSubject.trim() || !emailBody.trim()) {
       toast.error("Please fill in email subject and message body.");
       return;
     }
 
-    const note = {
-      id: Date.now().toString(),
+    const noteData = {
       author: "System (Email Dispatched)",
       comment: `📬 Subject: ${emailSubject}\n\n${emailBody}`,
       rating: 5,
@@ -283,18 +297,32 @@ HireIQ Hiring Team`
       })
     };
 
-    const updated = [note, ...notes];
-    setNotes(updated);
-    localStorage.setItem(`hireiq_notes_${id}`, JSON.stringify(updated));
+    try {
+      const res = await apiFetch(`${API}/candidates/${id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noteData)
+      });
+      if (res.ok) {
+        const savedNote = await res.json();
+        setNotes(prev => [savedNote, ...prev]);
 
-    // Log the dispatched email
-    addCommunicationLog('Gmail', `Sent Outreach email: "${emailSubject}"`);
+        // Log the dispatched email
+        addCommunicationLog('Gmail', `Sent Outreach email: "${emailSubject}"`);
 
-    toast.success("Simulated email dispatched successfully!");
-    setShowEmailModal(false);
-    setSelectedTemplate('');
-    setEmailSubject('');
-    setEmailBody('');
+        toast.success("Simulated email dispatched successfully!");
+        setShowEmailModal(false);
+        setSelectedTemplate('');
+        setEmailSubject('');
+        setEmailBody('');
+      } else {
+        toast.error("Failed to log the dispatched email note.");
+      }
+    } catch (err) {
+      toast.error("Network error logging the email note.");
+    }
   };
 
   const handleOpenEditModal = () => {
@@ -435,6 +463,22 @@ HireIQ Hiring Team`
       }
     };
     fetchCandidate();
+  }, [id]);
+
+  // Fetch notes dynamically
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        const res = await apiFetch(`${API}/candidates/${id}/notes`);
+        if (res.ok) {
+          const data = await res.json();
+          setNotes(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Failed to load notes:', err);
+      }
+    };
+    fetchNotes();
   }, [id]);
 
   // Fetch GitHub stats once we know the candidate's github handle
@@ -622,44 +666,58 @@ HireIQ Hiring Team`
 
   const handleSchedule = () => {
     setIsScheduling(true);
-    const promise = new Promise(resolve => setTimeout(resolve, 2000));
-    toast.promise(promise, {
+    
+    const interviewData = {
+      scheduled_at: new Date(Date.now() + 86400000 * 2).toISOString(),
+      duration_minutes: 60,
+      interviewer_name: interviewerName || 'Senior Interviewer',
+      status: 'scheduled'
+    };
+
+    const schedulePromise = async () => {
+      const res = await apiFetch(`${API}/candidates/${id}/interviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(interviewData)
+      });
+      if (!res.ok) {
+        throw new Error('Server returned an error');
+      }
+      addCommunicationLog('Outlook', 'Scheduled 1st round video panel interview invite');
+      setIsScheduling(false);
+      return `Interview scheduled! Email sent to ${candidate.email}`;
+    };
+
+    toast.promise(schedulePromise(), {
       loading: 'Scheduling interview...',
-      success: () => { 
-        setIsScheduling(false); 
-        addCommunicationLog('Outlook', 'Scheduled 1st round video panel interview invite');
-        return `Interview scheduled! Email sent to ${candidate.email}`; 
-      },
-      error: 'Failed to schedule.',
+      success: (msg) => msg,
+      error: () => {
+        setIsScheduling(false);
+        return 'Failed to schedule interview.';
+      }
     });
   };
 
-  const handleDownload = () => {
-    const lines = [
-      'HireIQ Candidate Report',
-      '========================',
-      `Name:     ${candidate.name}`,
-      `Role:     ${candidate.role}`,
-      `Email:    ${candidate.email}`,
-      `Location: ${candidate.location}`,
-      `Score:    ${candidate.score}%`,
-      `Trust:    ${trustLabel}`,
-      '',
-      'Summary:',
-      candidate.summary || 'N/A',
-      '',
-      `Skills: ${(candidate.skills || []).join(', ')}`,
-      '',
-      'Experience:',
-      ...(candidate.experience || []).map(e => `  - ${e.title} @ ${e.company} (${e.date})`),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(candidate.name || 'candidate').replace(/\s+/g, '-')}-report.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownload = async () => {
+    try {
+      const res = await apiFetch(`${API}/reports/candidates/${id}/pdf`);
+      if (!res.ok) {
+        throw new Error('Failed to generate report PDF');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `HireIQ_Report_${(candidate.name || 'candidate').replace(/\s+/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Candidate dossier downloaded successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to download candidate report.');
+    }
   };
 
   // Feature B Q&A trigger

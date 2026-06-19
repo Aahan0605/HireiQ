@@ -72,25 +72,29 @@ function InterviewModal({ onClose, onUpdateCount }) {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    // Load from localStorage or default seed
-    const stored = localStorage.getItem('hireiq_interviews');
-    if (stored) {
-      setInterviews(JSON.parse(stored));
-    } else {
-      setInterviews(INITIAL_INTERVIEWS);
-      localStorage.setItem('hireiq_interviews', JSON.stringify(INITIAL_INTERVIEWS));
-    }
+    // Fetch from backend
+    const loadInterviews = async () => {
+      try {
+        const res = await apiFetch(`${API}/candidates/interviews/all`);
+        if (res.ok) {
+          const data = await res.json();
+          setInterviews(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Failed to load interviews:', err);
+      }
+    };
+    loadInterviews();
 
     // Fetch candidates from DB to populate autocomplete/dropdown
     apiFetch(`${API}/candidates`)
       .then(r => r.ok ? r.json() : [])
-      .then(data => setCandidates(data))
+      .then(data => setCandidates(Array.isArray(data) ? data : (data?.data || [])))
       .catch(console.error);
   }, []);
 
   const saveInterviews = (updated) => {
     setInterviews(updated);
-    localStorage.setItem('hireiq_interviews', JSON.stringify(updated));
     if (onUpdateCount) {
       const active = updated.filter(i => i.status === 'confirmed' || i.status === 'rescheduled').length;
       onUpdateCount(active);
@@ -102,26 +106,56 @@ function InterviewModal({ onClose, onUpdateCount }) {
     setEditForm({ start: iv.start, end: iv.end });
   };
 
-  const saveEdit = (id) => {
+  const saveEdit = async (id) => {
     if (editForm.start >= editForm.end) {
       toast.error("Start time must be before end time");
       return;
     }
-    const updated = interviews.map(iv => iv.id === id ? { ...iv, ...editForm, status: 'rescheduled' } : iv);
-    saveInterviews(updated);
-    setEditingId(null);
-    toast.success("Time slot updated! Click 'Optimize Schedule' to resolve conflicts.");
+    try {
+      const res = await apiFetch(`${API}/candidates/interviews/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          start: editForm.start,
+          end: editForm.end,
+          status: 'rescheduled'
+        })
+      });
+      if (res.ok) {
+        const updated = interviews.map(iv => iv.id === id ? { ...iv, ...editForm, status: 'rescheduled' } : iv);
+        saveInterviews(updated);
+        setEditingId(null);
+        toast.success("Time slot updated! Click 'Optimize Schedule' to resolve conflicts.");
+      } else {
+        toast.error("Failed to update interview slot on server.");
+      }
+    } catch (err) {
+      toast.error("Network error updating interview.");
+    }
   };
 
   const cancelEdit = () => setEditingId(null);
 
-  const removeInterview = (id) => {
-    const updated = interviews.filter(iv => iv.id !== id);
-    saveInterviews(updated);
-    toast.success("Slot removed");
+  const removeInterview = async (id) => {
+    try {
+      const res = await apiFetch(`${API}/candidates/interviews/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const updated = interviews.filter(iv => iv.id !== id);
+        saveInterviews(updated);
+        toast.success("Slot removed");
+      } else {
+        toast.error("Failed to remove interview slot from server.");
+      }
+    } catch (err) {
+      toast.error("Network error removing interview slot.");
+    }
   };
 
-  const addInterview = () => {
+  const addInterview = async () => {
     if (!newForm.name) {
       toast.error("Please enter candidate name");
       return;
@@ -130,19 +164,60 @@ function InterviewModal({ onClose, onUpdateCount }) {
       toast.error("Start time must be before end time");
       return;
     }
-    const newIv = {
-      id: Date.now(),
-      name: newForm.name,
-      role: newForm.role || 'Software Engineer',
-      start: newForm.start,
-      end: newForm.end,
+
+    const cand = candidates.find(c => c.name.toLowerCase() === newForm.name.toLowerCase());
+    if (!cand) {
+      toast.error("Please select an existing candidate from the list.");
+      return;
+    }
+
+    const datePart = new Date().toISOString().split('T')[0];
+    const scheduled_at = `${datePart}T${newForm.start}:00Z`;
+
+    const [startH, startM] = newForm.start.split(':').map(Number);
+    const [endH, endM] = newForm.end.split(':').map(Number);
+    const duration_minutes = (endH * 60 + endM) - (startH * 60 + startM);
+
+    const reqData = {
+      scheduled_at,
+      duration_minutes,
+      interviewer_name: 'Senior Interviewer',
       status: 'pending'
     };
-    const updated = [...interviews, newIv];
-    saveInterviews(updated);
-    setNewForm({ name: '', role: '', start: '09:00', end: '10:00' });
-    setShowAdd(false);
-    toast.success("Interview slot added. Optimize schedule to verify conflict resolution!");
+
+    try {
+      const res = await apiFetch(`${API}/candidates/${cand.id}/interviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(reqData)
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        const newIv = {
+          id: saved.id,
+          candidate_id: cand.id,
+          name: cand.name,
+          role: cand.role || 'Software Engineer',
+          start: newForm.start,
+          end: newForm.end,
+          status: 'pending',
+          scheduled_at: saved.scheduled_at,
+          duration_minutes: saved.duration_minutes,
+          interviewer_name: saved.interviewer_name
+        };
+        const updated = [...interviews, newIv];
+        saveInterviews(updated);
+        setNewForm({ name: '', role: '', start: '09:00', end: '10:00' });
+        setShowAdd(false);
+        toast.success("Interview slot added. Optimize schedule to verify conflict resolution!");
+      } else {
+        toast.error("Failed to save interview slot to server.");
+      }
+    } catch (err) {
+      toast.error("Network error adding interview slot.");
+    }
   };
 
   const parseTimeToFloat = (timeStr) => {
@@ -180,6 +255,17 @@ function InterviewModal({ onClose, onUpdateCount }) {
         status: selectedIds.has(iv.id) ? 'confirmed' : 'conflict'
       }));
 
+      // Update optimized statuses in the database
+      await Promise.all(
+        updated.map(iv =>
+          apiFetch(`${API}/candidates/interviews/${iv.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: iv.status })
+          }).catch(err => console.error('Failed to update interview optimized status:', iv.id, err))
+        )
+      );
+
       saveInterviews(updated);
       toast.success(`Schedule optimized: ${result.total_slots} slots confirmed!`);
     } catch (err) {
@@ -205,6 +291,18 @@ function InterviewModal({ onClose, onUpdateCount }) {
         ...iv,
         status: selectedIds.includes(iv.id) ? 'confirmed' : 'conflict'
       }));
+
+      // Update optimized statuses in the database for fallback path
+      await Promise.all(
+        updated.map(iv =>
+          apiFetch(`${API}/candidates/interviews/${iv.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: iv.status })
+          }).catch(err => console.error('Failed to update interview optimized status fallback:', iv.id, err))
+        )
+      );
+
       saveInterviews(updated);
     } finally {
       setOptimizing(false);
@@ -641,20 +739,16 @@ export default function Dashboard() {
       })
       .catch(() => setAnalytics(null));
 
-    // Load active schedule count from localStorage safely
-    try {
-      const rawIvs = localStorage.getItem('hireiq_interviews');
-      const storedIvs = rawIvs ? JSON.parse(rawIvs) : [];
-      if (Array.isArray(storedIvs)) {
-        const confirmedCount = storedIvs.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
-        setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
-      } else {
-        setScheduledCount(INITIAL_INTERVIEWS.length);
-      }
-    } catch (e) {
-      console.error(e);
-      setScheduledCount(INITIAL_INTERVIEWS.length);
-    }
+    // Load active schedule count from backend
+    apiFetch(`${API}/candidates/interviews/all`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          const active = data.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
+          setScheduledCount(active);
+        }
+      })
+      .catch(console.error);
 
     // Load shortlist count from localStorage safely
     try {
@@ -761,20 +855,16 @@ export default function Dashboard() {
         setOpenJobs(Array.isArray(jobsData) ? jobsData.filter(j => j.status === 'Open').length : 0);
       }
       
-      // Reload schedule count safely
-      try {
-        const rawIvs = localStorage.getItem('hireiq_interviews');
-        const storedIvs = rawIvs ? JSON.parse(rawIvs) : [];
-        if (Array.isArray(storedIvs)) {
-          const confirmedCount = storedIvs.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
-          setScheduledCount(confirmedCount || INITIAL_INTERVIEWS.length);
-        } else {
-          setScheduledCount(INITIAL_INTERVIEWS.length);
-        }
-      } catch (e) {
-        console.error(e);
-        setScheduledCount(INITIAL_INTERVIEWS.length);
-      }
+      // Reload schedule count from backend
+      apiFetch(`${API}/candidates/interviews/all`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          if (Array.isArray(data)) {
+            const active = data.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
+            setScheduledCount(active);
+          }
+        })
+        .catch(console.error);
     } catch (err) {
       console.error(err);
       toast.error("Error seeding workspace demo data.");
