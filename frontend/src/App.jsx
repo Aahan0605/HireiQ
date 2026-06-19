@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Toaster as SonnerToaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import GrainOverlay from './components/GrainOverlay';
@@ -53,6 +54,7 @@ function AppRoutes() {
     <>
       <GrainOverlay />
       <Toaster position="top-center" reverseOrder={false} toastOptions={{ style: { background: '#131324', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '14px', borderRadius: '12px' } }} />
+      <SonnerToaster theme="dark" closeButton richColors position="top-center" />
       <MarketingNav />
       <AlgorithmLegend />
       <Routes>

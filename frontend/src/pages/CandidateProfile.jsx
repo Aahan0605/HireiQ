@@ -12,6 +12,15 @@ import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
 
+const stageColors = {
+  screening: 'bg-white/5 text-gray-400 border-white/10',
+  shortlisted: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  interviewing: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  offer: 'bg-violet/10 text-violet border-violet/20',
+  hired: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  rejected: 'bg-red-500/10 text-red-400 border-red-500/20'
+};
+
 function QACard({ qa, index }) {
   const [showAnswer, setShowAnswer] = useState(false);
   return (
@@ -219,6 +228,7 @@ HireIQ Hiring Team`
   });
 
   const [notes, setNotes] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(5);
   const [interviewerName, setInterviewerName] = useState('Senior Interviewer');
@@ -481,6 +491,22 @@ HireIQ Hiring Team`
     fetchNotes();
   }, [id]);
 
+  // Fetch interviews dynamically
+  useEffect(() => {
+    const fetchInterviews = async () => {
+      try {
+        const res = await apiFetch(`${API}/candidates/${id}/interviews`);
+        if (res.ok) {
+          const data = await res.json();
+          setInterviews(Array.isArray(data) ? data : []);
+        }
+      } catch (err) {
+        console.error('Failed to load interviews:', err);
+      }
+    };
+    fetchInterviews();
+  }, [id]);
+
   // Fetch GitHub stats once we know the candidate's github handle
   useEffect(() => {
     if (!candidate?.github) return;
@@ -638,7 +664,7 @@ HireIQ Hiring Team`
   }
 
   // Trust score based on how many profile fields are filled
-  const verifiedCount = [candidate.email, candidate.github, candidate.linkedin, candidate.location].filter(Boolean).length;
+  const verifiedCount = [candidate?.email, candidate?.github, candidate?.linkedin, candidate?.location].filter(Boolean).length;
   const trustLabel = verifiedCount >= 4 ? 'High' : verifiedCount >= 2 ? 'Medium' : 'Low';
   const trustColor = trustLabel === 'High'
     ? 'text-green-400 bg-green-500/10 border-green-500/20'
@@ -685,9 +711,29 @@ HireIQ Hiring Team`
       if (!res.ok) {
         throw new Error('Server returned an error');
       }
+
+      // Update candidate stage to interviewing in DB
+      await apiFetch(`${API}/candidates/${id}/stage`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ stage: 'interviewing' })
+      });
+
+      // Update local states
+      setCandidate(prev => prev ? { ...prev, stage: 'interviewing', status: 'Interviewing' } : null);
+
+      // Refresh interviews list
+      const updatedRes = await apiFetch(`${API}/candidates/${id}/interviews`);
+      if (updatedRes.ok) {
+        const data = await updatedRes.json();
+        setInterviews(Array.isArray(data) ? data : []);
+      }
+
       addCommunicationLog('Outlook', 'Scheduled 1st round video panel interview invite');
       setIsScheduling(false);
-      return `Interview scheduled! Email sent to ${candidate.email}`;
+      return `Interview scheduled! Email sent to ${candidate?.email || 'candidate'}`;
     };
 
     toast.promise(schedulePromise(), {
@@ -830,8 +876,13 @@ HireIQ Hiring Team`
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-3 py-1 text-sm font-medium text-emerald-400">
                   <Award className="h-4 w-4" /> {candidate?.score}% Match
                 </div>
-                <div className={`mt-2 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${trustColor}`}>
-                  Trust: {trustLabel}
+                <div className="flex gap-2 flex-wrap justify-center mt-2">
+                  <div className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${trustColor}`}>
+                    Trust: {trustLabel}
+                  </div>
+                  <div className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${stageColors[candidate?.stage?.toLowerCase() || 'screening'] || 'bg-white/5 text-gray-400 border-white/10'}`}>
+                    Stage: {candidate?.stage || 'Screening'}
+                  </div>
                 </div>
               </div>
 
@@ -877,6 +928,32 @@ HireIQ Hiring Team`
                   <Download className="h-4 w-4" /> Download Report
                 </button>
               </div>
+
+              {interviews.length > 0 && (
+                <div className="mt-6 border-t border-black/10 dark:border-white/10 pt-5">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Scheduled Interviews</h4>
+                  <div className="space-y-3">
+                    {interviews.map(iv => (
+                      <div key={iv.id} className="bg-white/5 border border-white/5 rounded-xl p-3 text-xs space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-gray-200">{iv.interviewer_name}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${
+                            iv.status === 'confirmed' || iv.status === 'scheduled'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                              : 'bg-white/5 text-gray-400 border-white/5'
+                          }`}>
+                            {iv.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-gray-400">
+                          {new Date(iv.scheduled_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                        </div>
+                        <div className="text-[10px] text-gray-500">Duration: {iv.duration_minutes} mins</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </MagneticCard>
 
             {/* Skill radar */}
