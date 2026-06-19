@@ -109,7 +109,7 @@ export default function ConstellationBackground() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 block w-full h-full z-0 opacity-40 pointer-events-none transition-opacity duration-1000"
+      className="fixed inset-0 w-screen h-screen z-0 opacity-40 pointer-events-none transition-opacity duration-1000"
     />
   );
 }
