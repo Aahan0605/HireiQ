@@ -90,6 +90,19 @@ export default function Landing() {
       }
     }
   };
+  const titleLineVariants = {
+    hidden: { 
+      y: prefersReducedMotion ? 0 : "120%"
+    },
+    visible: {
+      y: 0,
+      transition: {
+        duration: prefersReducedMotion ? 0.25 : 0.9,
+        ease: [0.16, 1, 0.3, 1]
+      }
+    }
+  };
+
 
   const cardVariants = {
     hidden: { 
@@ -292,23 +305,29 @@ export default function Landing() {
         </motion.div>
 
         <h1 className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance">
-          <motion.span variants={itemVariants} className="block">Hire the best,</motion.span>
-          <motion.span variants={itemVariants} className="block">
-            <motion.span 
-              animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
-              transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
-              style={prefersReducedMotion ? {} : {
-                background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
-                backgroundSize: "200% auto",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text"
-              }}
-              className={prefersReducedMotion ? "bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent block" : "block"}
-            >
-              faster than ever.
+          <span className="block overflow-hidden py-2 -my-2">
+            <motion.span variants={titleLineVariants} className="block">
+              Hire the best,
             </motion.span>
-          </motion.span>
+          </span>
+          <span className="block overflow-hidden py-2 -my-2">
+            <motion.span variants={titleLineVariants} className="block">
+              <motion.span 
+                animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
+                transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
+                style={prefersReducedMotion ? {} : {
+                  background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
+                  backgroundSize: "200% auto",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text"
+                }}
+                className={prefersReducedMotion ? "bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent block" : "block"}
+              >
+                faster than ever.
+              </motion.span>
+            </motion.span>
+          </span>
         </h1>
 
         <motion.p
