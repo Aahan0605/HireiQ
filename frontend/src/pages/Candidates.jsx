@@ -183,11 +183,76 @@ export default function Candidates() {
     return Array.from(skillsSet).sort();
   }, [candidates]);
 
+  // Semantic AI: compute which fields matched for each candidate
+  const semanticMatches = React.useMemo(() => {
+    const map = {};
+    if (!semanticSearch || !search.trim()) return map;
+    const q = search.toLowerCase().trim();
+    // Build simple token variants for fuzzy matching
+    const synonyms = {
+      'js': 'javascript', 'javascript': 'js',
+      'ts': 'typescript', 'typescript': 'ts',
+      'react.js': 'react', 'react': 'reactjs',
+      'reactjs': 'react', 'node': 'nodejs',
+      'nodejs': 'node', 'postgres': 'postgresql',
+      'postgresql': 'postgres', 'k8s': 'kubernetes',
+      'kubernetes': 'k8s', 'ml': 'machine learning',
+      'machine learning': 'ml', 'ai': 'artificial intelligence',
+      'artificial intelligence': 'ai', 'dl': 'deep learning',
+      'deep learning': 'dl', 'py': 'python', 'python': 'py',
+      'go': 'golang', 'golang': 'go', 'cpp': 'c++', 'c++': 'cpp',
+    };
+    const queries = [q];
+    if (synonyms[q]) queries.push(synonyms[q]);
+
+    candidates.forEach(c => {
+      const matched = [];
+      const skills = (c?.skills || []).map(s => s.toLowerCase());
+      const summary = (c?.summary || c?.insights?.executive_summary || '').toLowerCase();
+      const resumeText = (c?.resume_text || '').toLowerCase();
+      const role = (c?.role || '').toLowerCase();
+      const expText = Array.isArray(c?.experience)
+        ? c.experience.map(e => `${e.title || ''} ${e.company || ''} ${e.description || ''}`).join(' ').toLowerCase()
+        : '';
+
+      for (const term of queries) {
+        if (skills.some(s => s.includes(term) || term.includes(s))) {
+          if (!matched.includes('skills')) matched.push('skills');
+        }
+        if (summary.includes(term)) {
+          if (!matched.includes('summary')) matched.push('summary');
+        }
+        if (resumeText.includes(term)) {
+          if (!matched.includes('resume')) matched.push('resume');
+        }
+        if (expText.includes(term)) {
+          if (!matched.includes('experience')) matched.push('experience');
+        }
+        if (role.includes(term)) {
+          if (!matched.includes('role')) matched.push('role');
+        }
+      }
+      if (matched.length > 0) map[c.id] = matched;
+    });
+    return map;
+  }, [candidates, semanticSearch, search]);
+
   const filtered = candidates.filter(c => {
     // Search filter
-    const matchesSearch = c?.name?.toLowerCase().includes(search.toLowerCase()) ||
-                          c?.role?.toLowerCase().includes(search.toLowerCase()) ||
-                          (semanticSearch && (c?.skills || []).some(s => s.toLowerCase().includes(search.toLowerCase())));
+    let matchesSearch;
+    const q = search.toLowerCase().trim();
+    if (!q) {
+      matchesSearch = true; // No search text → show all
+    } else if (semanticSearch) {
+      // Semantic mode: match if name/role matches OR deep semantic fields matched
+      matchesSearch = c?.name?.toLowerCase().includes(q) ||
+                      c?.role?.toLowerCase().includes(q) ||
+                      !!semanticMatches[c.id];
+    } else {
+      // Normal mode: only match by name or role
+      matchesSearch = c?.name?.toLowerCase().includes(q) ||
+                      c?.role?.toLowerCase().includes(q);
+    }
     
     // Talent pool filter
     const stage = getKanbanStage(c);
@@ -588,20 +653,24 @@ export default function Candidates() {
           <div className="relative flex-1 flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-              <input type="text" placeholder="Search by name or role..."
+              <input type="text" placeholder={semanticSearch ? 'Semantic search across skills, resume, experience...' : 'Search by name or role...'}
                 value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
             </div>
             <button
-              onClick={() => setSemanticSearch(!semanticSearch)}
+              onClick={() => {
+                const next = !semanticSearch;
+                setSemanticSearch(next);
+                toast(next ? '🧠 Semantic AI enabled — searches skills, resume, summary & experience' : 'Semantic AI disabled — basic name/role search', { duration: 2500 });
+              }}
               className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                 semanticSearch
-                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 shadow-glow-blue/20'
+                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
                   : 'border-white/10 bg-card text-gray-400 hover:text-white'
               }`}
             >
               <Cpu size={14} className={semanticSearch ? 'text-blue-400 animate-pulse' : ''} />
-              Semantic AI
+              Semantic AI {semanticSearch ? 'ON' : ''}
             </button>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
@@ -880,6 +949,12 @@ export default function Candidates() {
                       <div className="min-w-0">
                         <p className="text-theme-1 text-sm font-semibold truncate">{displayName}</p>
                         <p className="text-gray-400 text-xs truncate">{c?.role}</p>
+                        {semanticSearch && search.trim() && semanticMatches[c?.id] && (
+                          <p className="text-[10px] text-blue-400/80 mt-0.5 flex items-center gap-1">
+                            <Cpu size={9} className="animate-pulse" />
+                            Matched in: {semanticMatches[c.id].join(', ')}
+                          </p>
+                        )}
                       </div>
                     </div>
 
