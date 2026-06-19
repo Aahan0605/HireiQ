@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const DASH_PREFIXES = [
@@ -7,152 +7,109 @@ const DASH_PREFIXES = [
 ];
 
 export default function ConstellationBackground() {
-  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const { pathname } = useLocation();
+  const [vantaEffect, setVantaEffect] = useState(null);
 
   const isAuthPage = DASH_PREFIXES.some(p => pathname.startsWith(p));
 
   useEffect(() => {
     if (isAuthPage) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationFrameId;
+    let isMounted = true;
+    let effect = null;
 
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
+    const initVanta = () => {
+      if (!containerRef.current || !window.VANTA || !window.VANTA.BIRDS) return;
 
-    // Respect prefers-reduced-motion
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      // Respect prefers-reduced-motion
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion) return;
 
-    const particles = [];
-    // If prefers-reduced-motion is true, disable or heavily reduce particles
-    const particleCount = prefersReducedMotion ? 0 : Math.min(60, Math.floor((width * height) / 20000));
-    const connectionDistance = 120;
-    const mouse = { x: null, y: null, radius: 150 };
-
-    class Particle {
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.4;
-        this.vy = (Math.random() - 0.5) * 0.4;
-        this.radius = Math.random() * 2 + 1;
-        const colors = ['rgba(16, 185, 129, 0.4)', 'rgba(56, 189, 248, 0.4)', 'rgba(139, 92, 246, 0.4)'];
-        this.color = colors[Math.floor(Math.random() * colors.length)];
-      }
-
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
-
-        if (this.x < 0 || this.x > width) this.vx = -this.vx;
-        if (this.y < 0 || this.y > height) this.vy = -this.vy;
-
-        if (mouse.x !== null && mouse.y !== null) {
-          const dx = mouse.x - this.x;
-          const dy = mouse.y - this.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < mouse.radius) {
-            const force = (mouse.radius - dist) / mouse.radius;
-            this.x -= dx / dist * force * 0.8;
-            this.y -= dy / dist * force * 0.8;
-          }
-        }
-      }
-
-      draw() {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = this.color;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-    }
-
-    // Initialize particles
-    for (let i = 0; i < particleCount; i++) {
-      particles.push(new Particle());
-    }
-
-    const handleResize = () => {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-    };
-
-    const handleMouseMove = (e) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    };
-
-    const handleMouseLeave = () => {
-      mouse.x = null;
-      mouse.y = null;
-    };
-
-    window.addEventListener('resize', handleResize);
-    if (!prefersReducedMotion) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseleave', handleMouseLeave);
-    }
-
-    const animate = () => {
-      ctx.clearRect(0, 0, width, height);
-
-      const gradient = ctx.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, Math.max(width, height));
-      gradient.addColorStop(0, '#0d0d1a');
-      gradient.addColorStop(1, '#05050d');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-
-      if (!prefersReducedMotion) {
-        particles.forEach((p) => {
-          p.update();
-          p.draw();
+      try {
+        effect = window.VANTA.BIRDS({
+          el: containerRef.current,
+          mouseControls: true,
+          touchControls: true,
+          gyroControls: false,
+          minHeight: 200.00,
+          minWidth: 200.00,
+          scale: 1.00,
+          scaleMobile: 1.00,
+          birdSize: 1.50,
+          wingSpan: 35.00,
+          speedLimit: 10.00,
+          separation: 68.00,
+          alignment: 47.00,
+          cohesion: 24.00,
+          quantity: 3.00, // Balanced count so it feels premium and not cluttered
+          backgroundAlpha: 0.00, // Transparent background to show theme gradients
+          color1: 0x2dd4bf, // Theme Teal/Cyan
+          color2: 0x8b5cf6, // Theme Violet/Purple
+          colorMode: "variance"
         });
-
-        for (let i = 0; i < particles.length; i++) {
-          for (let j = i + 1; j < particles.length; j++) {
-            const p1 = particles[i];
-            const p2 = particles[j];
-            const dx = p1.x - p2.x;
-            const dy = p1.y - p2.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < connectionDistance) {
-              const alpha = (1 - dist / connectionDistance) * 0.15;
-              ctx.beginPath();
-              ctx.moveTo(p1.x, p1.y);
-              ctx.lineTo(p2.x, p2.y);
-              ctx.strokeStyle = `rgba(139, 92, 246, ${alpha})`;
-              ctx.lineWidth = 0.5;
-              ctx.stroke();
-            }
-          }
+        if (isMounted) {
+          setVantaEffect(effect);
         }
-        animationFrameId = requestAnimationFrame(animate);
+      } catch (err) {
+        console.error("Error initializing Vanta Birds:", err);
       }
     };
 
-    animate();
+    const loadScript = (src, globalKey) => {
+      return new Promise((resolve) => {
+        if (window[globalKey] || (globalKey === 'VANTA' && window.VANTA && window.VANTA.BIRDS)) {
+          resolve();
+          return;
+        }
+
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) {
+          if (existing.dataset.loaded === 'true') {
+            resolve();
+          } else {
+            existing.addEventListener('load', resolve);
+          }
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.dataset.loaded = 'false';
+        script.addEventListener('load', () => {
+          script.dataset.loaded = 'true';
+          resolve();
+        });
+        document.body.appendChild(script);
+      });
+    };
+
+    // Load Three.js first, then Vanta Birds
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js', 'THREE')
+      .then(() => {
+        if (!isMounted) return;
+        return loadScript('https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.birds.min.js', 'VANTA');
+      })
+      .then(() => {
+        if (!isMounted) return;
+        initVanta();
+      });
 
     return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseleave', handleMouseLeave);
+      isMounted = false;
+      if (effect) {
+        effect.destroy();
+      }
     };
   }, [isAuthPage]);
 
   if (isAuthPage) return null;
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 block w-full h-full z-0 pointer-events-none"
+    <div
+      ref={containerRef}
+      className="absolute inset-0 block w-full h-full z-0 opacity-40 pointer-events-none transition-opacity duration-1000"
     />
   );
 }
