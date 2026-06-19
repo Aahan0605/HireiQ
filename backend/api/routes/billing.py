@@ -2,7 +2,9 @@ import os
 import logging
 from datetime import datetime
 import json
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, Request, HTTPException, status, Depends, Body
+from db.session import SessionLocal
+from db.models import Subscription
 import stripe
 
 from api.core.dependencies import get_current_user
@@ -194,64 +196,42 @@ async def get_webhook_audit_logs():
         "error_message": e["error_message"]
     } for e in res.data]
 
-@router.post("/create-checkout-session", dependencies=[Depends(require_permission(Permission.MANAGE_BILLING))])
+@router.post("/create-checkout-session")
 async def create_checkout_session(
-    plan_name: str,
+    plan_name: str = Body(..., embed=True),
     tenant_id: str = Depends(require_tenant),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    Create a Stripe Checkout session mapping the plan_name to configured price IDs,
-    associating with organization tenant ID.
-    """
-    if not stripe.api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Stripe API is not configured on this server."
-        )
-        
-    price_id = (
-        os.getenv(f"STRIPE_PRICE_{plan_name.upper()}")
-        or os.getenv(f"STRIPE_PRICE_{plan_name.upper()}_ID")
-    )
-    if not price_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid plan name or price not configured for {plan_name}"
-        )
-        
-    # Build checkout parameters
-    checkout_params = {
-        "payment_method_types": ["card"],
-        "line_items": [{
-            "price": price_id,
-            "quantity": 1
-        }],
-        "mode": "subscription",
-        "client_reference_id": tenant_id,
-        "subscription_data": {
-            "metadata": {
-                "organization_id": tenant_id,
-                "plan_name": plan_name
-            }
-        },
-        "metadata": {
-            "plan_name": plan_name,
-            "organization_id": tenant_id
-        },
-        "success_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/settings?tab=billing&checkout=success",
-        "cancel_url": os.getenv("FRONTEND_URL", "http://localhost:5173") + "/settings?tab=billing&checkout=cancel"
+    price_map = {
+        "Pro": os.getenv("STRIPE_PRICE_PRO_ID", ""),
+        "Business": os.getenv("STRIPE_PRICE_BUSINESS_ID", ""),
+        "Enterprise": os.getenv("STRIPE_PRICE_ENTERPRISE_ID", ""),
     }
-    
-    # Send customer email
-    checkout_params["customer_email"] = current_user.get("email")
-        
+    price_id = price_map.get(plan_name)
+    if not price_id:
+        raise HTTPException(status_code=400, detail=f"No Stripe price configured for plan: {plan_name}")
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    db = SessionLocal()
     try:
-        session = stripe.checkout.Session.create(**checkout_params)
-        return {"url": session.url, "checkout_url": session.url}
-    except Exception as e:
-        logger.error("Failed to create Stripe Checkout session: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Stripe Checkout error: {str(e)}"
-        )
+        sub = db.query(Subscription).filter(Subscription.organization_id == tenant_id).first()
+        customer_id = sub.stripe_customer_id if sub and sub.stripe_customer_id else None
+
+        params = {
+            "payment_method_types": ["card"],
+            "mode": "subscription",
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": f"{frontend_url}/settings?tab=billing&checkout=success",
+            "cancel_url": f"{frontend_url}/settings?tab=billing&checkout=cancelled",
+            "metadata": {"tenant_id": tenant_id, "plan_name": plan_name},
+            "client_reference_id": tenant_id,
+        }
+        if customer_id:
+            params["customer"] = customer_id
+        else:
+            params["customer_email"] = current_user.get("email", "")
+
+        session = stripe.checkout.Session.create(**params)
+        return {"checkout_url": session.url}
+    finally:
+        db.close()

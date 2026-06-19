@@ -73,7 +73,12 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-# No startup database bootstrap needed since we query Supabase directly
+@app.on_event("startup")
+def on_startup():
+    from db.session import engine
+    from db.models import Base
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database schema bootstrapped.")
 
 # ─── CORS — restrict to known frontend origins in production ───
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")

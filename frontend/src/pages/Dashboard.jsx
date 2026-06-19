@@ -40,7 +40,9 @@ const CustomPieTooltip = ({ active, payload }) => {
   return null;
 };
 
-// ── Initial interview data ─────────────────────────────────
+// DEMO DATA — only used as a fallback when localStorage is empty AND
+// the user has zero real candidates. Cleared automatically once real
+// candidate data exists (see useEffect above).
 const INITIAL_INTERVIEWS = [
   { id: 1, name: 'Alice Chen',      role: 'Frontend Engineer', start: '09:00', end: '10:00', status: 'confirmed' },
   { id: 2, name: 'Bob Martinez',    role: 'Fullstack Engineer', start: '10:00', end: '11:00', status: 'confirmed' },
@@ -48,7 +50,9 @@ const INITIAL_INTERVIEWS = [
   { id: 4, name: 'Frank Liu',       role: 'Backend Engineer',   start: '12:00', end: '13:00', status: 'confirmed' },
 ];
 
-// ── Initial shortlist data ─────────────────────────────────
+// DEMO DATA — only used as a fallback when localStorage is empty AND
+// the user has zero real candidates. Cleared automatically once real
+// candidate data exists (see useEffect above).
 const ALL_CANDIDATES = [
   { id: 1, name: 'Diana Park',    score: 97, cost: 8  },
   { id: 2, name: 'Charlie Brown', score: 88, cost: 6  },

@@ -8,6 +8,41 @@ import { useAuth } from '../context/AuthContext';
 
 const API = '/api/v1';
 
+const plansList = [
+  {
+    name: 'Free',
+    price: '$0',
+    desc: 'Basic candidate evaluation and resume parsing tool.',
+    features: [
+      '5 resume parses / month',
+      'Basic TF-IDF match score',
+      'Candidate List View'
+    ]
+  },
+  {
+    name: 'Pro',
+    price: '$79',
+    desc: 'Power features for scaling teams and active recruiters.',
+    features: [
+      'Unlimited CV uploads',
+      'Kanban Hiring pipeline board',
+      'Advanced filter controls',
+      'Real-time GitHub profile sync'
+    ]
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    desc: 'Dedicated database infrastructure and security controls.',
+    features: [
+      'custom weight templates',
+      'DB sync (Supabase/PostgreSQL)',
+      'PDF and CSV reports',
+      '24/7 Priority support SLA'
+    ]
+  }
+];
+
 export default function Settings() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
@@ -35,6 +70,7 @@ export default function Settings() {
   // Billing SaaS states
   const [plan, setPlan] = useState(() => localStorage.getItem('hireiq_saas_plan') || 'Free');
   const [quotaUsed, setQuotaUsed] = useState(0);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   // Team states
   const [members, setMembers] = useState([]);
@@ -160,35 +196,17 @@ export default function Settings() {
         }
       })
       .catch(() => {});
+  }, []);
 
-    // Listen for Stripe checkout session redirect success/cancel params
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') === 'success') {
-      const planName = localStorage.getItem('hireiq_saas_pending_plan') || 'Pro';
-      apiFetch(`${API}/settings/billing/update-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_name: planName })
-      })
-      .then(r => {
-        if (r.ok) {
-          setPlan(planName);
-          localStorage.setItem('hireiq_saas_plan', planName);
-          toast.success(`Subscription verified! You have been upgraded to ${planName}! 🎉`);
-        } else {
-          toast.error("Failed to verify subscription. Please try again later.");
-        }
-      })
-      .catch(() => toast.error("Failed to verify subscription. Please try again later."))
-      .finally(() => {
-        localStorage.removeItem('hireiq_saas_pending_plan');
-        const newUrl = window.location.pathname + '?tab=billing' + (window.location.hash || '');
-        window.history.replaceState({}, document.title, newUrl);
-      });
-    } else if (params.get('checkout') === 'cancel' || params.get('checkout') === 'cancelled') {
-      toast.info("Subscription checkout was cancelled.");
-      const newUrl = window.location.pathname + '?tab=billing' + (window.location.hash || '');
-      window.history.replaceState({}, document.title, newUrl);
+      toast.success('Subscription upgraded successfully!');
+      window.history.replaceState({}, '', '/settings');
+    }
+    if (params.get('checkout') === 'cancelled') {
+      toast.info('Checkout cancelled.');
+      window.history.replaceState({}, '', '/settings');
     }
   }, []);
 
@@ -244,6 +262,43 @@ export default function Settings() {
       toast.error(err.message || "Error exporting audit logs.");
     } finally {
       setExportingLogs(false);
+    }
+  };
+
+  const handleUpgrade = async (planName) => {
+    setCheckoutLoading(true);
+    try {
+      const res = await apiFetch(`${API}/billing/create-checkout-session`, {
+        method: 'POST',
+        body: JSON.stringify({ plan_name: planName }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.detail || 'Failed to start checkout');
+        return;
+      }
+      const { checkout_url } = await res.json();
+      window.location.href = checkout_url;
+    } catch {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleResetPlan = async () => {
+    try {
+      const res = await apiFetch(`${API}/settings/billing/update-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_name: 'Free' })
+      });
+      if (!res.ok) throw new Error();
+      setPlan('Free');
+      localStorage.setItem('hireiq_saas_plan', 'Free');
+      toast.success("Downgraded back to Free tier.");
+    } catch {
+      toast.error("Failed to cancel subscription.");
     }
   };
 
@@ -415,25 +470,126 @@ export default function Settings() {
             </motion.div>
           </div>
         ) : activeTab === 'billing' ? (
-          <div className="flex items-center justify-center min-h-[300px]">
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }} 
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-card border border-white/10 rounded-xl p-8 max-w-md text-center shadow-glow-indigo/10"
+          <div className="space-y-6">
+            {/* Active Plan Usage Tracker */}
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6 relative overflow-hidden"
             >
-              <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-400">
-                <Zap size={20} className="animate-pulse" />
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Usage Tracker</h3>
+                  <p className="text-xs text-gray-400">Total processed CV resumes on your account</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Current Plan:</span>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                    plan === 'Free' 
+                      ? 'bg-white/5 text-white border-white/10' 
+                      : plan === 'Pro' 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-glow-emerald/10'
+                        : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-glow-indigo/10'
+                  }`}>
+                    {plan} Plan
+                  </span>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Paid plans are launching soon</h3>
-              <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-                Paid plans are launching soon — email <a href="mailto:sales@hireiq.com" className="text-indigo-400 hover:text-indigo-300 underline font-medium">sales@hireiq.com</a> to get early access.
-              </p>
-              <a 
-                href="mailto:sales@hireiq.com"
-                className="inline-flex items-center justify-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all hover:scale-[1.02] active:scale-95 shadow"
-              >
-                Get Early Access
-              </a>
+
+              {/* Uploads progress bar */}
+              {plan === 'Free' ? (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-2">
+                    <span>{quotaUsed} of 5 CV uploads parsed</span>
+                    <span className="text-emerald-400 font-bold">{Math.round((quotaUsed / 5) * 100)}% quota used</span>
+                  </div>
+                  <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-yellow-400/80 mt-3 flex items-center gap-1.5">
+                    <AlertCircle size={12} />
+                    {quotaUsed >= 5 
+                      ? "You have reached your free tier limit. Upgrade to Pro for unlimited parsing and candidate management."
+                      : "Upgrade to Pro for unlimited parsing, advanced filters, and candidate management."}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-2">
+                    <span>Quota limits (Pro active)</span>
+                    <span className="text-emerald-400 font-bold">Unlimited CV Uploads</span>
+                  </div>
+                  <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 rounded-full w-full" />
+                  </div>
+                  <div className="mt-4 flex justify-between items-center">
+                    <p className="text-[11px] text-gray-400">Next renewal date: July 9, 2026</p>
+                    <button onClick={handleResetPlan} className="text-[10px] text-red-400 hover:text-red-300 underline">
+                      Cancel subscription
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+
+            {/* Pricing Selection Grid */}
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            >
+              {plansList.map(planItem => {
+                const isActive = plan === planItem.name;
+                return (
+                  <div key={planItem.name} className={`rounded-xl border p-5 flex flex-col justify-between transition-all bg-card relative overflow-hidden ${
+                    isActive 
+                      ? planItem.name === 'Pro' 
+                        ? 'border-emerald-500/50 shadow-glow-emerald/10' 
+                        : 'border-indigo-500/50 shadow-glow-indigo/10'
+                      : 'border-white/5 hover:border-white/10'
+                  }`}>
+                    {planItem.name === 'Pro' && (
+                      <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold tracking-widest px-2.5 py-0.5 rounded-bl">RECOMMENDED</div>
+                    )}
+                    <div>
+                      <h4 className={`font-bold text-sm mb-1 flex items-center gap-1 ${
+                        planItem.name === 'Pro' ? 'text-emerald-400' : planItem.name === 'Enterprise' ? 'text-indigo-400' : 'text-gray-300'
+                      }`}>
+                        {planItem.name === 'Pro' && <Zap size={12} />}
+                        {planItem.name === 'Enterprise' && <Lock size={11} />}
+                        {planItem.name}
+                      </h4>
+                      <div className="text-2xl font-bold text-white mb-3">{planItem.price}<span className="text-xs text-gray-400 font-normal"> {planItem.price !== 'Custom' && '/ mo'}</span></div>
+                      <p className="text-xs text-gray-400 leading-relaxed mb-4">{planItem.desc}</p>
+                      <ul className="space-y-2 text-[11px] text-gray-400 mb-5">
+                        {planItem.features.map(f => (
+                          <li key={f} className="flex items-center gap-1.5"><Check size={11} className="text-emerald-400" /> {f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    {planItem.name === 'Free' ? (
+                      <button 
+                        disabled 
+                        className="w-full py-2 rounded-lg text-xs font-semibold border transition-all bg-white/5 text-white/50 border-white/5 cursor-default"
+                      >
+                        {isActive ? 'Current Active Plan' : 'Free Tier'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleUpgrade(planItem.name)}
+                        disabled={checkoutLoading || isActive}
+                        className={`w-full py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                          isActive 
+                            ? planItem.name === 'Pro' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default' 
+                              : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 cursor-default'
+                            : planItem.name === 'Pro'
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow active:scale-95 disabled:opacity-50'
+                              : 'bg-white/5 text-white border-white/10 hover:bg-white/10 active:scale-95 disabled:opacity-50'
+                        }`}
+                      >
+                        {isActive ? 'Current Active Plan' : (checkoutLoading ? 'Redirecting...' : 'Upgrade')}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </motion.div>
           </div>
         ) : (
