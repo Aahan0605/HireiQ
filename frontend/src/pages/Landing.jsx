@@ -296,13 +296,6 @@ export default function Landing() {
         animate="visible"
         className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-32 pb-20 max-w-5xl mx-auto text-center"
       >
-        <motion.div
-          variants={itemVariants}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-gray-300"
-        >
-          <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          ⚡ Interactive AI Applicant Tracking System
-        </motion.div>
 
         <h1 className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance">
           <span className="block overflow-hidden py-2 -my-2">
