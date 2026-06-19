@@ -73,7 +73,7 @@
   }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 9999px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--mint); }
 }

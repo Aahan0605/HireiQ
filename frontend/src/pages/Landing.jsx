@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck } from 'lucide-react';
@@ -10,6 +10,14 @@ const MotionLink = motion(Link);
 export default function Landing() {
   const [activeFaq, setActiveFaq] = useState(null);
   const prefersReducedMotion = usePrefersReducedMotion();
+
+  // Force body background to dark while on the landing page
+  // Prevents the light-mode body bg from showing as a white line behind the scrollbar
+  useEffect(() => {
+    const prev = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = '#07070e';
+    return () => { document.body.style.backgroundColor = prev; };
+  }, []);
   const tiltConfig = useMagneticTilt(6);
 
   const { ref: showcaseRef, inView: showcaseInView } = useIntersection(0.1);
