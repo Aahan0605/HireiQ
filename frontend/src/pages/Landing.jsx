@@ -705,101 +705,184 @@ export default function Landing() {
       </section>
 
       {/* About & Contact Section */}
-      <section id="about" className="relative z-10 py-24 px-6 border-t border-white/5 bg-[#0a0a15]/40 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto">
+      <section id="about" className="relative z-10 py-28 px-6 border-t border-white/5 overflow-hidden">
+        {/* Decorative ambient glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500/8 rounded-full blur-[180px] pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[150px] pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto relative">
           <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
+            viewport={{ once: true, amount: 0.15 }}
             variants={scrollContainerVariants}
           >
-            {/* Section Header */}
-            <motion.div variants={scrollItemVariants} className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 mb-4 text-emerald-400">
-                <Heart size={20} />
-                <span className="text-xs font-bold tracking-widest uppercase">Our Story</span>
-              </div>
-              <h2 className="text-3xl font-black text-white mb-6">Built by Recruiters,<br />Powered by AI</h2>
+            {/* Section Header with gradient accent line */}
+            <motion.div variants={scrollItemVariants} className="text-center mb-20">
+              <motion.div 
+                className="inline-flex items-center gap-2.5 mb-5 px-4 py-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 backdrop-blur-md"
+                whileHover={prefersReducedMotion ? {} : { scale: 1.05, borderColor: "rgba(16, 185, 129, 0.4)" }}
+              >
+                <Heart size={16} className="text-emerald-400" />
+                <span className="text-xs font-bold tracking-widest uppercase text-emerald-400">Our Story</span>
+              </motion.div>
+              <h2 className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">
+                Built by Recruiters,<br />
+                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-violet-400 bg-clip-text text-transparent">Powered by AI</span>
+              </h2>
               <p className="text-sm text-gray-400 leading-relaxed max-w-2xl mx-auto">
                 HireiQ was born from a simple frustration — hiring the best engineers shouldn't feel like searching for a needle in a haystack. We built an AI-powered platform that combines resume intelligence, live GitHub analytics, and bias-free evaluation to help teams hire smarter, faster, and fairer.
               </p>
             </motion.div>
 
-            {/* Story Cards */}
-            <motion.div variants={scrollItemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
-              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
-                  <Users size={22} className="text-emerald-400" />
-                </div>
-                <h3 className="text-sm font-bold text-white mb-2">Team-First Design</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Built for recruiting teams of all sizes — from seed-stage startups hiring their first engineer to enterprise teams scaling globally.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-4">
-                  <ShieldCheck size={22} className="text-cyan-400" />
-                </div>
-                <h3 className="text-sm font-bold text-white mb-2">Bias-Free Hiring</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Our blind mode anonymizes candidate data so your team evaluates skills objectively — reducing demographic bias in every hiring decision.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
-                <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center mx-auto mb-4">
-                  <Terminal size={22} className="text-violet-400" />
-                </div>
-                <h3 className="text-sm font-bold text-white mb-2">Engineering-Grade</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Open-source at heart, built with React, FastAPI, and Supabase. We believe great tools should be transparent and extensible.
-                </p>
-              </div>
+            {/* Animated Stats Row */}
+            <motion.div variants={scrollItemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
+              {[
+                { value: "10K+", label: "Resumes Analyzed", color: "emerald" },
+                { value: "500+", label: "Teams Hiring", color: "cyan" },
+                { value: "98%", label: "Match Accuracy", color: "violet" },
+                { value: "20hrs", label: "Saved Per Week", color: "amber" },
+              ].map((stat, i) => (
+                <motion.div
+                  key={i}
+                  className="relative group text-center py-6 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md overflow-hidden"
+                  whileHover={prefersReducedMotion ? {} : { 
+                    y: -4, 
+                    borderColor: "rgba(255,255,255,0.15)",
+                    transition: { duration: 0.2 }
+                  }}
+                >
+                  <div className={`absolute inset-0 bg-${stat.color}-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                  <p className={`text-2xl md:text-3xl font-black bg-gradient-to-b from-white to-gray-400 bg-clip-text text-transparent mb-1`}>{stat.value}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{stat.label}</p>
+                </motion.div>
+              ))}
             </motion.div>
 
-            {/* Contact Details */}
-            <motion.div variants={scrollItemVariants} id="contact" className="max-w-2xl mx-auto">
-              <h3 className="text-xl font-bold text-white text-center mb-8">Get in Touch</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <a href="mailto:aahanjgy@gmail.com" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                    <Mail size={18} className="text-emerald-400" />
+            {/* Story Cards — premium glassmorphism with gradient top border */}
+            <motion.div variants={scrollItemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
+              {[
+                {
+                  icon: <Users size={24} className="text-emerald-400" />,
+                  title: "Team-First Design",
+                  desc: "Built for recruiting teams of all sizes — from seed-stage startups hiring their first engineer to enterprise teams scaling globally.",
+                  gradient: "from-emerald-500 to-teal-500",
+                  glow: "emerald"
+                },
+                {
+                  icon: <ShieldCheck size={24} className="text-cyan-400" />,
+                  title: "Bias-Free Hiring",
+                  desc: "Our blind mode anonymizes candidate data so your team evaluates skills objectively — reducing demographic bias in every hiring decision.",
+                  gradient: "from-cyan-500 to-blue-500",
+                  glow: "cyan"
+                },
+                {
+                  icon: <Terminal size={24} className="text-violet-400" />,
+                  title: "Engineering-Grade",
+                  desc: "Open-source at heart, built with React, FastAPI, and Supabase. We believe great tools should be transparent and extensible.",
+                  gradient: "from-violet-500 to-purple-500",
+                  glow: "violet"
+                }
+              ].map((card, i) => (
+                <motion.div
+                  key={i}
+                  className="relative group rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md p-7 text-center overflow-hidden"
+                  whileHover={prefersReducedMotion ? {} : { 
+                    y: -6,
+                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                >
+                  {/* Gradient top border accent */}
+                  <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${card.gradient} opacity-40 group-hover:opacity-100 transition-opacity duration-500`} />
+                  {/* Hover glow */}
+                  <div className={`absolute -top-20 left-1/2 -translate-x-1/2 w-40 h-40 bg-${card.glow}-500/10 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+                  
+                  <div className={`relative w-14 h-14 rounded-2xl bg-gradient-to-br ${card.gradient} bg-opacity-10 flex items-center justify-center mx-auto mb-5`} style={{ background: `linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))` }}>
+                    {card.icon}
                   </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Email</p>
-                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">aahanjgy@gmail.com</p>
-                  </div>
-                </a>
-                <a href="tel:+1234567890" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
-                  <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-                    <Phone size={18} className="text-cyan-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Phone</p>
-                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">+1 (234) 567-890</p>
-                  </div>
-                </a>
-                <a href="https://github.com/Aahan0605/HireiQ" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
-                  <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
-                    <Github size={18} className="text-violet-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">GitHub</p>
-                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">Aahan0605/HireiQ</p>
-                  </div>
-                </a>
-                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
-                  <div className="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center flex-shrink-0">
-                    <Linkedin size={18} className="text-sky-400" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">LinkedIn</p>
-                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">Connect with us</p>
-                  </div>
-                </a>
+                  <h3 className="relative text-sm font-bold text-white mb-3">{card.title}</h3>
+                  <p className="relative text-xs text-gray-400 leading-relaxed">{card.desc}</p>
+                </motion.div>
+              ))}
+            </motion.div>
+
+            {/* Glowing gradient divider */}
+            <div className="flex items-center justify-center mb-20">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+              <div className="mx-4 w-2 h-2 rounded-full bg-emerald-400/60 shadow-[0_0_12px_rgba(52,211,153,0.4)]" />
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent" />
+            </div>
+
+            {/* Contact Section */}
+            <motion.div variants={scrollItemVariants} id="contact" className="max-w-3xl mx-auto">
+              <div className="text-center mb-10">
+                <h3 className="text-2xl font-black text-white mb-3">Get in Touch</h3>
+                <p className="text-xs text-gray-500">Have questions? We'd love to hear from you. Reach out through any channel below.</p>
               </div>
-              <div className="mt-6 flex items-center gap-3 justify-center text-gray-500">
-                <MapPin size={14} />
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {/* Email */}
+                <motion.a 
+                  href="mailto:contact@hireiq.ai"
+                  className="group relative flex flex-col items-center text-center rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md p-6 overflow-hidden"
+                  whileHover={prefersReducedMotion ? {} : { 
+                    y: -6,
+                    borderColor: "rgba(52, 211, 153, 0.3)",
+                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                >
+                  <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-emerald-500/10 rounded-full blur-[50px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                  <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center mb-4 ring-1 ring-emerald-500/20 group-hover:ring-emerald-500/50 transition-all duration-300">
+                    <Mail size={20} className="text-emerald-400" />
+                  </div>
+                  <p className="relative text-[9px] text-gray-500 uppercase tracking-[0.2em] font-bold mb-1.5">Email</p>
+                  <p className="relative text-xs text-gray-300 group-hover:text-white transition-colors font-medium">contact@hireiq.ai</p>
+                </motion.a>
+
+                {/* Phone */}
+                <motion.a 
+                  href="tel:+14155550132"
+                  className="group relative flex flex-col items-center text-center rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md p-6 overflow-hidden"
+                  whileHover={prefersReducedMotion ? {} : { 
+                    y: -6,
+                    borderColor: "rgba(6, 182, 212, 0.3)",
+                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                >
+                  <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-cyan-500/10 rounded-full blur-[50px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                  <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center mb-4 ring-1 ring-cyan-500/20 group-hover:ring-cyan-500/50 transition-all duration-300">
+                    <Phone size={20} className="text-cyan-400" />
+                  </div>
+                  <p className="relative text-[9px] text-gray-500 uppercase tracking-[0.2em] font-bold mb-1.5">Phone</p>
+                  <p className="relative text-xs text-gray-300 group-hover:text-white transition-colors font-medium">+1 (415) 555-0132</p>
+                </motion.a>
+
+                {/* LinkedIn */}
+                <motion.a 
+                  href="https://linkedin.com/company/hireiq-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative flex flex-col items-center text-center rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md p-6 overflow-hidden"
+                  whileHover={prefersReducedMotion ? {} : { 
+                    y: -6,
+                    borderColor: "rgba(59, 130, 246, 0.3)",
+                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                >
+                  <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-32 h-32 bg-blue-500/10 rounded-full blur-[50px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                  <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-blue-500/5 flex items-center justify-center mb-4 ring-1 ring-blue-500/20 group-hover:ring-blue-500/50 transition-all duration-300">
+                    <Linkedin size={20} className="text-blue-400" />
+                  </div>
+                  <p className="relative text-[9px] text-gray-500 uppercase tracking-[0.2em] font-bold mb-1.5">LinkedIn</p>
+                  <p className="relative text-xs text-gray-300 group-hover:text-white transition-colors font-medium">linkedin.com/company/hireiq-ai</p>
+                </motion.a>
+              </div>
+
+              <div className="mt-8 flex items-center gap-3 justify-center text-gray-500">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/60 shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+                <MapPin size={13} />
                 <p className="text-xs">Remote-first · Based in India</p>
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/60 shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
               </div>
             </motion.div>
           </motion.div>
