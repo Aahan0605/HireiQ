@@ -36,13 +36,13 @@ export default function ConstellationBackground() {
           minWidth: 200.00,
           scale: 1.00,
           scaleMobile: 1.00,
-          birdSize: 1.50,
-          wingSpan: 35.00,
+          birdSize: 0.80,
+          wingSpan: 20.00,
           speedLimit: 10.00,
           separation: 68.00,
           alignment: 47.00,
           cohesion: 24.00,
-          quantity: 3.00, // Balanced count so it feels premium and not cluttered
+          quantity: 4.00, // Slightly more birds since they are smaller now
           backgroundAlpha: 0.00, // Transparent background to show theme gradients
           color1: 0x2dd4bf, // Theme Teal/Cyan
           color2: 0x8b5cf6, // Theme Violet/Purple
