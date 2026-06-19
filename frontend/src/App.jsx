@@ -30,7 +30,7 @@ const DASH_PREFIXES = [
 
 function MarketingNav() {
   const { pathname } = useLocation();
-  const hide = DASH_PREFIXES.some(p => pathname.startsWith(p)) || pathname === '/signin';
+  const hide = DASH_PREFIXES.some(p => pathname.startsWith(p)) || pathname === '/signin' || pathname === '/';
   if (hide) return null;
   return (
     <nav className="fixed top-0 z-40 w-full border-b border-white/10 bg-[#0d0d1a]/80 backdrop-blur-md">

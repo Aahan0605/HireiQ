@@ -152,7 +152,7 @@ export default function ConstellationBackground() {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 block w-full h-full -z-10 pointer-events-none"
+      className="absolute inset-0 block w-full h-full z-0 pointer-events-none"
     />
   );
 }
