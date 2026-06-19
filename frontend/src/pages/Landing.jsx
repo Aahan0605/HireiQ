@@ -3,9 +3,97 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
+import { usePrefersReducedMotion, useCountUp, useIntersection } from '../lib/hooks';
+
+const MotionLink = motion(Link);
 
 export default function Landing() {
   const [activeFaq, setActiveFaq] = useState(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [isEntranceComplete, setIsEntranceComplete] = useState(false);
+
+  const { ref: showcaseRef, inView: showcaseInView } = useIntersection(0.1);
+  const totalCandidatesRef = useCountUp(48, prefersReducedMotion ? 0 : 1.4, showcaseInView);
+  const githubVerifiedRef = useCountUp(32, prefersReducedMotion ? 0 : 1.4, showcaseInView);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.08
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: prefersReducedMotion ? 0 : 16 
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: prefersReducedMotion ? 0.25 : 0.5,
+        ease: [0.22, 1, 0.36, 1]
+      }
+    }
+  };
+
+  const cardVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: prefersReducedMotion ? 0 : 24, 
+      scale: prefersReducedMotion ? 1 : 0.96 
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: prefersReducedMotion ? 0.25 : 0.5,
+        ease: [0.22, 1, 0.36, 1]
+      }
+    }
+  };
+
+  const skeletonVariants = {
+    animate: (i) => ({
+      opacity: [0.35, 0.7, 0.35],
+      transition: {
+        duration: 1.8,
+        repeat: Infinity,
+        ease: "easeInOut",
+        delay: i * 0.15
+      }
+    })
+  };
+
+  const scrollContainerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.1
+      }
+    }
+  };
+
+  const scrollItemVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: prefersReducedMotion ? 0 : 24 
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut"
+      }
+    }
+  };
 
   const testimonials = [
     {
@@ -117,79 +205,110 @@ export default function Landing() {
             <span>HIRE<span className="text-cyan-400">IQ</span></span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-gray-400">
-            <a href="#features" className="hover:text-emerald-400 transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-emerald-400 transition-colors">Pricing</a>
-            <a href="#faq" className="hover:text-emerald-400 transition-colors">FAQs</a>
+            <a href="#features" className="hover:text-emerald-400 transition-colors duration-200">Features</a>
+            <a href="#pricing" className="hover:text-emerald-400 transition-colors duration-200">Pricing</a>
+            <a href="#faq" className="hover:text-emerald-400 transition-colors duration-200">FAQs</a>
           </nav>
           <div className="flex items-center gap-4">
-            <Link to="/signin" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+            <Link to="/signin" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors duration-200">
               Sign In
             </Link>
-            <Link to="/dashboard" className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-500/10 hover:scale-[1.02] hover:shadow-emerald-500/20 active:scale-95 transition-all">
+            <MotionLink 
+              to="/dashboard"
+              whileHover={prefersReducedMotion ? {} : { scale: 1.02, boxShadow: "0 10px 15px -3px rgba(16, 185, 129, 0.2)" }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-5 py-2 text-sm font-bold text-white shadow-lg"
+            >
               Launch App
-            </Link>
+            </MotionLink>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-32 pb-20 max-w-5xl mx-auto text-center">
+      <motion.section 
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-32 pb-20 max-w-5xl mx-auto text-center"
+      >
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
+          variants={itemVariants}
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-gray-300"
         >
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           ⚡ Interactive AI Applicant Tracking System
         </motion.div>
 
-        <motion.h1
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-          className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance"
-        >
-          Hire the best, <br />
-          <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+        <h1 className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance">
+          <motion.span variants={itemVariants} className="block">Hire the best,</motion.span>
+          <motion.span 
+            variants={itemVariants}
+            animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
+            transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
+            style={prefersReducedMotion ? {} : {
+              background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
+              backgroundSize: "200% auto",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text"
+            }}
+            className={prefersReducedMotion ? "bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent block" : "block"}
+          >
             faster than ever.
-          </span>
-        </motion.h1>
+          </motion.span>
+        </h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          variants={itemVariants}
           className="mx-auto mb-10 max-w-2xl text-sm text-gray-400 sm:text-base leading-relaxed text-balance"
         >
           Leverage automated resume parsing, interactive skill graphs, blind bias audits, and live social portfolio footprints to identify and hire elite technical talent.
         </motion.p>
 
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
+          variants={itemVariants}
           className="flex flex-col items-center justify-center gap-4 sm:flex-row mb-16"
         >
-          <Link
+          <MotionLink
             to="/dashboard"
-            className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-200"
+            whileHover={prefersReducedMotion ? {} : { 
+              scale: 1.03,
+              boxShadow: "0 10px 20px -5px rgba(16, 185, 129, 0.3)"
+            }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 text-sm font-bold text-white shadow-lg shadow-emerald-500/20"
           >
             Go to Recruiter Dashboard
-          </Link>
-          <Link
+          </MotionLink>
+          <MotionLink
             to="/settings"
-            className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-8 text-sm font-semibold text-white hover:bg-white/10 active:scale-95 transition-all duration-200"
+            whileHover={prefersReducedMotion ? {} : { 
+              scale: 1.02, 
+              borderColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: "rgba(255, 255, 255, 0.08)"
+            }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-8 text-sm font-semibold text-white"
           >
             Explore B2B Plans
-          </Link>
+          </MotionLink>
         </motion.div>
 
         {/* Interactive Dashboard Showcase Widget */}
         <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
+          ref={showcaseRef}
+          variants={cardVariants}
+          onAnimationComplete={() => setIsEntranceComplete(true)}
+          animate={isEntranceComplete && !prefersReducedMotion ? { y: [0, -8, 0] } : "visible"}
+          transition={isEntranceComplete && !prefersReducedMotion ? {
+            duration: 5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          } : undefined}
           className="w-full max-w-4xl mx-auto border border-white/10 rounded-2xl bg-[#131326]/40 backdrop-blur-md p-6 shadow-2xl relative overflow-hidden"
         >
           {/* Mock Window Controls */}
@@ -207,17 +326,32 @@ export default function Landing() {
                 <div className="h-3.5 bg-white/10 rounded w-2/3" />
                 <div className="h-7 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 flex items-center justify-between">
                   <span className="text-[10px] font-bold text-emerald-400">Total Candidates</span>
-                  <span className="text-[10px] font-black text-white">48</span>
+                  <span ref={totalCandidatesRef} className="text-[10px] font-black text-white">0</span>
                 </div>
                 <div className="h-7 bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-2 flex items-center justify-between">
                   <span className="text-[10px] font-bold text-cyan-400">GitHub Verified</span>
-                  <span className="text-[10px] font-black text-white">32</span>
+                  <span ref={githubVerifiedRef} className="text-[10px] font-black text-white">0</span>
                 </div>
               </div>
               <div className="space-y-2 pt-2 border-t border-white/5">
-                <div className="h-2 bg-white/5 rounded w-full" />
-                <div className="h-2 bg-white/5 rounded w-4/5" />
-                <div className="h-2 bg-white/5 rounded w-5/6" />
+                <motion.div
+                  custom={0}
+                  variants={skeletonVariants}
+                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
+                  className="h-2 bg-white/10 rounded w-full"
+                />
+                <motion.div
+                  custom={1}
+                  variants={skeletonVariants}
+                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
+                  className="h-2 bg-white/10 rounded w-4/5"
+                />
+                <motion.div
+                  custom={2}
+                  variants={skeletonVariants}
+                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
+                  className="h-2 bg-white/10 rounded w-5/6"
+                />
               </div>
             </div>
 
@@ -251,7 +385,7 @@ export default function Landing() {
             </div>
           </div>
         </motion.div>
-      </section>
+      </motion.section>
 
       {/* Features Showcase Section */}
       <section id="features" className="relative z-10 py-28 px-6 max-w-6xl mx-auto border-t border-white/5">
@@ -260,8 +394,14 @@ export default function Landing() {
           We combine deterministic screening tools with developer social footprints to automate and secure technical sourcing.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+        <motion.div 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={scrollContainerVariants}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+        >
+          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">🤖</span>
               <h3 className="font-bold text-sm text-white mb-2">AI Resume Parsing</h3>
@@ -269,8 +409,8 @@ export default function Landing() {
                 Scan semantic structures to extract skills, experience years, degrees, and certificates within 5 seconds.
               </p>
             </div>
-          </div>
-          <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-cyan-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          </motion.div>
+          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-cyan-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">📈</span>
               <h3 className="font-bold text-sm text-white mb-2">GitHub Footprint Sync</h3>
@@ -278,8 +418,8 @@ export default function Landing() {
                 Verify actual commits, star counts, polyglot language frequencies, and test coverage indicators directly.
               </p>
             </div>
-          </div>
-          <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-violet/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          </motion.div>
+          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-violet/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">🔒</span>
               <h3 className="font-bold text-sm text-white mb-2">Anonymized Bias Audit</h3>
@@ -287,8 +427,8 @@ export default function Landing() {
                 Hide demographic data, locations, and names with one click to enforce objective skill-based reviews.
               </p>
             </div>
-          </div>
-          <div className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-yellow-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          </motion.div>
+          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-yellow-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">📅</span>
               <h3 className="font-bold text-sm text-white mb-2">Greedy Scheduling</h3>
@@ -296,8 +436,8 @@ export default function Landing() {
                 Schedule technical interviews without conflicts using greedy activity interval optimizations.
               </p>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Testimonials Section */}
@@ -307,10 +447,17 @@ export default function Landing() {
             <Quote className="text-emerald-400" /> What Engineering Teams Say
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={scrollContainerVariants}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          >
             {testimonials.map((t, idx) => (
-              <div 
+              <motion.div 
                 key={idx} 
+                variants={scrollItemVariants}
                 className="bg-white/5 backdrop-blur-md border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 transition-all flex flex-col justify-between"
               >
                 <div>
@@ -330,9 +477,9 @@ export default function Landing() {
                     <p className="text-[10px] text-gray-500">{t.role}</p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -340,13 +487,20 @@ export default function Landing() {
       <section id="pricing" className="relative z-10 py-24 px-6 max-w-5xl mx-auto">
         <h2 className="text-3xl font-black text-white text-center mb-4">Transparent Recruiter Plans</h2>
         <p className="text-xs text-gray-400 text-center mb-16 max-w-md mx-auto">
-          Choose a tier designed to support seed-stage startups through to growing enterprise recruiting teams.
+          Choose a tier designed to support seed-stage startups through to growing engineering teams.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <motion.div 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.2 }}
+          variants={scrollContainerVariants}
+          className="grid grid-cols-1 md:grid-cols-3 gap-8"
+        >
           {pricingPlans.map((plan, idx) => (
-            <div 
+            <motion.div 
               key={idx}
+              variants={scrollItemVariants}
               className={`rounded-2xl border p-6 flex flex-col justify-between bg-white/5 backdrop-blur-md relative overflow-hidden transition-all ${
                 plan.popular 
                   ? 'border-emerald-500/50 shadow-lg' 
@@ -381,9 +535,9 @@ export default function Landing() {
               >
                 {plan.buttonText}
               </Link>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       {/* FAQ Accordion Section */}

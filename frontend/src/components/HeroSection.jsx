@@ -1,10 +1,59 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { fadeUp, staggerContainer, softSpring } from '../lib/animations';
+import { usePrefersReducedMotion } from '../lib/hooks';
 import MagneticCard from './MagneticCard';
 
 export default function HeroSection() {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const MotionLink = motion(Link);
+
+  const customStagger = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.08,
+      },
+    },
+  };
+
+  const customFadeUp = {
+    hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 16 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { 
+        duration: prefersReducedMotion ? 0.25 : 0.5, 
+        ease: [0.22, 1, 0.36, 1] 
+      } 
+    },
+  };
+
+  const floatEntrance1 = {
+    hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 50 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: prefersReducedMotion ? 0.1 : 0.6,
+        duration: prefersReducedMotion ? 0.25 : 1
+      }
+    }
+  };
+
+  const floatEntrance2 = {
+    hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 50 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: prefersReducedMotion ? 0.15 : 0.8,
+        duration: prefersReducedMotion ? 0.25 : 1
+      }
+    }
+  };
+
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pt-20">
       
@@ -13,54 +62,78 @@ export default function HeroSection() {
       <div className="absolute top-1/3 left-1/3 -z-10 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-mint/20 opacity-40 blur-[90px] mix-blend-screen animate-pulseGlow" style={{ animationDelay: '1s' }} />
 
       <motion.div
-        variants={staggerContainer}
-        initial="initial"
-        animate="animate"
+        variants={customStagger}
+        initial="hidden"
+        animate="visible"
         className="relative z-10 mx-auto max-w-4xl text-center"
       >
-        <motion.div variants={fadeUp} className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-1.5 text-sm font-medium text-text-2">
+        <motion.div variants={customFadeUp} className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-1.5 text-sm font-medium text-text-2">
           <span className="flex h-2 w-2 rounded-full bg-mint animate-blink" />
           Intelligent Hiring Platform
         </motion.div>
 
-        <motion.h1
-          variants={fadeUp}
-          className="mb-8 font-display text-5xl font-bold tracking-tight text-white sm:text-7xl"
-        >
-          Hire the best, <br />
-          <span className="gradient-text">faster than ever.</span>
-        </motion.h1>
+        <h1 className="mb-8 font-display text-5xl font-bold tracking-tight text-white sm:text-7xl">
+          <motion.span variants={customFadeUp} className="block">Hire the best,</motion.span>
+          <motion.span 
+            variants={customFadeUp}
+            animate={prefersReducedMotion ? {} : { backgroundPosition: ["0% center", "200% center"] }}
+            transition={prefersReducedMotion ? {} : { duration: 7, ease: "linear", repeat: Infinity }}
+            style={prefersReducedMotion ? {} : {
+              background: "linear-gradient(90deg, #2dd4bf, #06b6d4, #2dd4bf)",
+              backgroundSize: "200% auto",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text"
+            }}
+            className={prefersReducedMotion ? "gradient-text block" : "block"}
+          >
+            faster than ever.
+          </motion.span>
+        </h1>
 
         <motion.p
-          variants={fadeUp}
+          variants={customFadeUp}
           className="mx-auto mb-10 max-w-2xl text-lg text-text-2 sm:text-xl text-balance"
         >
           Leverage AI-driven insights to analyze candidate resumes and social footprints. Build exceptional teams without the guesswork.
         </motion.p>
 
-        <motion.div variants={fadeUp} className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-          <Link
+        <motion.div variants={customFadeUp} className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <MotionLink
             to="/dashboard"
-            className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-full bg-white px-8 font-medium text-bg transition-transform hover:scale-105"
+            whileHover={prefersReducedMotion ? {} : { 
+              scale: 1.03,
+              boxShadow: "0 10px 20px -5px rgba(16, 185, 129, 0.3)"
+            }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-full bg-white px-8 font-medium text-bg"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-mint to-sky opacity-0 transition-opacity group-hover:opacity-100" />
             <span className="relative z-10 group-hover:text-bg">Get Started</span>
-          </Link>
+          </MotionLink>
 
-          <Link
+          <MotionLink
             to="/analyze"
-            className="group running-border inline-flex h-12 items-center justify-center rounded-full border border-border bg-surface-2 px-8 font-medium text-text-1 transition-colors hover:bg-surface-3"
+            whileHover={prefersReducedMotion ? {} : { 
+              scale: 1.02, 
+              borderColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: "rgba(255, 255, 255, 0.08)"
+            }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+            className="group running-border inline-flex h-12 items-center justify-center rounded-full border border-border bg-surface-2 px-8 font-medium text-text-1"
           >
             Try Demo
-          </Link>
+          </MotionLink>
         </motion.div>
       </motion.div>
 
       {/* Floating abstract elements */}
       <motion.div 
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6, duration: 1 }}
+        variants={floatEntrance1}
+        initial="hidden"
+        animate="visible"
         className="pointer-events-none absolute top-1/4 right-[10%] -z-10 hidden lg:block animate-float"
       >
         <MagneticCard className="h-40 w-40 rounded-3xl border border-white/10 bg-gradient-to-br from-violet/10 to-transparent p-6 shadow-glow-violet backdrop-blur-md">
@@ -69,9 +142,9 @@ export default function HeroSection() {
       </motion.div>
 
       <motion.div 
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8, duration: 1 }}
+        variants={floatEntrance2}
+        initial="hidden"
+        animate="visible"
         className="pointer-events-none absolute bottom-1/4 left-[10%] -z-10 hidden lg:block animate-floatSlow"
       >
         <MagneticCard className="h-32 w-32 rounded-full border border-white/10 bg-gradient-to-tr from-mint/10 to-transparent p-4 shadow-glow-mint backdrop-blur-md" maxTilt={15}>
