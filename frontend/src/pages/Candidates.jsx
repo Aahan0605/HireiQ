@@ -92,6 +92,7 @@ export default function Candidates() {
   const [selected, setSelected]     = useState(new Set());
   const [shortlisted, setShortlisted] = useState(new Set()); // top-3 highlight
   const [deltas, setDeltas]         = useState({});          // rank delta badges
+  const [sortAsc, setSortAsc]       = useState(false);       // toggle sort direction
   const blindReview = false;
   
   // Advanced filters state
@@ -252,15 +253,25 @@ export default function Candidates() {
     }
   };
 
-  // Sort by score using merge sort, compute rank deltas
+  // Sort by score (toggles ascending/descending), compute rank deltas
   const handleSort = () => {
+    const nextSortAsc = !sortAsc;
+    setSortAsc(nextSortAsc);
+
     const before = filtered.map((c, i) => ({ id: c.id, rank: i }));
-    const sorted = mergeSort([...filtered]);
+    // Use stable array sort based on current sort direction
+    const sorted = [...filtered].sort((a, b) => {
+      const scoreA = a.score || a.final_score || 0;
+      const scoreB = b.score || b.final_score || 0;
+      return nextSortAsc ? scoreA - scoreB : scoreB - scoreA;
+    });
+
     const deltaMap = {};
     sorted.forEach((c, newRank) => {
       const old = before.find(b => b.id === c.id);
       if (old) deltaMap[c.id] = old.rank - newRank; // positive = moved up
     });
+
     setCandidates(prev => {
       const rest = prev.filter(c => !filtered.find(f => f.id === c.id));
       return [...sorted, ...rest];
@@ -592,7 +603,7 @@ export default function Candidates() {
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={handleSort}
               className="px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-card text-sm font-medium text-gray-300 hover:border-emerald-500/40 transition-all">
-              ↓ Sort by Score
+              {sortAsc ? '↑' : '↓'} Sort by Score
             </button>
             <button onClick={handleShortlist}
               className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
