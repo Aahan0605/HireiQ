@@ -3,17 +3,68 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
-import { usePrefersReducedMotion, useCountUp, useIntersection } from '../lib/hooks';
+import { usePrefersReducedMotion, useCountUp, useIntersection, useMagneticTilt } from '../lib/hooks';
 
 const MotionLink = motion(Link);
 
 export default function Landing() {
   const [activeFaq, setActiveFaq] = useState(null);
   const prefersReducedMotion = usePrefersReducedMotion();
+  const tiltConfig = useMagneticTilt(6);
 
   const { ref: showcaseRef, inView: showcaseInView } = useIntersection(0.1);
   const totalCandidatesRef = useCountUp(48, prefersReducedMotion ? 0 : 1.4, showcaseInView);
   const githubVerifiedRef = useCountUp(32, prefersReducedMotion ? 0 : 1.4, showcaseInView);
+
+  const sentence = '"Aahan Gajera is a Mid-Level Software Engineer candidate with a verified background in Bachelor of Technology (B.Tech), demonstrating 2.0 years of experience. Live engineering analytics successfully verified practical usage and competence in React and Python (score: 67/100)."';
+  const words = sentence.split(' ');
+
+  const sentenceVariants = {
+    hidden: { opacity: 1 },
+    visible: {
+      opacity: 1,
+      transition: {
+        delayChildren: 0.4,
+        staggerChildren: prefersReducedMotion ? 0 : 0.012,
+      }
+    }
+  };
+
+  const wordVariants = {
+    hidden: { opacity: 0, y: prefersReducedMotion ? 0 : 3 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.2,
+        ease: 'easeOut'
+      }
+    }
+  };
+
+  const badgeContainerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.06,
+        delayChildren: 1.0
+      }
+    }
+  };
+
+  const badgeItemVariants = {
+    hidden: { opacity: 0, scale: prefersReducedMotion ? 1 : 0.95 },
+    visible: { 
+      opacity: 1, 
+      scale: 1, 
+      transition: { 
+        type: 'spring', 
+        stiffness: 300, 
+        damping: 20 
+      } 
+    }
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -336,30 +387,23 @@ export default function Landing() {
                 </div>
               </div>
               <div className="space-y-2 pt-2 border-t border-white/5">
-                <motion.div
-                  custom={0}
-                  variants={skeletonVariants}
-                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
-                  className="h-2 bg-white/10 rounded w-full"
-                />
-                <motion.div
-                  custom={1}
-                  variants={skeletonVariants}
-                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
-                  className="h-2 bg-white/10 rounded w-4/5"
-                />
-                <motion.div
-                  custom={2}
-                  variants={skeletonVariants}
-                  animate={prefersReducedMotion ? { opacity: 0.4 } : "animate"}
-                  className="h-2 bg-white/10 rounded w-5/6"
-                />
+                <div className="h-2 shimmer-bar rounded w-full" />
+                <div className="h-2 shimmer-bar rounded w-4/5" />
+                <div className="h-2 shimmer-bar rounded w-5/6" />
               </div>
             </div>
 
             {/* Middle/Right Mock Content (Interactive Candidate Card) */}
-            <div className="md:col-span-2 bg-[#19192f] border border-white/10 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between">
-              <div>
+            <div 
+              ref={tiltConfig.ref}
+              onMouseMove={tiltConfig.onMouseMove}
+              onMouseLeave={tiltConfig.onMouseLeave}
+              className="md:col-span-2 bg-[#19192f] border border-white/10 rounded-xl p-5 relative overflow-hidden flex flex-col justify-between transition-all duration-200 z-10"
+            >
+              {/* Highlight overlay for cursor glow reflection */}
+              <div className="card-highlight absolute inset-0 pointer-events-none z-0" />
+              
+              <div className="relative z-10">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -367,23 +411,59 @@ export default function Landing() {
                     </h4>
                     <p className="text-[10px] text-gray-500 mt-0.5">Sourced via Resume upload</p>
                   </div>
-                  <div className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                  <motion.div 
+                    animate={prefersReducedMotion ? {} : { 
+                      scale: [1, 1.04, 1],
+                      boxShadow: ["0 0 0 0 rgba(16, 185, 129, 0)", "0 0 8px 2px rgba(16, 185, 129, 0.2)", "0 0 0 0 rgba(16, 185, 129, 0)"]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold border border-emerald-500/20"
+                  >
                     67/100 Match
-                  </div>
+                  </motion.div>
                 </div>
                 
-                <p className="text-[11px] text-gray-400 leading-relaxed mb-4">
-                  "Aahan Gajera is a Mid-Level Software Engineer candidate with a verified background in Bachelor of Technology (B.Tech), demonstrating 2.0 years of experience. Live engineering analytics successfully verified practical usage and competence in React and Python (score: 67/100)."
-                </p>
+                <motion.p 
+                  variants={sentenceVariants}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  className="text-[11px] text-gray-400 leading-relaxed mb-4 flex flex-wrap gap-x-1"
+                >
+                  {words.map((word, idx) => (
+                    <motion.span key={idx} variants={wordVariants} className="inline-block">
+                      {word}
+                    </motion.span>
+                  ))}
+                </motion.p>
               </div>
 
               {/* Mock Badges */}
-              <div className="flex flex-wrap gap-1.5 pt-3 border-t border-white/5">
-                <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">FastAPI</span>
-                <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">React</span>
-                <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">PostgreSQL</span>
-                <span className="text-[9px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1"><Github size={8} /> GitHub Verified</span>
-              </div>
+              <motion.div 
+                variants={badgeContainerVariants}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true }}
+                className="flex flex-wrap gap-1.5 pt-3 border-t border-white/5 relative z-10"
+              >
+                <motion.span variants={badgeItemVariants} className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">FastAPI</motion.span>
+                <motion.span variants={badgeItemVariants} className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">React</motion.span>
+                <motion.span variants={badgeItemVariants} className="text-[9px] px-2.5 py-0.5 rounded-full bg-white/5 text-gray-300 border border-white/5">PostgreSQL</motion.span>
+                <motion.span 
+                  variants={badgeItemVariants}
+                  animate={prefersReducedMotion ? {} : { 
+                    borderColor: ["rgba(16,185,129,0.2)", "rgba(16,185,129,0.5)", "rgba(16,185,129,0.2)"]
+                  }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                  className="text-[9px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1"
+                >
+                  <Github size={8} /> GitHub Verified
+                </motion.span>
+              </motion.div>
             </div>
           </div>
           </motion.div>

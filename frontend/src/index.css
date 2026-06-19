@@ -127,6 +127,17 @@
   .text-theme-1 { color: var(--text-1); }
   .text-theme-2 { color: var(--text-2); }
   .text-theme-3 { color: var(--text-3); }
+
+  .shimmer-bar {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0.12) 50%,
+      rgba(255, 255, 255, 0.04) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite linear;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -141,7 +152,8 @@
   .animate-float,
   .animate-floatSlow,
   .animate-pulseGlow,
-  .animate-blink {
+  .animate-blink,
+  .shimmer-bar {
     animation: none !important;
     transform: none !important;
   }
