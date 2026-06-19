@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 import time
 from typing import Any
@@ -388,7 +389,10 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         contact = extract_contact(text)
         github_username = contact.get("github")
         if github_username:
-            github_username = github_username.split("github.com/")[-1].split("/")[0].strip().replace(" ", "").replace("\t", "")
+            github_username = github_username.strip()
+            github_username = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", github_username, flags=re.IGNORECASE)
+            github_username = re.sub(r"^(?:https?:/?/?)?", "", github_username, flags=re.IGNORECASE)
+            github_username = github_username.strip("/").replace(" ", "").replace("\t", "")
 
         best_job = jobs_list[0] if jobs_list else None
         role_type = "backend_engineer"
@@ -419,13 +423,24 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         candidate_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
 
         # Run scoring engine (async — no asyncio.run needed, we're already in an event loop)
-        scoring_res = await compute_full_candidate_score(
-            candidate_name=candidate_name,
-            resume_text=text,
-            jd_features=jd_features,
-            github_username=github_username,
-            role_type=role_type
-        )
+        from signals.github_signal import GitHubRateLimitException
+        try:
+            scoring_res = await compute_full_candidate_score(
+                candidate_name=candidate_name,
+                resume_text=text,
+                jd_features=jd_features,
+                github_username=github_username,
+                role_type=role_type
+            )
+        except GitHubRateLimitException:
+            logger.warning("GitHub rate limit hit during resume upload, falling back to resume-only scoring.")
+            scoring_res = await compute_full_candidate_score(
+                candidate_name=candidate_name,
+                resume_text=text,
+                jd_features=jd_features,
+                github_username=None,
+                role_type=role_type
+            )
 
         final_score = int(scoring_res.get("final_score", 60))
         blind_score = final_score
@@ -1156,9 +1171,9 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     text = candidate_dict.get("resume_text") or (candidate_name + " " + (candidate_dict.get("summary") or ""))
     github_url = candidate_dict.get("github") or ""
 
-    username = github_url.strip().replace("https://", "").replace("http://", "")
-    if username.startswith("github.com/"):
-        username = username[len("github.com/"):]
+    username = github_url.strip()
+    username = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", username, flags=re.IGNORECASE)
+    username = re.sub(r"^(?:https?:/?/?)?", "", username, flags=re.IGNORECASE)
     username = username.strip("/").replace(" ", "").replace("\t", "")
 
     if not username:
@@ -1195,6 +1210,7 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
             "education_required": "unknown"
         }
 
+    from signals.github_signal import GitHubRateLimitException
     # Run full scoring engine
     try:
         scoring_res = await compute_full_candidate_score(
@@ -1203,6 +1219,12 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
             jd_features=jd_features,
             github_username=username,
             role_type=role_type
+        )
+    except GitHubRateLimitException as e:
+        logger.warning("GitHub rate limit hit during webhook sync: %s", e)
+        raise HTTPException(
+            status_code=429,
+            detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
         )
     except Exception as e:
         logger.error("Scoring engine failed during webhook sync: %s", e)
@@ -1420,9 +1442,9 @@ async def fetch_platform_signals(
             detail=f"Invalid platforms: {', '.join(invalid)}. Valid: {', '.join(valid_platforms)}",
         )
 
-    clean_username = username.strip().replace("https://", "").replace("http://", "")
-    if clean_username.startswith("github.com/"):
-        clean_username = clean_username[len("github.com/"):]
+    clean_username = username.strip()
+    clean_username = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", clean_username, flags=re.IGNORECASE)
+    clean_username = re.sub(r"^(?:https?:/?/?)?", "", clean_username, flags=re.IGNORECASE)
     clean_username = clean_username.strip("/").replace(" ", "").replace("\t", "")
 
     tasks: dict[str, Any] = {}
@@ -1531,18 +1553,25 @@ async def get_github_signals(username: str):
     Uses fetch_github_signals() (async httpx) + score_github().
     Time Complexity: O(1) network calls, O(r) repo parsing where r = repo count
     """
-    from signals.github_signal import fetch_github_signals, score_github, analyze_github_profile
+    from signals.github_signal import fetch_github_signals, score_github, analyze_github_profile, GitHubRateLimitException
 
     # Strip github.com/ prefix if the full URL was passed
-    clean = username.strip().replace("https://", "").replace("http://", "")
-    if clean.startswith("github.com/"):
-        clean = clean[len("github.com/"):]
+    clean = username.strip()
+    clean = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"^(?:https?:/?/?)?", "", clean, flags=re.IGNORECASE)
     clean = clean.strip("/").replace(" ", "").replace("\t", "")
 
     if not clean:
         return {"error": "Invalid username"}
 
-    signals = await fetch_github_signals(clean)
+    try:
+        signals = await fetch_github_signals(clean)
+    except GitHubRateLimitException:
+        raise HTTPException(
+            status_code=429,
+            detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
+        )
+
     if not signals:
         return {"error": f"GitHub profile '{clean}' not found or is private"}
 

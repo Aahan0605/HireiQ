@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import logging
 from datetime import datetime
@@ -150,6 +151,9 @@ def _candidate_to_dict(c: dict) -> dict:
         "phone": c.get("phone") or "",
         "role": c.get("career_tier") or "Software Engineer",
         "github": c.get("github_url") or "",
+        "github_stars": c.get("github_stars") or 0,
+        "github_languages": c.get("github_languages") or [],
+        "github_commits_last_year": c.get("github_commits_last_year") or 0,
         "linkedin": db_insights.get("linkedin") or "",
         "location": c.get("location") or "Remote",
         "score": round(c.get("match_score", 0.0) or 0.0),
@@ -242,6 +246,19 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     if "linkedin" in candidate:
         insights["linkedin"] = candidate["linkedin"]
     
+    github_val = candidate.get("github") or ""
+    if github_val:
+        github_val = github_val.strip()
+        github_val = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", github_val, flags=re.IGNORECASE)
+        github_val = re.sub(r"^(?:https?:/?/?)?", "", github_val, flags=re.IGNORECASE)
+        github_val = github_val.strip("/").replace(" ", "").replace("\t", "")
+
+    github_signals = insights.get("github_signals") or {}
+    github_stars = int(github_signals.get("total_stars") or candidate.get("github_stars") or 0)
+    github_langs = github_signals.get("languages") or candidate.get("github_languages") or []
+    commit_freq = github_signals.get("commit_frequency_per_week") or github_signals.get("commit_frequency") or 0
+    github_commits = int(commit_freq * 52) if commit_freq else int(candidate.get("github_commits_last_year") or 0)
+
     db_record = {
         "full_name": candidate.get("name"),
         "email": candidate.get("email"),
@@ -257,7 +274,10 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "development_gaps": insights.get("weaknesses") or [],
         "potential_concerns": insights.get("concerns") or [],
         "pipeline_stage": pipeline_stage,
-        "github_url": candidate.get("github") or "",
+        "github_url": github_val,
+        "github_stars": github_stars,
+        "github_languages": github_langs,
+        "github_commits_last_year": github_commits,
         "blind_score": float(candidate.get("blind_score") or match_score),
         "interview_questions": candidate.get("qa") or [],
         "summary": candidate.get("summary"),

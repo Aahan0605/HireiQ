@@ -443,10 +443,46 @@ HireIQ Hiring Team`
     setGithubLoading(true);
     apiFetch(`${API}/candidates/github/${encodeURIComponent(candidate.github)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data && !data.error) setGithub(data); })
-      .catch(() => {})
+      .then(data => {
+        if (data && !data.error) {
+          setGithub(data);
+        } else {
+          // Fallback to database-cached stats
+          setGithub({
+            username: candidate.github,
+            total_repos: candidate.insights?.github_signals?.total_repos ?? 0,
+            total_stars: candidate.github_stars ?? candidate.insights?.github_signals?.total_stars ?? 0,
+            commit_frequency_per_week: (candidate.github_commits_last_year !== undefined && candidate.github_commits_last_year !== null) ? (candidate.github_commits_last_year / 52) : (candidate.insights?.github_signals?.commit_frequency_per_week ?? 0),
+            open_source_prs_estimate: candidate.insights?.github_signals?.open_source_prs_estimate ?? 0,
+            score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+            engineering_score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+            open_source_score: candidate.insights?.github_analysis?.open_source_score ?? 0,
+            project_maturity_score: candidate.insights?.github_analysis?.project_maturity_score ?? 0,
+            verified_skills: candidate.insights?.github_analysis?.verified_skills ?? [],
+            unsupported_claims: candidate.insights?.github_analysis?.unsupported_claims ?? [],
+            languages: candidate.github_languages ?? candidate.insights?.github_signals?.languages ?? [],
+          });
+        }
+      })
+      .catch(() => {
+        // Fallback on network/fetch error
+        setGithub({
+          username: candidate.github,
+          total_repos: candidate.insights?.github_signals?.total_repos ?? 0,
+          total_stars: candidate.github_stars ?? candidate.insights?.github_signals?.total_stars ?? 0,
+          commit_frequency_per_week: (candidate.github_commits_last_year !== undefined && candidate.github_commits_last_year !== null) ? (candidate.github_commits_last_year / 52) : (candidate.insights?.github_signals?.commit_frequency_per_week ?? 0),
+          open_source_prs_estimate: candidate.insights?.github_signals?.open_source_prs_estimate ?? 0,
+          score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+          engineering_score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+          open_source_score: candidate.insights?.github_analysis?.open_source_score ?? 0,
+          project_maturity_score: candidate.insights?.github_analysis?.project_maturity_score ?? 0,
+          verified_skills: candidate.insights?.github_analysis?.verified_skills ?? [],
+          unsupported_claims: candidate.insights?.github_analysis?.unsupported_claims ?? [],
+          languages: candidate.github_languages ?? candidate.insights?.github_signals?.languages ?? [],
+        });
+      })
       .finally(() => setGithubLoading(false));
-  }, [candidate?.github]);
+  }, [candidate?.github, candidate?.github_stars]);
 
   if (loading) {
     return (

@@ -25,7 +25,7 @@ from algorithms.tfidf import TFIDFVectorizer
 from algorithms.cosine_similarity import (
     cosine_similarity as cosine_similarity_sparse,
 )
-from signals.github_signal import fetch_github_signals, score_github
+from signals.github_signal import fetch_github_signals, score_github, GitHubRateLimitException
 from signals.coding_signal import (
     fetch_codeforces,
     fetch_codechef,
@@ -244,6 +244,7 @@ async def compute_full_candidate_score(
         "ai_summary": ai_summary,
         "skill_confidence": skill_confidence,
         "github_analysis": github_analysis,
+        "github_signals": github_raw,
         "ranking": ranking_result,
         "match_breakdown": match_breakdown,
         "resume_features": {
@@ -427,6 +428,8 @@ async def _fetch_all_external_signals(
         )
         for key, result in zip(keys, results):
             if isinstance(result, Exception):
+                if isinstance(result, GitHubRateLimitException):
+                    raise result
                 logger.warning("Signal fetch failed for %s: %s", key, str(result))
                 signals[key] = {}
             else:
