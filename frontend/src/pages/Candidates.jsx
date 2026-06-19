@@ -254,9 +254,7 @@ export default function Candidates() {
     const expYears = getExperienceYears(c);
     
     let matchesPool = true;
-    if (activePool === 'Inbox') {
-      matchesPool = stage === 'Screening';
-    } else if (activePool === 'Shortlisted') {
+    if (activePool === 'Shortlisted') {
       matchesPool = stage === 'Shortlisted';
     } else if (activePool === 'Interviewing') {
       matchesPool = stage === 'Interviewing';
@@ -621,7 +619,7 @@ export default function Candidates() {
 
         {/* Talent Pool Tabs */}
         <div className="mb-6 border-b border-white/5 flex gap-1 overflow-x-auto pb-px scrollbar-none">
-          {['All', 'Inbox', 'Shortlisted', 'Interviewing', 'Offer', 'Hired', 'Rejected', 'Silver Medalists', 'Future Pipeline'].map(pool => (
+          {['All', 'Shortlisted', 'Interviewing', 'Offer', 'Hired', 'Rejected', 'Silver Medalists', 'Future Pipeline'].map(pool => (
             <button
               key={pool}
               onClick={() => setActivePool(pool)}
