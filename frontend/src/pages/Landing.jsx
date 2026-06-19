@@ -354,8 +354,8 @@ export default function Landing() {
           >
             Go to Recruiter Dashboard
           </MotionLink>
-          <MotionLink
-            to="/settings"
+          <motion.a
+            href="#pricing"
             whileHover={prefersReducedMotion ? {} : { 
               scale: 1.02, 
               borderColor: "rgba(255, 255, 255, 0.2)",
@@ -366,7 +366,7 @@ export default function Landing() {
             className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-8 text-sm font-semibold text-white"
           >
             Explore B2B Plans
-          </MotionLink>
+          </motion.a>
         </motion.div>
 
         {/* Interactive Dashboard Showcase Widget */}
