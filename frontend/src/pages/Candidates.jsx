@@ -281,10 +281,14 @@ export default function Candidates() {
     deltaTimer.current = setTimeout(() => setDeltas({}), 3000);
   };
 
-  // Highlight top 3 by score
+  // Toggle highlight of top 3 by score
   const handleShortlist = () => {
-    const top3 = [...filtered].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 3);
-    setShortlisted(new Set(top3.map(c => c.id)));
+    if (shortlisted.size > 0) {
+      setShortlisted(new Set());
+    } else {
+      const top3 = [...filtered].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 3);
+      setShortlisted(new Set(top3.map(c => c.id)));
+    }
   };
 
   const toggleSelect = (id) => {
@@ -606,7 +610,12 @@ export default function Candidates() {
               {sortAsc ? '↑' : '↓'} Sort by Score
             </button>
             <button onClick={handleShortlist}
-              className="px-4 py-2.5 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-sm font-medium text-yellow-300 hover:bg-yellow-500/20 transition-all">
+              className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                shortlisted.size > 0
+                  ? 'border-yellow-500 bg-yellow-500/20 text-yellow-300 shadow-glow-yellow/20'
+                  : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20'
+              }`}
+            >
               ⭐ Optimal Shortlist
             </button>
           </div>
