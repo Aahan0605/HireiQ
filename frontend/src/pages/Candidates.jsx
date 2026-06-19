@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Trash2, Cpu, Loader2, Linkedin, Sparkles, Filter, Grid, List, UserPlus, Check } from 'lucide-react';
+import { Search, Trash2, Loader2, Linkedin, Sparkles, Filter, Grid, List, UserPlus, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
@@ -103,7 +103,7 @@ export default function Candidates() {
   const [selectedSkills, setSelectedSkills] = useState(new Set());
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
   const [activePool, setActivePool] = useState('All');
-  const [semanticSearch, setSemanticSearch] = useState(false);
+
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [linkedinUrl, setLinkedinUrl] = useState('');
@@ -183,12 +183,11 @@ export default function Candidates() {
     return Array.from(skillsSet).sort();
   }, [candidates]);
 
-  // Semantic AI: compute which fields matched for each candidate
+  // Semantic search: compute which fields matched for each candidate
   const semanticMatches = React.useMemo(() => {
     const map = {};
-    if (!semanticSearch || !search.trim()) return map;
+    if (!search.trim()) return map;
     const q = search.toLowerCase().trim();
-    // Build simple token variants for fuzzy matching
     const synonyms = {
       'js': 'javascript', 'javascript': 'js',
       'ts': 'typescript', 'typescript': 'ts',
@@ -235,23 +234,18 @@ export default function Candidates() {
       if (matched.length > 0) map[c.id] = matched;
     });
     return map;
-  }, [candidates, semanticSearch, search]);
+  }, [candidates, search]);
 
   const filtered = candidates.filter(c => {
-    // Search filter
+    // Search filter — always searches across name, role, skills, summary, resume & experience
     let matchesSearch;
     const q = search.toLowerCase().trim();
     if (!q) {
-      matchesSearch = true; // No search text → show all
-    } else if (semanticSearch) {
-      // Semantic mode: match if name/role matches OR deep semantic fields matched
+      matchesSearch = true;
+    } else {
       matchesSearch = c?.name?.toLowerCase().includes(q) ||
                       c?.role?.toLowerCase().includes(q) ||
                       !!semanticMatches[c.id];
-    } else {
-      // Normal mode: only match by name or role
-      matchesSearch = c?.name?.toLowerCase().includes(q) ||
-                      c?.role?.toLowerCase().includes(q);
     }
     
     // Talent pool filter
@@ -650,28 +644,14 @@ export default function Candidates() {
 
         {/* Controls */}
         <div className="mb-5 flex flex-col xl:flex-row gap-3">
-          <div className="relative flex-1 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-              <input type="text" placeholder={semanticSearch ? 'Semantic search across skills, resume, experience...' : 'Search by name or role...'}
-                value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-4 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
-            </div>
-            <button
-              onClick={() => {
-                const next = !semanticSearch;
-                setSemanticSearch(next);
-                toast(next ? '🧠 Semantic AI enabled — searches skills, resume, summary & experience' : 'Semantic AI disabled — basic name/role search', { duration: 2500 });
-              }}
-              className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                semanticSearch
-                  ? 'border-blue-500/50 bg-blue-500/10 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
-                  : 'border-white/10 bg-card text-gray-400 hover:text-white'
-              }`}
-            >
-              <Cpu size={14} className={semanticSearch ? 'text-blue-400 animate-pulse' : ''} />
-              Semantic AI {semanticSearch ? 'ON' : ''}
-            </button>
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            <input type="text" placeholder="Search by name, role, skills, resume..."
+              value={search} onChange={e => setSearch(e.target.value)}
+              className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-card py-2.5 pl-11 pr-10 text-theme-1 text-sm outline-none focus:border-emerald-500/40 transition-colors" />
+            {search.trim() && (
+              <Sparkles className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-400 animate-pulse" />
+            )}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={handleSort}
@@ -949,9 +929,9 @@ export default function Candidates() {
                       <div className="min-w-0">
                         <p className="text-theme-1 text-sm font-semibold truncate">{displayName}</p>
                         <p className="text-gray-400 text-xs truncate">{c?.role}</p>
-                        {semanticSearch && search.trim() && semanticMatches[c?.id] && (
+                        {search.trim() && semanticMatches[c?.id] && (
                           <p className="text-[10px] text-blue-400/80 mt-0.5 flex items-center gap-1">
-                            <Cpu size={9} className="animate-pulse" />
+                            <Sparkles size={9} className="text-blue-400" />
                             Matched in: {semanticMatches[c.id].join(', ')}
                           </p>
                         )}
