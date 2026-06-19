@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck } from 'lucide-react';
+import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck, Mail, MapPin, Phone, Globe, Users, Heart } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
 import { usePrefersReducedMotion, useCountUp, useIntersection, useMagneticTilt } from '../lib/hooks';
 
@@ -221,7 +221,7 @@ export default function Landing() {
         "Anonymized Bias Audit"
       ],
       buttonText: "Try Free Demo",
-      buttonLink: "/dashboard",
+      buttonLink: "/signin",
       popular: false
     },
     {
@@ -250,7 +250,7 @@ export default function Landing() {
         "Dedicated Support SLA"
       ],
       buttonText: "Contact Sales",
-      buttonLink: "/settings",
+      buttonLink: "#about",
       popular: false
     }
   ];
@@ -279,6 +279,7 @@ export default function Landing() {
             <a href="#features" className="hover:text-emerald-400 transition-colors duration-200">Features</a>
             <a href="#pricing" className="hover:text-emerald-400 transition-colors duration-200">Pricing</a>
             <a href="#faq" className="hover:text-emerald-400 transition-colors duration-200">FAQs</a>
+            <a href="#about" className="hover:text-emerald-400 transition-colors duration-200">About</a>
           </nav>
           <div className="flex items-center gap-4">
             <Link to="/signin" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors duration-200">
@@ -628,16 +629,29 @@ export default function Landing() {
                   ))}
                 </ul>
               </div>
-              <Link
-                to={plan.buttonLink}
-                className={`w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
-                  plan.popular
-                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:opacity-95'
-                    : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                }`}
-              >
-                {plan.buttonText}
-              </Link>
+              {plan.buttonLink.startsWith('#') ? (
+                <a
+                  href={plan.buttonLink}
+                  className={`block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
+                    plan.popular
+                      ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:opacity-95'
+                      : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                  }`}
+                >
+                  {plan.buttonText}
+                </a>
+              ) : (
+                <Link
+                  to={plan.buttonLink}
+                  className={`block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
+                    plan.popular
+                      ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:opacity-95'
+                      : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                  }`}
+                >
+                  {plan.buttonText}
+                </Link>
+              )}
             </motion.div>
           ))}
         </motion.div>
@@ -690,10 +704,118 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* About & Contact Section */}
+      <section id="about" className="relative z-10 py-24 px-6 border-t border-white/5 bg-[#0a0a15]/40 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={scrollContainerVariants}
+          >
+            {/* Section Header */}
+            <motion.div variants={scrollItemVariants} className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 mb-4 text-emerald-400">
+                <Heart size={20} />
+                <span className="text-xs font-bold tracking-widest uppercase">Our Story</span>
+              </div>
+              <h2 className="text-3xl font-black text-white mb-6">Built by Recruiters,<br />Powered by AI</h2>
+              <p className="text-sm text-gray-400 leading-relaxed max-w-2xl mx-auto">
+                HireiQ was born from a simple frustration — hiring the best engineers shouldn't feel like searching for a needle in a haystack. We built an AI-powered platform that combines resume intelligence, live GitHub analytics, and bias-free evaluation to help teams hire smarter, faster, and fairer.
+              </p>
+            </motion.div>
+
+            {/* Story Cards */}
+            <motion.div variants={scrollItemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
+              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                  <Users size={22} className="text-emerald-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">Team-First Design</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Built for recruiting teams of all sizes — from seed-stage startups hiring their first engineer to enterprise teams scaling globally.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-4">
+                  <ShieldCheck size={22} className="text-cyan-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">Bias-Free Hiring</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Our blind mode anonymizes candidate data so your team evaluates skills objectively — reducing demographic bias in every hiring decision.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/5 bg-white/5 backdrop-blur-md p-6 text-center">
+                <div className="w-12 h-12 rounded-xl bg-violet-500/10 flex items-center justify-center mx-auto mb-4">
+                  <Terminal size={22} className="text-violet-400" />
+                </div>
+                <h3 className="text-sm font-bold text-white mb-2">Engineering-Grade</h3>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Open-source at heart, built with React, FastAPI, and Supabase. We believe great tools should be transparent and extensible.
+                </p>
+              </div>
+            </motion.div>
+
+            {/* Contact Details */}
+            <motion.div variants={scrollItemVariants} id="contact" className="max-w-2xl mx-auto">
+              <h3 className="text-xl font-bold text-white text-center mb-8">Get in Touch</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href="mailto:aahanjgy@gmail.com" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                    <Mail size={18} className="text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Email</p>
+                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">aahanjgy@gmail.com</p>
+                  </div>
+                </a>
+                <a href="tel:+1234567890" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
+                    <Phone size={18} className="text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Phone</p>
+                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">+1 (234) 567-890</p>
+                  </div>
+                </a>
+                <a href="https://github.com/Aahan0605/HireiQ" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
+                  <div className="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                    <Github size={18} className="text-violet-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">GitHub</p>
+                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">Aahan0605/HireiQ</p>
+                  </div>
+                </a>
+                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 rounded-xl border border-white/5 bg-white/5 backdrop-blur-md p-4 hover:border-emerald-500/30 hover:bg-white/10 transition-all group">
+                  <div className="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center flex-shrink-0">
+                    <Linkedin size={18} className="text-sky-400" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">LinkedIn</p>
+                    <p className="text-xs text-gray-300 group-hover:text-white transition-colors">Connect with us</p>
+                  </div>
+                </a>
+              </div>
+              <div className="mt-6 flex items-center gap-3 justify-center text-gray-500">
+                <MapPin size={14} />
+                <p className="text-xs">Remote-first · Based in India</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="relative z-10 py-12 px-6 border-t border-white/5 text-center text-xs text-gray-500">
         <p className="mb-2">© 2026 HireiQ. Transforming AI recruiting intelligence globally.</p>
-        <p>Built with React, FastAPI, Supabase, and Tailwind CSS.</p>
+        <p className="mb-4">Built with React, FastAPI, Supabase, and Tailwind CSS.</p>
+        <div className="flex items-center justify-center gap-6 text-gray-600">
+          <a href="#features" className="hover:text-gray-300 transition-colors">Features</a>
+          <a href="#pricing" className="hover:text-gray-300 transition-colors">Pricing</a>
+          <a href="#faq" className="hover:text-gray-300 transition-colors">FAQs</a>
+          <a href="#about" className="hover:text-gray-300 transition-colors">About</a>
+        </div>
       </footer>
     </div>
   );
