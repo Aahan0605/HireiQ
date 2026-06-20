@@ -58,3 +58,12 @@ jobs:
         run: |
           cd frontend
           npm run build
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Trigger Staging Deploy Webhook
+        run: |
+          curl -Ssf "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" || echo "No staging hook configured, skipping"

@@ -3,6 +3,10 @@ import os
 # Ensure dummy keys are present before imports
 os.environ.setdefault("FIELD_ENCRYPTION_KEY", "L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=")  # pragma: allowlist secret
 os.environ.setdefault("JWT_SECRET_KEY", "mock-jwt-secret-key-here-that-is-long-enough-for-validation-32-chars")  # pragma: allowlist secret
+
+from api.core.limiter import limiter
+limiter.enabled = False
+
 import uuid
 import datetime
 import copy
@@ -54,6 +58,12 @@ class MockQueryBuilder:
         return self
 
     def execute(self):
+        if getattr(self, "_is_write", False):
+            class Result:
+                def __init__(self, data, count):
+                    self.data = data
+                    self.count = count
+            return Result(copy.deepcopy(self._last_data), len(self._last_data))
         items = self.db.setdefault(self.table_name, [])
         filtered_items = []
         for item in items:
@@ -115,6 +125,7 @@ class MockQueryBuilder:
             existing_list.append(new_item)
             inserted_items.append(new_item)
         self._last_data = inserted_items
+        self._is_write = True
         return self
 
     def upsert(self, data):
@@ -136,6 +147,7 @@ class MockQueryBuilder:
                 existing_list.append(new_item)
                 upserted_items.append(new_item)
         self._last_data = upserted_items
+        self._is_write = True
         return self
 
     def update(self, data):
@@ -156,6 +168,7 @@ class MockQueryBuilder:
                 item.update(data)
                 updated_items.append(item)
         self._last_data = updated_items
+        self._is_write = True
         return self
 
     def delete(self):
@@ -179,6 +192,7 @@ class MockQueryBuilder:
                 kept.append(item)
         self.db[self.table_name] = kept
         self._last_data = deleted
+        self._is_write = True
         return self
 
 class MockSupabaseClient:

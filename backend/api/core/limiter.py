@@ -22,7 +22,10 @@ def get_user_or_ip(request: Request) -> str:
     return get_remote_address(request)
 
 # Define global rate limiter with default 100 requests per minute per IP
+is_testing = os.getenv("TESTING") == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
+
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["100/minute"]
+    default_limits=["100/minute"],
+    enabled=not is_testing
 )

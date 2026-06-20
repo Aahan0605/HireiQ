@@ -77,7 +77,13 @@ async def save_job(job: dict, recruiter_id: str) -> dict:
         "recruiter_id": recruiter_id
     }
     
+    is_update = False
     if "id" in job and job["id"] and not str(job["id"]).startswith("seed-"):
+        exists_res = supabase.table("jobs").select("id").eq("id", job["id"]).eq("recruiter_id", recruiter_id).execute()
+        if exists_res.data:
+            is_update = True
+
+    if is_update:
         # update
         res = supabase.table("jobs").update(db_record).eq("id", job["id"]).eq("recruiter_id", recruiter_id).execute()
     else:
@@ -87,6 +93,10 @@ async def save_job(job: dict, recruiter_id: str) -> dict:
         res = supabase.table("jobs").insert(db_record).execute()
         
     return _job_to_dict(res.data[0]) if res.data else {}
+
+async def delete_job_db(job_id: str, recruiter_id: str):
+    supabase = get_supabase()
+    supabase.table("jobs").delete().eq("id", job_id).eq("recruiter_id", recruiter_id).execute()
 
 async def _seed_if_empty(recruiter_id: str):
     existing = await fetch_all_jobs(recruiter_id)

@@ -649,7 +649,7 @@ HireIQ Hiring Team`
         <div className="mx-auto max-w-4xl space-y-6 animate-pulse">
           <div className="h-8 w-48 bg-white/10 rounded-xl" />
           <div className="h-40 rounded-2xl bg-white/5 border border-white/5" />
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="h-24 rounded-2xl bg-white/5 border border-white/5" />
             ))}
@@ -950,7 +950,7 @@ HireIQ Hiring Team`
         <motion.div variants={staggerContainer} initial="initial" animate="animate" className="grid gap-8 lg:grid-cols-3">
 
           {/* ── Left Sidebar ── */}
-          <motion.div variants={fadeUp} className="flex flex-col gap-6">
+          <motion.div variants={fadeUp} className="flex flex-col gap-6 order-2 lg:order-1">
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
               <div className="mb-6 flex flex-col items-center">
                 <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-mint text-3xl font-bold text-[#0d0d1a] shadow-glow-mint">
@@ -999,21 +999,21 @@ HireIQ Hiring Team`
                     : <><Calendar className="h-4 w-4" />Schedule Interview</>}
                 </button>
                 <button onClick={() => setShowEmailModal(true)}
-                  className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                  className="w-full rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-2">
                   <Mail className="h-4 w-4" /> Contact Candidate
                 </button>
                 <button onClick={handleOpenEditModal}
-                  className="w-full rounded-xl border border-violet/20 bg-violet/10 px-4 py-2.5 text-sm font-semibold text-violet hover:bg-violet/20 transition-all flex items-center justify-center gap-2">
+                  className="w-full rounded-xl border border-violet/20 bg-violet/10 px-4 py-3 text-sm font-semibold text-violet hover:bg-violet/20 transition-all flex items-center justify-center gap-2">
                   <Edit className="h-4 w-4" /> Edit Profile
                 </button>
                 {!blindReview && (
                   <button onClick={handleCheckResume}
-                    className="w-full rounded-xl border border-[#3b3b4f] bg-[#1a1a2e] px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#25253b] transition-all flex items-center justify-center gap-2">
+                    className="w-full rounded-xl border border-[#3b3b4f] bg-[#1a1a2e] px-4 py-3 text-sm font-semibold text-gray-300 hover:bg-[#25253b] transition-all flex items-center justify-center gap-2">
                     <FileText className="h-4 w-4" /> Check Resume
                   </button>
                 )}
                 <button onClick={handleDownload}
-                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-gray-300 hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                   <Download className="h-4 w-4" /> Download Report
                 </button>
               </div>
@@ -1059,9 +1059,9 @@ HireIQ Hiring Team`
               ) : <p className="text-gray-500 text-sm mb-4">No skills extracted.</p>}
               <div className="h-56 w-full" role="img" aria-label="Radar chart showing candidate skill scores across key technical subjects">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
                     <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#9494B0', fontSize: 11 }} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#9494B0', fontSize: 10 }} />
                     <Radar name={candidate?.name} dataKey="A" stroke="#9D74FF" fill="#9D74FF" fillOpacity={0.4} />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -1109,7 +1109,7 @@ HireIQ Hiring Team`
 
                   {/* Stats grid */}
                   {github && (
-                    <div className="grid grid-cols-2 gap-2 mt-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                       {[
                         { icon: <GitBranch className="h-3 w-3" />, label: 'Repos',   value: github.total_repos },
                         { icon: <Star className="h-3 w-3" />,      label: 'Stars',   value: github.total_stars },
@@ -1199,7 +1199,7 @@ HireIQ Hiring Team`
           </motion.div>
 
           {/* ── Main Content ── */}
-          <motion.div variants={fadeUp} className="flex flex-col gap-6 lg:col-span-2">
+          <motion.div variants={fadeUp} className="flex flex-col gap-6 lg:col-span-2 order-1 lg:order-2">
             
             {/* AI Summary Card */}
             <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f] relative overflow-hidden">
@@ -1696,7 +1696,7 @@ HireIQ Hiring Team`
                 </div>
                 <button 
                   type="submit"
-                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 text-xs transition-all active:scale-95 flex items-center gap-1.5"
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-3 sm:py-2 text-xs transition-all active:scale-95 flex items-center gap-1.5"
                 >
                   Save Feedback
                 </button>
@@ -1813,7 +1813,7 @@ HireIQ Hiring Team`
                 <h3 className="text-white font-semibold text-lg flex items-center gap-2">
                   <Mail className="h-5 w-5 text-emerald-400" /> Contact Candidate
                 </h3>
-                <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <button onClick={() => setShowEmailModal(false)} className="w-11 h-11 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-colors -mr-2 -mt-2">
                   <X size={18} />
                 </button>
               </div>
@@ -1901,7 +1901,7 @@ HireIQ Hiring Team`
                 <h3 className="text-white font-semibold text-lg flex items-center gap-2">
                   <Edit className="h-5 w-5 text-violet" /> Edit Candidate Profile
                 </h3>
-                <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <button onClick={() => setShowEditModal(false)} className="w-11 h-11 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-colors -mr-2 -mt-2">
                   <X size={18} />
                 </button>
               </div>
@@ -2048,7 +2048,7 @@ HireIQ Hiring Team`
                 <h3 className="text-white font-semibold text-lg flex items-center gap-2">
                   <FileText className="h-5 w-5 text-emerald-400" /> Original Resume Viewer
                 </h3>
-                <button onClick={handleCloseResumeModal} className="text-gray-400 hover:text-white transition-colors">
+                <button onClick={handleCloseResumeModal} className="w-11 h-11 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-colors -mr-2 -mt-2">
                   <X size={18} />
                 </button>
               </div>

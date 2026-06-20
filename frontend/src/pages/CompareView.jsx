@@ -167,9 +167,9 @@ export default function CompareView() {
         </div>
 
         {/* Side-by-side cards */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex gap-4 mb-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row gap-4 mb-6 items-stretch">
           <CandidateCard candidate={a} isWinner={winner.id === a.id} categoryScores={scoresA} />
-          <div className="flex items-center justify-center text-gray-600 font-bold text-xl px-2 flex-shrink-0">VS</div>
+          <div className="flex items-center justify-center text-gray-600 font-bold text-lg px-2 flex-shrink-0 py-1 md:py-0">VS</div>
           <CandidateCard candidate={b} isWinner={winner.id === b.id} categoryScores={scoresB} />
         </motion.div>
 
@@ -195,7 +195,7 @@ export default function CompareView() {
 
         {/* Category dominance */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="grid grid-cols-2 gap-4 mb-4">
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="bg-card border border-emerald-500/20 rounded-xl p-4">
             <h4 className="text-emerald-300 font-medium text-sm mb-2">{a.name} leads in</h4>
             {aLeads.length > 0
@@ -212,7 +212,7 @@ export default function CompareView() {
 
         {/* Unique skills diff */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 gap-4">
+          className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-5">
             <h4 className="text-theme-1 font-medium text-sm mb-3">Only {a.name} has</h4>
             {onlyA.length > 0
