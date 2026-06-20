@@ -64,6 +64,29 @@ jobs:
     needs: [backend-tests, frontend-build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Trigger Staging Deploy Webhook
-        run: |
-          curl -Ssf "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" || echo "No staging hook configured, skipping"
+    - name: Trigger Staging Deploy Webhook
+      run: |
+        # Call hosting provider's deploy hook via GitHub secret
+        # PLACEHOLDER: Ensure you have added the RENDER_STAGING_DEPLOY_HOOK secret in GitHub Repository Secrets.
+        curl -Ssf "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" || echo "No staging hook configured, skipping"
+
+    - name: Checkout code (for staging smoke test script)
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install HTTPX dependency for smoke test
+      run: |
+        python -m pip install --upgrade pip
+        pip install httpx
+
+    - name: Wait briefly and run Staging Smoke Test Verification
+      run: |
+        # Wait 15 seconds for build initiation
+        sleep 15
+        # Run verify_staging.py against staging API URL
+        # PLACEHOLDER: Ensure you have added the STAGING_API_URL secret in GitHub Repository Secrets (e.g., https://staging-api.hireiq.com)
+        python backend/scripts/verify_staging.py --url "${{ secrets.STAGING_API_URL }}"

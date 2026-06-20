@@ -27,7 +27,7 @@ graph TD
 
 ### Step 2: Auto-Deployment to Staging
 - Merges or direct pushes to `main` automatically trigger the staging deployment workflow.
-- GitHub Actions notifies the hosting environment (e.g. Render/AWS) via a secure webhook hook (`RENDER_STAGING_DEPLOY_HOOK`).
+- GitHub Actions notifies the hosting environment (Render) via a secure webhook hook (`RENDER_STAGING_DEPLOY_HOOK`).
 
 ### Step 3: Staging Verification & QA
 Before promoting changes to production, the following validations must be completed on Staging:
