@@ -42,6 +42,8 @@ from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.limits import check_cv_upload_limit, increment_cv_parses
 from tasks.worker import process_resume_task
+from api.core.encryption import encrypt_field
+
 
 from api.models import (
     CandidateResult,
@@ -376,7 +378,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
             logger.warning("Extraction returned empty text for candidate: %s", candidate_id)
             supabase.table("candidates").update({
                 "pipeline_stage": "rejected",
-                "raw_text": "Error: Could not extract text from document."
+                "raw_text": encrypt_field("Error: Could not extract text from document.")
             }).eq("id", candidate_id).execute()
             return
 
@@ -483,7 +485,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
             "experience_years": int(scoring_res.get("resume_features", {}).get("experience_years", 0)),
             "education_tier": edu_tier,
             "skills": scoring_res.get("resume_features", {}).get("skills", []),
-            "raw_text": text,
+            "raw_text": encrypt_field(text),
             "match_score": final_score,
             "completeness_score": insights.get("completeness_score", 80),
             "ats_score": insights.get("ats_score", 75),
@@ -514,7 +516,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         try:
             supabase.table("candidates").update({
                 "pipeline_stage": "rejected",
-                "raw_text": f"Error during parsing: {str(e)}"
+                "raw_text": encrypt_field(f"Error during parsing: {str(e)}")
             }).eq("id", candidate_id).execute()
         except Exception:
             pass

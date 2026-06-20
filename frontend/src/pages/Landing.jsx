@@ -893,11 +893,13 @@ export default function Landing() {
       <footer className="relative z-10 py-12 px-6 border-t border-white/5 text-center text-xs text-gray-500">
         <p className="mb-2">© 2026 HireiQ. Transforming AI recruiting intelligence globally.</p>
         <p className="mb-4">Built with React, FastAPI, Supabase, and Tailwind CSS.</p>
-        <div className="flex items-center justify-center gap-6 text-gray-600">
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-600">
           <a href="#features" className="hover:text-gray-300 transition-colors">Features</a>
           <a href="#pricing" className="hover:text-gray-300 transition-colors">Pricing</a>
           <a href="#faq" className="hover:text-gray-300 transition-colors">FAQs</a>
           <a href="#about" className="hover:text-gray-300 transition-colors">About</a>
+          <Link to="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-gray-300 transition-colors">Terms of Service</Link>
         </div>
       </footer>
     </div>

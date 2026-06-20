@@ -8,6 +8,8 @@ import re
 from celery import Celery
 import sentry_sdk
 from db import get_supabase
+from api.core.encryption import encrypt_field
+
 
 # Initialize Sentry for background workers
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -54,7 +56,7 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             logger.warning("Extraction returned empty text for candidate: %s", candidate_id)
             supabase.table("candidates").update({
                 "pipeline_stage": "rejected",
-                "raw_text": "Error: Could not extract text from document."
+                "raw_text": encrypt_field("Error: Could not extract text from document.")
             }).eq("id", candidate_id).execute()
             return
 
@@ -149,7 +151,7 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "experience_years": int(scoring_res.get("resume_features", {}).get("experience_years", 0)),
             "education_tier": edu_tier,
             "skills": scoring_res.get("resume_features", {}).get("skills", []),
-            "raw_text": text,
+            "raw_text": encrypt_field(text),
             "match_score": final_score,
             "completeness_score": insights.get("completeness_score", 80),
             "ats_score": insights.get("ats_score", 75),
@@ -180,7 +182,7 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
         try:
             supabase.table("candidates").update({
                 "pipeline_stage": "rejected",
-                "raw_text": f"Error during parsing: {str(e)}"
+                "raw_text": encrypt_field(f"Error during parsing: {str(e)}")
             }).eq("id", candidate_id).execute()
         except Exception:
             pass

@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -136,8 +136,61 @@ def health_check():
 
 
 @app.get("/health")
-def health():
-    return {"status": "healthy"}
+async def health(response: Response):
+    import asyncio
+    from datetime import datetime
+    from db.supabase_client import get_supabase
+    
+    # 1. Perform database availability check with 2.0s timeout
+    db_status = "unreachable"
+    error_msg = None
+    try:
+        async def check_db():
+            loop = asyncio.get_running_loop()
+            def run_query():
+                client = get_supabase()
+                client.table("recruiters").select("id").limit(1).execute()
+            await loop.run_in_executor(None, run_query)
+        
+        await asyncio.wait_for(check_db(), timeout=2.0)
+        db_status = "connected"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Database health check failed: {e}")
+
+    # 2. Perform optional, non-blocking Redis connection ping (0.1s socket timeout)
+    redis_status = "unconfigured"
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        import socket
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(redis_url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 6379
+            with socket.create_connection((host, port), timeout=0.1):
+                redis_status = "connected"
+        except Exception:
+            redis_status = "disconnected"
+
+    # 3. Determine status and response code
+    timestamp = datetime.utcnow().isoformat()
+    if db_status == "connected":
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "redis": redis_status,
+            "timestamp": timestamp
+        }
+    else:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "unhealthy",
+            "database": "unreachable",
+            "redis": redis_status,
+            "error": error_msg,
+            "timestamp": timestamp
+        }
 
 
 if __name__ == "__main__":

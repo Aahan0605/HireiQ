@@ -116,6 +116,14 @@ export default function SignIn() {
                 {loading ? 'Processing...' : isRegistering ? 'Sign Up' : 'Sign In'}
               </span>
             </button>
+            {isRegistering && (
+              <p className="text-[11px] text-center text-text-2 mt-4 leading-relaxed">
+                By signing up, you agree to our{' '}
+                <Link to="/terms" className="text-violet hover:underline">Terms of Service</Link>{' '}
+                and{' '}
+                <Link to="/privacy" className="text-violet hover:underline">Privacy Policy</Link>.
+              </p>
+            )}
           </form>
 
           <div className="mt-8 text-center text-sm text-text-2">

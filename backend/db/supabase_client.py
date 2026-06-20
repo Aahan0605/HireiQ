@@ -5,6 +5,8 @@ import logging
 from datetime import datetime
 from functools import lru_cache
 from supabase import create_client, Client
+from api.core.encryption import encrypt_field, decrypt_field
+
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +165,7 @@ def _candidate_to_dict(c: dict) -> dict:
         "stage": stage_val,
         "summary": summary,
         "experience_years": c.get("experience_years") or 0,
-        "resume_text": c.get("raw_text") or "",
+        "resume_text": decrypt_field(c.get("raw_text") or ""),
         "has_resume_file": has_resume,
         "resume_filename": c.get("resume_filename") or "",
         "skills": c.get("skills") or [],
@@ -268,7 +270,7 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "location": candidate.get("location", "Remote"),
         "career_tier": candidate.get("role", "Software Engineer"),
         "skills": candidate.get("skills") or [],
-        "raw_text": candidate.get("resume_text") or "",
+        "raw_text": encrypt_field(candidate.get("resume_text") or ""),
         "match_score": float(match_score),
         "completeness_score": float(insights.get("completeness_score") or 0.0),
         "ats_score": float(insights.get("ats_score") or 0.0),

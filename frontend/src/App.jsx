@@ -23,6 +23,9 @@ import VerifyEmail from './pages/VerifyEmail';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AcceptInvite from './pages/AcceptInvite';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+
 
 const DASH_PREFIXES = [
   '/dashboard', '/analyze', '/candidates', '/candidate',
@@ -63,6 +66,9 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/accept-invite" element={<AcceptInvite />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+
 
         {/* All dashboard pages share the sidebar layout */}
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>

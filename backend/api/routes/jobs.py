@@ -11,6 +11,8 @@ from api.core.dependencies import get_current_user
 from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.limits import check_job_creation_limit, increment_jobs_created
 from db import get_supabase
+from api.core.encryption import decrypt_field
+
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +231,7 @@ async def job_matches(job_id: str, tenant_id: str = Depends(require_tenant)):
 
         for c in candidates_list:
             cand_skills_list = c.get("skills", [])
-            cand_text = " ".join(cand_skills_list) + " " + (c.get("raw_text") or "")
+            cand_text = " ".join(cand_skills_list) + " " + decrypt_field(c.get("raw_text") or "")
             cand_skills = {s.lower() for s in cand_skills_list}
 
             sim = _cosine_similarity(job_text, cand_text)

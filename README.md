@@ -159,6 +159,18 @@ npm run dev
 
 ---
 
+### 🔒 Field Encryption & Migration
+
+To protect PII at rest, HireIQ encrypts the `resume_text` (`raw_text` in the database) using symmetric Fernet encryption.
+
+1. **Setup**: Generate a 32-byte urlsafe base64 key and define it in your `.env`:
+   ```bash
+   FIELD_ENCRYPTION_KEY=L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=
+   ```
+2. **Migration Note**: Any existing unencrypted candidate records in the database will fail decryption and show `[unable to decrypt]` in the UI. Running a one-time migration/backfill script to encrypt legacy `raw_text` rows with the active `FIELD_ENCRYPTION_KEY` is required when moving from unencrypted to encrypted storage.
+
+---
+
 ## 📂 System Architecture
 
 ```
