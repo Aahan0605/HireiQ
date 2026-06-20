@@ -178,11 +178,14 @@ async def perform_login_checks(user: dict, password_attempt: str) -> None:
     if verify_password(password_attempt, user.get("hashed_password", "")):
         # Reset attempts on success
         if int(user.get("failed_login_attempts") or 0) > 0 or user.get("locked_until") is not None:
-            supabase = get_supabase()
-            supabase.table("recruiters").update({
-                "failed_login_attempts": 0,
-                "locked_until": None
-            }).eq("id", user["id"]).execute()
+            try:
+                supabase = get_supabase()
+                supabase.table("recruiters").update({
+                    "failed_login_attempts": 0,
+                    "locked_until": None
+                }).eq("id", user["id"]).execute()
+            except Exception as e:
+                logger.warning(f"Could not reset failed login attempts in database (columns might be missing): {e}")
         return
     else:
         # Increment failed login attempts
@@ -192,12 +195,15 @@ async def perform_login_checks(user: dict, password_attempt: str) -> None:
         if attempts >= 5:
             new_locked_until = (now + timedelta(minutes=15)).isoformat()
             
-        supabase = get_supabase()
-        supabase.table("recruiters").update({
-            "failed_login_attempts": attempts,
-            "locked_until": new_locked_until
-        }).eq("id", user["id"]).execute()
-        
+        try:
+            supabase = get_supabase()
+            supabase.table("recruiters").update({
+                "failed_login_attempts": attempts,
+                "locked_until": new_locked_until
+            }).eq("id", user["id"]).execute()
+        except Exception as e:
+            logger.warning(f"Could not update failed login attempts/lockout status in database (columns might be missing): {e}")
+            
         if attempts >= 5:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
