@@ -35,3 +35,5 @@ services:
         sync: false # Set manually in Render dashboard (optional)
       - key: REDIS_URL
         sync: false # Set manually in Render dashboard (optional, only if using Celery Upstash)
+      - key: GEMINI_API_KEY
+        sync: false # Set manually in Render dashboard (Gemini API key for resume parsing)
