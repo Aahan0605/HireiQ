@@ -106,8 +106,6 @@ export default function Candidates() {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
-  const [linkedinUrl, setLinkedinUrl] = useState('');
-  const [importLoading, setImportLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -295,31 +293,6 @@ export default function Candidates() {
     return matchesSearch && matchesPool && matchesScore && matchesExp && matchesEdu && matchesSkills;
   });
 
-  const handleImportLinkedIn = async (e) => {
-    e.preventDefault();
-    if (!linkedinUrl) return;
-    setImportLoading(true);
-    try {
-      const res = await apiFetch(`${API}/features/linkedin-import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linkedin_url: linkedinUrl })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || "LinkedIn Import failed.");
-      }
-      toast.success(`Successfully imported ${data.name} profile from LinkedIn!`);
-      setLinkedinUrl('');
-      setShowImportModal(false);
-      
-      setCurrentPage(1);
-    } catch (err) {
-      toast.error(err.message || "Error importing from LinkedIn.");
-    } finally {
-      setImportLoading(false);
-    }
-  };
 
   // Sort by score (toggles ascending/descending), compute rank deltas
   const handleSort = () => {
@@ -1072,7 +1045,7 @@ export default function Candidates() {
         )}
       </AnimatePresence>
 
-      {/* LinkedIn Import Modal */}
+      {/* LinkedIn Import Modal — feature not yet available */}
       <AnimatePresence>
         {showImportModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
@@ -1083,35 +1056,35 @@ export default function Candidates() {
                 <Linkedin size={20} />
                 <h3 className="text-lg font-bold text-white">Import from LinkedIn</h3>
               </div>
-              <p className="text-xs text-gray-400">Enter a public LinkedIn profile URL to instantly scrape, parse, score, and import the candidate details into HireIQ.</p>
-              
-              <form onSubmit={handleImportLinkedIn} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1">LinkedIn Profile URL</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={linkedinUrl}
-                    onChange={e => setLinkedinUrl(e.target.value)}
-                    placeholder="https://linkedin.com/in/username"
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-xs outline-none focus:border-blue-500/50 transition-colors" 
-                  />
-                </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
-                  <button type="button" onClick={() => setShowImportModal(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold transition-colors">Cancel</button>
-                  <button type="submit" disabled={importLoading} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
-                    {importLoading ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        Importing...
-                      </>
-                    ) : (
-                      'Start Import'
-                    )}
-                  </button>
-                </div>
-              </form>
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+                <p className="text-xs text-amber-300 font-medium">Coming soon</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Direct LinkedIn import is still in development. For now, you can 
+                  upload the candidate's resume directly and HireIQ will parse, 
+                  score, and add them to your pipeline.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    navigate('/analyze');
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Upload Resume Instead
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
