@@ -344,7 +344,7 @@ export default function Landing() {
           className="flex flex-col items-center justify-center gap-4 sm:flex-row mb-16"
         >
           <MotionLink
-            to="/dashboard"
+            to="/signin"
             whileHover={prefersReducedMotion ? {} : { 
               scale: 1.03,
               boxShadow: "0 10px 20px -5px rgba(16, 185, 129, 0.3)"
