@@ -5,7 +5,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "HireIQ <onboarding@resend.dev>")
+FROM_EMAIL = os.getenv("FROM_EMAIL")
+if not FROM_EMAIL:
+    is_dev = os.getenv("ENVIRONMENT", "development") == "development"
+    if is_dev:
+        FROM_EMAIL = "HireIQ <onboarding@resend.dev>"
+        logger.warning("FROM_EMAIL not configured. Falling back to sandbox domain for development.")
+    else:
+        FROM_EMAIL = "HireIQ <notifications@yourdomain.com>"
+        logger.error("CRITICAL: FROM_EMAIL environment variable is not configured in a non-development environment! Defaulting to notifications@yourdomain.com which will fail if domain is not verified in Resend.")
 
 # HTML Templates for product and transactional emails
 TEMPLATES = {

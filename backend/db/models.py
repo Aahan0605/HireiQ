@@ -13,6 +13,8 @@ class User(Base):
     role = Column(String(50), default='Recruiter')
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     is_verified = Column(Boolean, default=False)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
     verification_token = Column(String(255), nullable=True)
     verification_token_expires = Column(DateTime, nullable=True)
     password_reset_token = Column(String(255), nullable=True)

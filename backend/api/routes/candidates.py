@@ -43,6 +43,7 @@ from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.limits import check_cv_upload_limit, increment_cv_parses
 from tasks.worker import process_resume_task
 from api.core.encryption import encrypt_field
+from api.core.error_handling import safe_error_response
 
 
 from api.models import (
@@ -687,8 +688,8 @@ async def upload_csv(file: UploadFile = File(...), tenant_id: str = Depends(requ
             await save_candidate(candidate, tenant_id)
             results.append({"name": candidate["name"], "status": "success"})
         except Exception as e:
-            logger.warning("Supabase save failed for %s: %s", candidate["name"], e)
-            results.append({"name": candidate["name"], "status": "error", "error": str(e)})
+            logger.error("Supabase save failed for %s: %s", candidate["name"], e, exc_info=True)
+            results.append({"name": candidate["name"], "status": "error", "error": "Failed to save candidate to database."})
             
     return {
         "message": f"Processed {len(results)} rows",
@@ -741,11 +742,7 @@ async def get_all_candidates(
             "has_prev": page > 1
         }
     except Exception as e:
-        logger.error("Database fetch failed in GET /candidates: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database query failed: {str(e)}"
-        )
+        raise safe_error_response(e, "Database query failed. Please try again.")
 
 # ─────────────────────────────────────────────────────────────
 # POST /candidates/seed-demo
@@ -1260,8 +1257,7 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
             detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
         )
     except Exception as e:
-        logger.error("Scoring engine failed during webhook sync: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to score candidate: {str(e)}")
+        raise safe_error_response(e, "Failed to score candidate. Please try again.")
 
     github_signals = scoring_res.get("external_signals", {}).get("github", {})
     github_analysis = scoring_res["insights"].get("github_analysis", {})
@@ -1692,8 +1688,7 @@ async def add_candidate_note(candidate_id: str, req: NoteCreateRequest, tenant_i
             "created_at": row.get("created_at")
         }
     except Exception as e:
-        logger.error(f"Error inserting note: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error saving note: {str(e)}")
+        raise safe_error_response(e, "Database error saving note.")
 
 @router.get("/{candidate_id}/notes")
 async def get_candidate_notes(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> list[dict]:
@@ -1741,8 +1736,7 @@ async def get_candidate_notes(candidate_id: str, tenant_id: str = Depends(requir
             })
         return notes
     except Exception as e:
-        logger.error(f"Error fetching notes: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error fetching notes: {str(e)}")
+        raise safe_error_response(e, "Database error fetching notes.")
 
 @router.delete("/{candidate_id}/notes/{note_id}")
 async def delete_candidate_note(candidate_id: str, note_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
@@ -1761,8 +1755,7 @@ async def delete_candidate_note(candidate_id: str, note_id: str, tenant_id: str 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting note: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error deleting note: {str(e)}")
+        raise safe_error_response(e, "Database error deleting note.")
 
 
 class InterviewCreateRequest(BaseModel):
@@ -1795,8 +1788,7 @@ async def add_candidate_interview(candidate_id: str, req: InterviewCreateRequest
             raise HTTPException(status_code=500, detail="Failed to save interview to database.")
         return res.data[0]
     except Exception as e:
-        logger.error(f"Error inserting interview: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error saving interview: {str(e)}")
+        raise safe_error_response(e, "Database error saving interview.")
 
 @router.get("/{candidate_id}/interviews")
 async def get_candidate_interviews(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> list[dict]:
@@ -1809,8 +1801,7 @@ async def get_candidate_interviews(candidate_id: str, tenant_id: str = Depends(r
         res = supabase.table("interviews").select("*").eq("candidate_id", candidate_id).execute()
         return res.data or []
     except Exception as e:
-        logger.error(f"Error fetching interviews: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error fetching interviews: {str(e)}")
+        raise safe_error_response(e, "Database error fetching interviews.")
 
 @router.get("/interviews/all")
 async def get_all_interviews(tenant_id: str = Depends(require_tenant)) -> list[dict]:
@@ -1859,8 +1850,7 @@ async def get_all_interviews(tenant_id: str = Depends(require_tenant)) -> list[d
             })
         return results
     except Exception as e:
-        logger.error(f"Error fetching all interviews: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error fetching all interviews: {str(e)}")
+        raise safe_error_response(e, "Database error fetching all interviews.")
 
 class InterviewUpdateRequest(BaseModel):
     start: str | None = None
@@ -1929,8 +1919,7 @@ async def update_candidate_interview(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating interview: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error updating interview: {str(e)}")
+        raise safe_error_response(e, "Database error updating interview.")
 
 @router.delete("/interviews/{interview_id}")
 async def delete_candidate_interview(interview_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
@@ -1950,5 +1939,4 @@ async def delete_candidate_interview(interview_id: str, tenant_id: str = Depends
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting interview: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error deleting interview: {str(e)}")
+        raise safe_error_response(e, "Database error deleting interview.")

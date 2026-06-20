@@ -14,10 +14,40 @@ from api.core.encryption import encrypt_field
 # Initialize Sentry for background workers
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
+    def scrub_sensitive_data(event, hint):
+        if 'request' in event:
+            req = event['request']
+            req.pop('cookies', None)
+            headers = req.get('headers', {})
+            headers.pop('Authorization', None)
+            headers.pop('authorization', None)
+            headers.pop('Cookie', None)
+            headers.pop('cookie', None)
+            
+            data = req.get('data')
+            if data:
+                if isinstance(data, dict):
+                    for k in list(data.keys()):
+                        if any(sensitive in k.lower() for sensitive in ('password', 'resume_text', 'raw_text', 'card', 'token', 'secret', 'content_b64')):
+                            data[k] = '[scrubbed]'
+                elif isinstance(data, str):
+                    try:
+                        parsed = json.loads(data)
+                        if isinstance(parsed, dict):
+                            for k in list(parsed.keys()):
+                                if any(sensitive in k.lower() for sensitive in ('password', 'resume_text', 'raw_text', 'card', 'token', 'secret', 'content_b64')):
+                                    parsed[k] = '[scrubbed]'
+                            req['data'] = json.dumps(parsed)
+                    except Exception:
+                        pass
+        return event
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0
+        traces_sample_rate=0.2,
+        profiles_sample_rate=0.2,
+        send_default_pii=False,
+        before_send=scrub_sensitive_data,
     )
 
 # Initialize Celery App

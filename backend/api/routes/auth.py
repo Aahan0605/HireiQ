@@ -3,7 +3,8 @@ import secrets
 import os
 import asyncio
 import logging
-from datetime import datetime, timedelta
+import math
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, validator
@@ -12,6 +13,7 @@ from api.core.dependencies import get_current_user
 from db import get_supabase
 from api.core.email import send_verification_email, send_password_reset_email
 from api.core.limiter import limiter
+from api.core.error_handling import safe_error_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -78,9 +80,10 @@ async def register(user_in: UserRegister):
     try:
         existing_user = await fetch_user_by_email(user_in.email)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection error: {str(e)}. Please check your backend/.env database configuration."
+        raise safe_error_response(
+            e,
+            "Database connection error. Please try again later.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
     if existing_user:
         raise HTTPException(
@@ -117,10 +120,10 @@ async def register(user_in: UserRegister):
             "github_weight": 0.1
         }).execute()
     except Exception as e:
-        logger.error(f"Database error during registration: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database error during registration: {str(e)}. Please check your backend/.env database configuration."
+        raise safe_error_response(
+            e,
+            "Database error during registration. Please check configuration or try again.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
     
     # Send verification email (non-blocking)
@@ -151,6 +154,62 @@ async def register(user_in: UserRegister):
         "email_verification_sent": True
     }
 
+async def perform_login_checks(user: dict, password_attempt: str) -> None:
+    now = datetime.now(timezone.utc)
+    
+    # 1. Check if locked out
+    locked_until_str = user.get("locked_until")
+    if locked_until_str:
+        try:
+            locked_until = datetime.fromisoformat(locked_until_str.replace("Z", "+00:00"))
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            if locked_until > now:
+                minutes_left = math.ceil((locked_until - now).total_seconds() / 60)
+                minutes_left = max(1, minutes_left)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Account temporarily locked due to repeated failed login attempts. Try again in {minutes_left} minutes."
+                )
+        except ValueError:
+            pass
+            
+    # 2. Verify password
+    if verify_password(password_attempt, user.get("hashed_password", "")):
+        # Reset attempts on success
+        if int(user.get("failed_login_attempts") or 0) > 0 or user.get("locked_until") is not None:
+            supabase = get_supabase()
+            supabase.table("recruiters").update({
+                "failed_login_attempts": 0,
+                "locked_until": None
+            }).eq("id", user["id"]).execute()
+        return
+    else:
+        # Increment failed login attempts
+        attempts = int(user.get("failed_login_attempts") or 0) + 1
+        new_locked_until = None
+        
+        if attempts >= 5:
+            new_locked_until = (now + timedelta(minutes=15)).isoformat()
+            
+        supabase = get_supabase()
+        supabase.table("recruiters").update({
+            "failed_login_attempts": attempts,
+            "locked_until": new_locked_until
+        }).eq("id", user["id"]).execute()
+        
+        if attempts >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account temporarily locked due to repeated failed login attempts. Try again in 15 minutes."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
 @router.post("/login", response_model=Token)
 @limiter.limit("10/15minute")
 async def login_json(request: Request, user_in: UserLogin):
@@ -158,16 +217,19 @@ async def login_json(request: Request, user_in: UserLogin):
     try:
         user = await fetch_user_by_email(user_in.email)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection error: {str(e)}. Please check your SUPABASE_URL and credentials in backend/.env."
+        raise safe_error_response(
+            e,
+            "Database connection error. Please try again later.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
-    if not user or not verify_password(user_in.password, user.get("hashed_password", "")):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
+    await perform_login_checks(user, user_in.password)
     
     if not user.get("is_verified", False):
         raise HTTPException(
@@ -207,16 +269,19 @@ async def login_oauth(form_data: OAuth2PasswordRequestForm = Depends()):
     try:
         user = await fetch_user_by_email(form_data.username)
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection error: {str(e)}. Please check your SUPABASE_URL and credentials in backend/.env."
+        raise safe_error_response(
+            e,
+            "Database connection error. Please try again later.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
         )
-    if not user or not verify_password(form_data.password, user.get("hashed_password", "")):
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+        
+    await perform_login_checks(user, form_data.password)
     
     if not user.get("is_verified", False):
         raise HTTPException(
@@ -257,8 +322,7 @@ async def verify_email(token: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error verifying email: {e}")
-        raise HTTPException(status_code=500, detail="An error occurred during verification.")
+        raise safe_error_response(e, "An error occurred during verification.")
 
 @router.get("/me", response_model=dict)
 async def read_users_me(current_user: dict = Depends(get_current_user)):
@@ -317,5 +381,4 @@ async def reset_password(req: ResetPasswordRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error resetting password: {e}")
-        raise HTTPException(status_code=500, detail="An error occurred resetting password.")
+        raise safe_error_response(e, "An error occurred resetting password.")

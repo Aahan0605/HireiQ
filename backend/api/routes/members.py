@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.email import send_org_invitation_email
 from db import get_supabase
+from api.core.error_handling import safe_error_response
 
 router = APIRouter(prefix="/members", tags=["Team Members"])
 
@@ -35,7 +36,7 @@ async def list_members(tenant_id: str = Depends(require_tenant)):
             "joined_at": m.get("created_at")
         } for m in members_res.data]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch team members: {str(e)}")
+        raise safe_error_response(e, "Failed to fetch team members.")
 
 @router.post("/invite", dependencies=[Depends(require_permission(Permission.MANAGE_MEMBERS))])
 async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_tenant)):
@@ -70,7 +71,7 @@ async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_ten
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send invitation: {str(e)}")
+        raise safe_error_response(e, "Failed to send invitation.")
 
 @router.delete("/{member_id}", dependencies=[Depends(require_permission(Permission.MANAGE_MEMBERS))])
 async def remove_member(member_id: str, tenant_id: str = Depends(require_tenant)):
@@ -96,7 +97,7 @@ async def remove_member(member_id: str, tenant_id: str = Depends(require_tenant)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to remove member: {str(e)}")
+        raise safe_error_response(e, "Failed to remove member.")
 
 from pydantic import BaseModel as PydanticBaseModel
 
