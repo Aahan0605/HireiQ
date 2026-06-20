@@ -66,9 +66,11 @@ jobs:
     steps:
     - name: Trigger Staging Deploy Webhook
       run: |
-        # Call hosting provider's deploy hook via GitHub secret
-        # PLACEHOLDER: Ensure you have added the RENDER_STAGING_DEPLOY_HOOK secret in GitHub Repository Secrets.
-        curl -Ssf "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" || echo "No staging hook configured, skipping"
+        if [ -z "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}" ]; then
+          echo "No staging hook configured, skipping"
+        else
+          curl -Ssf "${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}"
+        fi
 
     - name: Checkout code (for staging smoke test script)
       uses: actions/checkout@v4
@@ -85,8 +87,10 @@ jobs:
 
     - name: Wait briefly and run Staging Smoke Test Verification
       run: |
+        if [ -z "${{ secrets.STAGING_API_URL }}" ]; then
+          echo "STAGING_API_URL secret is not configured. Skipping smoke test."
+          exit 0
+        fi
         # Wait 15 seconds for build initiation
         sleep 15
-        # Run verify_staging.py against staging API URL
-        # PLACEHOLDER: Ensure you have added the STAGING_API_URL secret in GitHub Repository Secrets (e.g., https://staging-api.hireiq.com)
         python backend/scripts/verify_staging.py --url "${{ secrets.STAGING_API_URL }}"

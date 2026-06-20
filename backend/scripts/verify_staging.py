@@ -11,7 +11,16 @@ def main():
     args = parser.parse_args()
 
     # Clean URL string
-    base_url = args.url.rstrip("/")
+    if not args.url or not args.url.strip() or not args.url.startswith("http"):
+        print("=" * 60)
+        print(" HIREIQ STAGING DEPLOYMENT SMOKE TEST ")
+        print("=" * 60)
+        print("[INFO] No valid staging URL provided (STAGING_API_URL secret is likely unconfigured).")
+        print("Skipping smoke test verification.")
+        print("=" * 60)
+        sys.exit(0)
+
+    base_url = args.url.strip().rstrip("/")
     health_url = f"{base_url}/health"
 
     print("=" * 60)
