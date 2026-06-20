@@ -1639,7 +1639,8 @@ import json
 
 class NoteCreateRequest(BaseModel):
     author: str
-    comment: str
+    comment: Optional[str] = None
+    content: Optional[str] = None
     rating: int = 5
     date: str = ""
 
@@ -1648,6 +1649,10 @@ async def add_candidate_note(candidate_id: str, req: NoteCreateRequest, tenant_i
     candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    note_text = req.comment or req.content
+    if not note_text or not note_text.strip():
+        raise HTTPException(status_code=400, detail="Note comment/content cannot be empty.")
         
     supabase = get_supabase()
     note_id = str(uuid.uuid4())
@@ -1658,7 +1663,7 @@ async def add_candidate_note(candidate_id: str, req: NoteCreateRequest, tenant_i
         
     serialized_content = json.dumps({
         "author": req.author,
-        "comment": req.comment,
+        "comment": note_text,
         "rating": req.rating,
         "date": note_date
     })
@@ -1679,7 +1684,7 @@ async def add_candidate_note(candidate_id: str, req: NoteCreateRequest, tenant_i
             "id": row["id"],
             "candidate_id": row["candidate_id"],
             "author": req.author,
-            "comment": req.comment,
+            "comment": note_text,
             "rating": req.rating,
             "date": note_date,
             "created_at": row.get("created_at")

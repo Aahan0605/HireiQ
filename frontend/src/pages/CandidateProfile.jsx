@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
@@ -88,31 +88,36 @@ export default function CandidateProfile() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const [communications, setCommunications] = useState(() => {
-    const saved = localStorage.getItem(`hireiq_communications_${id}`);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [
-      { provider: 'System', event: 'Profile imported from resume upload', time: 'Today' }
-    ];
-  });
+  const [notesLoading, setNotesLoading] = useState(true);
 
-  const addCommunicationLog = (provider, event) => {
-    const newLog = {
-      provider,
-      event,
-      time: 'Just now'
+  const addCommunicationLog = async (provider, event) => {
+    const noteData = {
+      author: `System (${provider} Sync)`,
+      comment: event,
+      rating: 5,
+      date: new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
     };
-    setCommunications(prev => {
-      const updated = [newLog, ...prev];
-      localStorage.setItem(`hireiq_communications_${id}`, JSON.stringify(updated));
-      return updated;
-    });
+    try {
+      const res = await apiFetch(`${API}/candidates/${id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noteData)
+      });
+      if (res.ok) {
+        const savedNote = await res.json();
+        setNotes(prev => [savedNote, ...prev]);
+      }
+    } catch (err) {
+      console.error('Failed to log communication:', err);
+    }
   };
 
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -235,6 +240,27 @@ HireIQ Hiring Team`
   });
 
   const [notes, setNotes] = useState([]);
+  const feedbackNotes = useMemo(() => {
+    return notes.filter(n => n.author !== 'System (Gmail Sync)' && n.author !== 'System (Outlook Sync)');
+  }, [notes]);
+
+  const derivedCommunications = useMemo(() => {
+    const sysNotes = notes.filter(n => n.author === 'System (Gmail Sync)' || n.author === 'System (Outlook Sync)' || n.author === 'System');
+    const mapped = sysNotes.map(n => {
+      let provider = 'System';
+      if (n.author.includes('Gmail')) provider = 'Gmail';
+      else if (n.author.includes('Outlook')) provider = 'Outlook';
+      return {
+        provider,
+        event: n.comment,
+        time: n.date || 'Today'
+      };
+    });
+    if (mapped.length === 0 && !loading) {
+      mapped.push({ provider: 'System', event: 'Profile imported from resume upload', time: 'Today' });
+    }
+    return mapped;
+  }, [notes, loading]);
   const [interviews, setInterviews] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [newRating, setNewRating] = useState(5);
@@ -538,6 +564,7 @@ HireIQ Hiring Team`
   // Fetch notes dynamically
   useEffect(() => {
     const fetchNotes = async () => {
+      setNotesLoading(true);
       try {
         const res = await apiFetch(`${API}/candidates/${id}/notes`);
         if (res.ok) {
@@ -546,6 +573,8 @@ HireIQ Hiring Team`
         }
       } catch (err) {
         console.error('Failed to load notes:', err);
+      } finally {
+        setNotesLoading(false);
       }
     };
     fetchNotes();
@@ -1571,16 +1600,30 @@ HireIQ Hiring Team`
               </div>
 
               <div className="space-y-4">
-                {communications.map((log, idx) => (
-                  <div key={idx} className="flex gap-3 text-xs leading-relaxed items-start border-l border-white/5 pl-4 relative ml-2">
-                    <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3b3b4f] border-2 border-[#13131f]" />
-                    <div className="flex-1">
-                      <span className="text-gray-400 font-medium">[{log.provider}]</span>{' '}
-                      <span className="text-gray-300">{log.event}</span>
-                    </div>
-                    <span className="text-gray-500 text-[10px] whitespace-nowrap">{log.time}</span>
+                {notesLoading ? (
+                  <div className="space-y-3 animate-pulse">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="flex gap-3 ml-2 relative pl-4 border-l border-white/5">
+                        <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3b3b4f]" />
+                        <div className="flex-1 space-y-2 py-1">
+                          <div className="h-2 bg-white/10 rounded w-1/4"></div>
+                          <div className="h-2 bg-white/5 rounded w-3/4"></div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  derivedCommunications.map((log, idx) => (
+                    <div key={idx} className="flex gap-3 text-xs leading-relaxed items-start border-l border-white/5 pl-4 relative ml-2">
+                      <span className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3b3b4f] border-2 border-[#13131f]" />
+                      <div className="flex-1">
+                        <span className="text-gray-400 font-medium">[{log.provider}]</span>{' '}
+                        <span className="text-gray-300">{log.event}</span>
+                      </div>
+                      <span className="text-gray-500 text-[10px] whitespace-nowrap">{log.time}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </MagneticCard>
 
@@ -1660,9 +1703,9 @@ HireIQ Hiring Team`
               </form>
 
               {/* Feed timeline */}
-              {notes.length > 0 ? (
+              {feedbackNotes.length > 0 ? (
                 <div className="space-y-4">
-                  {notes.map(note => (
+                  {feedbackNotes.map(note => (
                     <div key={note.id} className="p-4 border border-white/5 bg-white/[0.02] rounded-xl flex flex-col gap-2 relative group">
                       <div className="flex items-center justify-between gap-2">
                         <div>

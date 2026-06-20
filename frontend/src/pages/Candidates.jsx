@@ -153,6 +153,9 @@ export default function Candidates() {
               }
             }
           } else {
+            // Note: hireiq_dynamic_candidates in local storage is used solely as an optimistic UI cache
+            // for offline resilience and fallback demo display. It is never treated as a secondary source
+            // of truth when the database/network is available.
             setCandidates(getAllCandidates());
           }
         })
