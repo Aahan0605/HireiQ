@@ -54,6 +54,14 @@ if SENTRY_DSN:
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("hireiq_tasks", broker=REDIS_URL, backend=REDIS_URL)
 
+# Configure Celery for secure rediss:// brokers if needed
+if REDIS_URL.startswith("rediss://"):
+    import ssl
+    celery_app.conf.update(
+        broker_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE},
+        redis_backend_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE}
+    )
+
 logger = logging.getLogger("celery_worker")
 logging.basicConfig(level=logging.INFO)
 

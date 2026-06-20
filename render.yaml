@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: hireiq-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+      - key: JWT_SECRET_KEY
+        sync: false # Set manually in Render dashboard
+      - key: SUPABASE_URL
+        sync: false # Set manually in Render dashboard
+      - key: SUPABASE_SERVICE_KEY
+        sync: false # Set manually in Render dashboard
+      - key: SUPABASE_KEY
+        sync: false # Set manually in Render dashboard
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false # Set manually in Render dashboard
+      - key: ALLOWED_ORIGINS
+        sync: false # Set manually in Render dashboard (include the Vercel frontend URL)
+      - key: STRIPE_SECRET_KEY
+        sync: false # Set manually in Render dashboard (test mode secret key)
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false # Set manually in Render dashboard (test mode webhook secret)
+      - key: RESEND_API_KEY
+        sync: false # Set manually in Render dashboard
+      - key: FROM_EMAIL
+        sync: false # Set manually in Render dashboard
+      - key: SENTRY_DSN
+        sync: false # Set manually in Render dashboard (optional)
+      - key: POSTHOG_API_KEY
+        sync: false # Set manually in Render dashboard (optional)
+      - key: REDIS_URL
+        sync: false # Set manually in Render dashboard (optional, only if using Celery Upstash)
