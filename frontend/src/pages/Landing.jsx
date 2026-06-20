@@ -728,7 +728,7 @@ export default function Landing() {
               </motion.div>
               <h2 className="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">
                 Built by Recruiters,<br />
-                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-violet-400 bg-clip-text text-transparent">Powered by AI</span>
+                <span className="bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">Powered by AI</span>
               </h2>
               <p className="text-sm text-gray-400 leading-relaxed max-w-2xl mx-auto">
                 HireiQ was born from a simple frustration — hiring the best engineers shouldn't feel like searching for a needle in a haystack. We built an AI-powered platform that combines resume intelligence, live GitHub analytics, and bias-free evaluation to help teams hire smarter, faster, and fairer.
