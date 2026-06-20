@@ -109,32 +109,40 @@ export default function Candidates() {
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [importLoading, setImportLoading] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCandidates, setTotalCandidates] = useState(0);
+  const [pageLoading, setPageLoading] = useState(false);
+  const PAGE_SIZE = 50;
+
   const navigate = useNavigate();
   const deltaTimer = useRef(null);
-
-
 
   useEffect(() => {
     let isMounted = true;
     let timerId = null;
 
     const fetchCandidates = () => {
-      apiFetch(`${API}/candidates?page=1&limit=200`)
+      setPageLoading(true);
+      apiFetch(`${API}/candidates?page=${currentPage}&limit=${PAGE_SIZE}`)
         .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
           if (!isMounted) return;
-          
+
           let list = null;
           if (Array.isArray(data)) {
             list = data;
+            setTotalPages(1);
+            setTotalCandidates(data.length);
           } else if (data && Array.isArray(data.data)) {
             list = data.data;
+            setTotalPages(data.pages || 1);
+            setTotalCandidates(data.total || data.data.length);
           }
 
           if (list) {
             setCandidates(list);
-            
-            // Check if any candidate is still analyzing
+
             const isAnyAnalyzing = list.some(c => c.status === 'Analyzing');
             if (isAnyAnalyzing) {
               if (!timerId) {
@@ -150,17 +158,20 @@ export default function Candidates() {
             setCandidates(getAllCandidates());
           }
         })
-        .catch(() => { 
+        .catch(() => {
           if (!isMounted) return;
-          setCandidates(getAllCandidates()); 
-          setError('Unable to load candidates. Showing demo data.'); 
+          setCandidates(getAllCandidates());
+          setError('Unable to load candidates. Showing demo data.');
           if (timerId) {
             clearInterval(timerId);
             timerId = null;
           }
         })
         .finally(() => {
-          if (isMounted) setLoading(false);
+          if (isMounted) {
+            setPageLoading(false);
+            setLoading(false);
+          }
         });
     };
 
@@ -170,7 +181,11 @@ export default function Candidates() {
       isMounted = false;
       if (timerId) clearInterval(timerId);
     };
-  }, []);
+  }, [currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, minScore, minExp, educationFilter, selectedSkills, activePool]);
 
   // Extract all unique skills dynamically
   const allSkills = React.useMemo(() => {
@@ -298,11 +313,7 @@ export default function Candidates() {
       setLinkedinUrl('');
       setShowImportModal(false);
       
-      const refRes = await apiFetch(`${API}/candidates?page=1&limit=200`);
-      if (refRes.ok) {
-        const refData = await refRes.json();
-        setCandidates(Array.isArray(refData) ? refData : (refData.data || []));
-      }
+      setCurrentPage(1);
     } catch (err) {
       toast.error(err.message || "Error importing from LinkedIn.");
     } finally {
@@ -462,16 +473,7 @@ export default function Candidates() {
         }
       }
       
-      // Refresh candidates list
-      const r = await apiFetch(`${API}/candidates?page=1&limit=200`);
-      const data = await r.json();
-      let list = null;
-      if (Array.isArray(data)) {
-        list = data;
-      } else if (data && Array.isArray(data.data)) {
-        list = data.data;
-      }
-      setCandidates(list || getAllCandidates());
+      setCurrentPage(1);
 
     } catch (err) {
       toast.error(err.message || 'Error importing candidates');
@@ -989,6 +991,31 @@ export default function Candidates() {
                 );
               })
             )}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-white/10 pt-4 mt-4">
+            <p className="text-xs text-gray-500">
+              Showing page {currentPage} of {totalPages} · {totalCandidates} total candidates
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage <= 1 || pageLoading}
+                className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-400 px-2">{currentPage} / {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || pageLoading}
+                className="h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-sm text-gray-300 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

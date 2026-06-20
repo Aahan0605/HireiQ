@@ -75,7 +75,11 @@ export function AuthProvider({ children }) {
         throw new Error(data.detail || data.error || 'Failed to register.');
       }
       
-      toast.success('Registration successful! You can now sign in.');
+      if (data.email_verification_sent) {
+        toast.success('Registration successful! Please check your email to verify your account before signing in.');
+      } else {
+        toast.success('Registration successful! You can now sign in.');
+      }
       return data;
     } catch (err) {
       toast.error(err.message || 'Error registering.');
