@@ -33,6 +33,19 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - CORS_ORIGINS=http://localhost,http://localhost:80,http://localhost:6901,http://localhost:5173
       - RATE_LIMIT_PER_MINUTE=60
+      # Optional in dev (falls back to safe defaults), required in production
+      # for Stripe checkout and transactional email to actually work.
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FROM_EMAIL=${FROM_EMAIL:-HireIQ <onboarding@resend.dev>}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_PRO_ID=${STRIPE_PRICE_PRO_ID}
+      - STRIPE_PRICE_BUSINESS_ID=${STRIPE_PRICE_BUSINESS_ID}
+      - STRIPE_PRICE_ENTERPRISE_ID=${STRIPE_PRICE_ENTERPRISE_ID}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY}
+      - POSTHOG_HOST=${POSTHOG_HOST:-https://app.posthog.com}
     depends_on:
       redis:
         condition: service_healthy
@@ -60,6 +73,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      # Optional in dev (falls back to safe defaults), required in production
+      # for Stripe checkout and transactional email to actually work.
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FROM_EMAIL=${FROM_EMAIL:-HireIQ <onboarding@resend.dev>}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY}
+      - POSTHOG_HOST=${POSTHOG_HOST:-https://app.posthog.com}
     depends_on:
       redis:
         condition: service_healthy
