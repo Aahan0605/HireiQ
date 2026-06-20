@@ -9,7 +9,9 @@ export default function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, register, loading } = useAuth();
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(
+    location.state?.mode === 'signup' || new URLSearchParams(location.search).get('mode') === 'signup'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Recruiter');

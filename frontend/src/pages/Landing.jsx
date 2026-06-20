@@ -286,7 +286,7 @@ export default function Landing() {
               Sign In
             </Link>
             <MotionLink 
-              to="/dashboard"
+              to="/signin?mode=signup"
               whileHover={prefersReducedMotion ? {} : { scale: 1.02, boxShadow: "0 10px 15px -3px rgba(16, 185, 129, 0.2)" }}
               whileTap={{ scale: 0.95 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
