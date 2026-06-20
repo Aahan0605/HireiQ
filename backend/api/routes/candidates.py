@@ -45,6 +45,8 @@ from tasks.worker import process_resume_task
 from api.core.encryption import encrypt_field
 from api.core.error_handling import safe_error_response
 
+ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+
 
 from api.models import (
     CandidateResult,
@@ -511,6 +513,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
 
         supabase.table("candidates").update(db_record).eq("id", candidate_id).execute()
         logger.info("Successfully processed Candidate ID: %s (inline)", candidate_id)
+        increment_cv_parses(None, tenant_id)
 
     except Exception as e:
         logger.error("Error processing resume inline: %s", e, exc_info=True)
@@ -529,6 +532,15 @@ async def upload_resume(
     file: UploadFile = File(...),
     tenant_id: str = Depends(require_tenant)
 ):
+    # Check filename extension
+    filename = file.filename or ""
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ALLOWED_RESUME_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported file type. Please upload a PDF, DOCX, DOC, or TXT file."
+        )
+
     # 1. Enforce active tenant quota limits
     check_cv_upload_limit(None, tenant_id)
     
@@ -572,9 +584,6 @@ async def upload_resume(
     
     background_tasks.add_task(_process_resume_inline, candidate_id, file.filename, content_b64, tenant_id)
     
-    # 6. Increment the tenant's parse usage
-    increment_cv_parses(None, tenant_id)
-    
     return {
         "candidate_id": candidate_id,
         "name": name,
@@ -601,6 +610,17 @@ async def upload_bulk(
     results = []
 
     for file in files:
+        filename = file.filename or ""
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_RESUME_EXTENSIONS:
+            results.append({
+                "candidate_id": None,
+                "name": filename,
+                "status": "Rejected",
+                "error": "Unsupported file type. Please upload a PDF, DOCX, DOC, or TXT file."
+            })
+            continue
+
         check_cv_upload_limit(None, tenant_id)
         
         candidate_id = str(uuid.uuid4())
@@ -630,8 +650,6 @@ async def upload_bulk(
         content = await file.read()
         content_b64 = base64.b64encode(content).decode("utf-8")
         background_tasks.add_task(_process_resume_inline, candidate_id, file.filename, content_b64, tenant_id)
-        
-        increment_cv_parses(None, tenant_id)
         
         results.append({
             "candidate_id": candidate_id,

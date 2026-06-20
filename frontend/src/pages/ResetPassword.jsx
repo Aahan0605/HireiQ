@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Lock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
+import { validatePassword } from '../utils/passwordValidation';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -23,6 +24,12 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const val = validatePassword(password);
+    if (!val.valid) {
+      setStatus('error');
+      setMessage(`Password must contain: ${val.errors.join(', ')}.`);
+      return;
+    }
     if (password !== confirmPassword) {
       setStatus('error');
       setMessage('Passwords do not match.');
@@ -79,6 +86,7 @@ export default function ResetPassword() {
                   <input
                     type="password"
                     required
+                    minLength={8}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Min. 8 chars, 1 letter, 1 number"

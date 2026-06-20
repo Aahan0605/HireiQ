@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import MagneticCard from '../components/MagneticCard';
 import { useAuth } from '../context/AuthContext';
+import { validatePassword } from '../utils/passwordValidation';
 import ConstellationBackground from '../components/ConstellationBackground';
 
 export default function SignIn() {
@@ -16,15 +17,24 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('Recruiter');
 
+  const [passwordError, setPasswordError] = useState('');
+
   React.useEffect(() => {
     setEmail('');
     setPassword('');
+    setPasswordError('');
   }, [isRegistering]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    setPasswordError('');
     try {
       if (isRegistering) {
+        const val = validatePassword(password);
+        if (!val.valid) {
+          setPasswordError(`Password must contain: ${val.errors.join(', ')}.`);
+          return;
+        }
         await register(email, password, role);
         setIsRegistering(false);
       } else {
@@ -99,11 +109,18 @@ export default function SignIn() {
                 type="password"
                 id="password"
                 required
+                minLength={8}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError('');
+                }}
                 placeholder={isRegistering ? "Min. 8 chars, 1 letter, 1 number" : ""}
                 className="w-full rounded-xl border border-border bg-surface-3 p-3 text-white placeholder-text-3 outline-none transition-colors focus:border-violet focus:ring-1 focus:ring-violet"
               />
+              {isRegistering && passwordError && (
+                <p className="mt-1.5 text-xs text-rose-400 font-medium">{passwordError}</p>
+              )}
             </div>
 
             <button

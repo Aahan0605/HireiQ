@@ -483,6 +483,10 @@ export default function Candidates() {
   };
 
   const handleUpdateStage = async (id, stageKey) => {
+    const candidate = candidates.find(c => c.id === id);
+    const previousStage = candidate ? candidate.stage : null;
+    const previousStatus = candidate ? candidate.status : null;
+
     // 1. Update in local memory state
     setCandidates(prev => 
       prev.map(c => c.id === id ? { ...c, status: stageKey, stage: stageKey.toLowerCase() } : c)
@@ -502,11 +506,26 @@ export default function Candidates() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to update status on server.');
+      if (candidate) {
+        setCandidates(prev => 
+          prev.map(c => c.id === id ? { ...c, status: previousStatus, stage: previousStage } : c)
+        );
+      }
     }
   };
 
   const handleBulkUpdateStage = async (stageKey) => {
     const selectedIds = Array.from(selected);
+
+    // Capture the previous state for all selected candidates
+    const previousStates = {};
+    selectedIds.forEach(id => {
+      const c = candidates.find(cand => cand.id === id);
+      if (c) {
+        previousStates[id] = { stage: c.stage, status: c.status };
+      }
+    });
+
     // 1. Update local state
     setCandidates(prev => 
       prev.map(c => selectedIds.includes(c.id) ? { ...c, status: stageKey, stage: stageKey.toLowerCase() } : c)
@@ -516,19 +535,62 @@ export default function Candidates() {
     
     // 2. Concurrently patch backend
     try {
-      await Promise.all(selectedIds.map(id => 
-        apiFetch(`${API}/candidates/${id}/stage`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage: stageKey.toLowerCase() })
+      const results = await Promise.allSettled(
+        selectedIds.map(async (id) => {
+          const res = await apiFetch(`${API}/candidates/${id}/stage`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stage: stageKey.toLowerCase() })
+          });
+          if (!res.ok) {
+            throw new Error(`Failed to patch candidate ${id}`);
+          }
+          return id;
         })
-      ));
+      );
+
       toast.dismiss();
-      toast.success(`Updated ${selectedIds.length} candidate(s) to ${stageKey}.`);
+
+      // Find failed ones and revert them
+      const failedIds = [];
+      const successfulIds = [];
+      results.forEach((result, idx) => {
+        const id = selectedIds[idx];
+        if (result.status === 'rejected') {
+          failedIds.push(id);
+        } else {
+          successfulIds.push(id);
+        }
+      });
+
+      if (failedIds.length > 0) {
+        // Revert failed candidates back to their previous state
+        setCandidates(prev => 
+          prev.map(c => {
+            if (failedIds.includes(c.id) && previousStates[c.id]) {
+              return { 
+                ...c, 
+                status: previousStates[c.id].status, 
+                stage: previousStates[c.id].stage 
+              };
+            }
+            return c;
+          })
+        );
+
+        if (successfulIds.length > 0) {
+          toast.success(`Updated ${successfulIds.length} candidate(s). Failed to update ${failedIds.length} candidate(s).`);
+        } else {
+          toast.error('Failed to update candidates on server.');
+        }
+      } else {
+        toast.success(`Updated ${selectedIds.length} candidate(s) to ${stageKey}.`);
+      }
+
       setSelected(new Set());
     } catch (err) {
       toast.dismiss();
-      toast.error('Failed to update some candidate statuses on server.');
+      toast.error('Failed to update candidate statuses on server.');
       console.error(err);
     }
   };

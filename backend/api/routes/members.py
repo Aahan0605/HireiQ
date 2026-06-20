@@ -156,8 +156,14 @@ async def accept_invite(token: str, req: AcceptInviteRequest):
         user_id = user["id"]
     else:
         # New account — require a password to create one
-        if not req.password or len(req.password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters to create your account.")
+        if not req.password:
+            raise HTTPException(status_code=400, detail="Password is required to create your account.")
+        if len(req.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters long.")
+        if not any(c.isalpha() for c in req.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one letter.")
+        if not any(c.isdigit() for c in req.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one digit.")
         new_id = str(uuid.uuid4())
         supabase.table("recruiters").insert({
             "id": new_id,

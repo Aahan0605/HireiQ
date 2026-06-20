@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle, Loader2, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ConstellationBackground from '../components/ConstellationBackground';
+import { validatePassword } from '../utils/passwordValidation';
 
 const API = '/api/v1';
 
@@ -36,6 +37,13 @@ export default function AcceptInvite() {
 
   const handleAccept = async (e) => {
     e.preventDefault();
+    if (!invite.account_exists) {
+      const val = validatePassword(password);
+      if (!val.valid) {
+        setError(`Password must contain: ${val.errors.join(', ')}.`);
+        return;
+      }
+    }
     setStatus('accepting');
     try {
       const res = await fetch(`${API}/members/invite/${token}/accept`, {
@@ -108,7 +116,7 @@ export default function AcceptInvite() {
                     type="password" required minLength={8} value={password}
                     onChange={e => setPassword(e.target.value)}
                     className="w-full rounded-xl border border-white/10 bg-surface-3 pl-10 pr-4 py-3 text-white placeholder-gray-500 outline-none focus:border-emerald-500/50 transition-colors"
-                    placeholder="At least 8 characters"
+                    placeholder="Min. 8 chars, 1 letter, 1 number"
                   />
                 </div>
               </div>
