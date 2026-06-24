@@ -43,7 +43,6 @@ def _candidate_to_dict(c: dict) -> dict:
         return {}
         
     status_map = {
-        "analyzing": "Analyzing",
         "screening": "Screening",
         "shortlisted": "Shortlisted",
         "interviewing": "Interviewing",
@@ -53,6 +52,11 @@ def _candidate_to_dict(c: dict) -> dict:
     }
     stage_val = c.get("stage") or c.get("pipeline_stage") or "screening"
     status = status_map.get(stage_val.lower(), "Screening")
+    
+    # If the candidate has the placeholder summary, return status: "Analyzing"
+    summary_text = c.get("summary") or ""
+    if "Analyzing resume, please wait..." in summary_text:
+        status = "Analyzing"
     
     # Check if job title is pre-fetched/joined
     job_title = "Software Engineer"
@@ -211,7 +215,6 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     
     # Map status to pipeline_stage (lowercase)
     status_to_stage = {
-        "Analyzing": "analyzing",
         "Screening": "screening",
         "Shortlisted": "shortlisted",
         "Interviewing": "interviewing",
@@ -220,7 +223,10 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "Rejected": "rejected"
     }
     status_str = candidate.get("status", "Screening")
-    pipeline_stage = status_to_stage.get(status_str, "screening")
+    if status_str == "Analyzing":
+        pipeline_stage = "screening"
+    else:
+        pipeline_stage = status_to_stage.get(status_str, "screening")
     
     # Map jobMatches / job_matches to job_id and match_score
     job_id = None
