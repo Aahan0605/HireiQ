@@ -88,6 +88,7 @@ async def compute_full_candidate_score(
 
     # ── Step 1: Extract resume features ──
     resume_features = extract_features(resume_text)
+    candidate_name = resume_features.get("name") or candidate_name
     claimed_skills = resume_features.get("skills", [])
     claimed_experience = resume_features.get("experience", 0.0)
     claimed_education = resume_features.get("education", [])
