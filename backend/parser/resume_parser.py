@@ -89,6 +89,7 @@ def _extract_from_pdf(filepath: Path) -> str:
         )
 
     pages_text: list[str] = []
+    hyperlinks: list[str] = []
 
     try:
         with pdfplumber.open(filepath) as pdf:
@@ -97,6 +98,15 @@ def _extract_from_pdf(filepath: Path) -> str:
                     text = page.extract_text()
                     if text:
                         pages_text.append(text)
+                    try:
+                        # Extract hyperlinks from annotations
+                        page_links = page.hyperlinks
+                        if page_links:
+                            for link in page_links:
+                                if link.get("uri"):
+                                    hyperlinks.append(link["uri"])
+                    except Exception:
+                        pass
                 except Exception as e:
                     logger.warning(
                         f"Failed to extract text from page {page_num} "
@@ -113,7 +123,10 @@ def _extract_from_pdf(filepath: Path) -> str:
     raw_text = "\n".join(pages_text)
     # Fix words jammed together in PDF text
     raw_text = _clean_pdf_text(raw_text)
-    return _clean_text(raw_text)
+    cleaned_text = _clean_text(raw_text)
+    if hyperlinks:
+        cleaned_text += "\n\nExtracted Links:\n" + "\n".join(hyperlinks)
+    return cleaned_text
 
 
 def _clean_pdf_text(text: str) -> str:

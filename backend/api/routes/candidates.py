@@ -1420,11 +1420,14 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
         "job_matches": job_matches,
         "radar_data": radar_data,
         "insights": scoring_res["insights"],
+        "github": candidate_dict.get("github") or "",
+        "linkedin": candidate_dict.get("linkedin") or "",
         "signals": {
             "followers": github_signals.get("followers", 0),
             "public_repos": github_signals.get("total_repos", 0),
             "stars": github_signals.get("total_stars", 0),
-            "commit_frequency": github_signals.get("commit_frequency_per_week", 0)
+            "commit_frequency": github_signals.get("commit_frequency_per_week", 0),
+            "languages": github_signals.get("languages", []),
         }
     }
 
