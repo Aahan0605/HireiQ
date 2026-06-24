@@ -500,8 +500,11 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         insights["completeness_score"] = insights.get("completeness_score") or 80
         insights["ats_score"] = insights.get("ats_score") or 75
 
+        # Use name extracted from resume if available, otherwise filename-based name
+        extracted_name = scoring_res.get("resume_features", {}).get("name") or candidate_name
+
         db_record = {
-            "full_name": candidate_name,
+            "full_name": extracted_name,
             "email": contact.get("email") or f"{candidate_id[:8]}@example.com",
             "phone": contact.get("phone", ""),
             "location": contact.get("location") or "Remote",

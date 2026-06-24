@@ -253,6 +253,7 @@ async def compute_full_candidate_score(
             "education": claimed_education,
             "certifications": claimed_certs,
             "projects": resume_features.get("projects", []),
+            "name": resume_features.get("name"),
         },
     }
 
@@ -274,6 +275,7 @@ async def compute_full_candidate_score(
             "experience_years": claimed_experience,
             "education": claimed_education,
             "certifications": claimed_certs,
+            "name": resume_features.get("name"),
         },
         "external_signals": {
             "github": github_raw,
