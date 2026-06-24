@@ -107,7 +107,10 @@ async def register(user_in: UserRegister):
             "full_name": user_in.full_name,
             "verification_token": token,
             "verification_token_expires": expires.isoformat(),
-            "is_verified": not bool(os.getenv("RESEND_API_KEY")),
+            "is_verified": not (
+                (os.getenv("RESEND_API_KEY") and os.getenv("RESEND_API_KEY") != "re_dummy" and not os.getenv("RESEND_API_KEY").startswith("re_your"))
+                or (os.getenv("SMTP_HOST") and os.getenv("SMTP_PORT") and os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"))
+            ),
             "plan": "free"
         }).execute()
         

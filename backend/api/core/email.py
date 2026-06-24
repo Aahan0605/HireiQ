@@ -1,6 +1,10 @@
 import os
 import logging
 import httpx
+import smtplib
+import asyncio
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +18,13 @@ if not FROM_EMAIL:
     else:
         FROM_EMAIL = "HireIQ <notifications@yourdomain.com>"
         logger.error("CRITICAL: FROM_EMAIL environment variable is not configured in a non-development environment! Defaulting to notifications@yourdomain.com which will fail if domain is not verified in Resend.")
+
+# SMTP Configuration
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")  # pragma: allowlist secret
+SMTP_SENDER = os.getenv("SMTP_SENDER") or FROM_EMAIL
 
 # HTML Templates for product and transactional emails
 TEMPLATES = {
@@ -102,11 +113,47 @@ TEMPLATES = {
 }
 
 async def send_html_email(to_email: str, subject: str, html_content: str) -> bool:
-    """Send an email using Resend's REST API endpoint."""
-    if not RESEND_API_KEY:
-        logger.warning("⚠️  RESEND_API_KEY is missing. Simulating email send to %s: Subject: '%s'", to_email, subject)
+    """Send an email using SMTP or Resend's REST API endpoint."""
+    # 1. Try sending via SMTP if fully configured
+    if SMTP_HOST and SMTP_PORT and SMTP_USER and SMTP_PASSWORD:
+        logger.info("Attempting to send email to %s via SMTP (%s:%s)...", to_email, SMTP_HOST, SMTP_PORT)
+        try:
+            loop = asyncio.get_event_loop()
+            def send_smtp():
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"] = SMTP_SENDER
+                msg["To"] = to_email
+                
+                part = MIMEText(html_content, "html")
+                msg.attach(part)
+                
+                port = int(SMTP_PORT)
+                if port == 465:
+                    server = smtplib.SMTP_SSL(SMTP_HOST, port, timeout=10.0)
+                else:
+                    server = smtplib.SMTP(SMTP_HOST, port, timeout=10.0)
+                    server.starttls()
+                
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_SENDER, [to_email], msg.as_string())
+                server.quit()
+                
+            await loop.run_in_executor(None, send_smtp)
+            logger.info("Email sent successfully via SMTP to %s", to_email)
+            return True
+        except Exception as e:
+            logger.error("Error sending email via SMTP to %s: %s", to_email, e)
+            logger.info("Falling back to Resend API...")
+
+    # 2. Check if Resend key is missing or is placeholder/dummy
+    is_dummy_key = not RESEND_API_KEY or RESEND_API_KEY == "re_dummy" or RESEND_API_KEY.startswith("re_your")  # pragma: allowlist secret
+    if is_dummy_key:
+        logger.warning("⚠️  RESEND_API_KEY is missing/dummy and SMTP is unconfigured. Simulating email send to %s: Subject: '%s'", to_email, subject)
+        logger.warning("Simulated Email Body for %s:\n%s", to_email, html_content)
         return True
 
+    # 3. Send via Resend API
     url = "https://api.resend.com/emails"
     headers = {
         "Authorization": f"Bearer {RESEND_API_KEY}",

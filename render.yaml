@@ -29,6 +29,16 @@ services:
         sync: false # Set manually in Render dashboard
       - key: FROM_EMAIL
         sync: false # Set manually in Render dashboard
+      - key: SMTP_HOST
+        sync: false # Set manually in Render dashboard (optional, SMTP server host)
+      - key: SMTP_PORT
+        sync: false # Set manually in Render dashboard (optional, SMTP server port)
+      - key: SMTP_USER
+        sync: false # Set manually in Render dashboard (optional, SMTP server username)
+      - key: SMTP_PASSWORD
+        sync: false # Set manually in Render dashboard (optional, SMTP server password)
+      - key: SMTP_SENDER
+        sync: false # Set manually in Render dashboard (optional, SMTP sender email)
       - key: SENTRY_DSN
         sync: false # Set manually in Render dashboard (optional)
       - key: POSTHOG_API_KEY
