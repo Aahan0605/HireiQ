@@ -68,7 +68,7 @@ class Token(BaseModel):
 async def fetch_user_by_email(email: str) -> dict | None:
     try:
         supabase = get_supabase()
-        res = supabase.table("recruiters").select("*").eq("email", email).execute()
+        res = supabase.table("recruiters").select("*").eq("email", email.strip().lower()).execute()
         return res.data[0] if res.data else None
     except Exception as e:
         logger.error(f"Error fetching user by email: {e}")
@@ -100,7 +100,7 @@ async def register(user_in: UserRegister):
         supabase = get_supabase()
         supabase.table("recruiters").insert({
             "id": user_id,
-            "email": user_in.email,
+            "email": user_in.email.strip().lower(),
             "hashed_password": hashed_password,
             "role": user_in.role,
             "company": user_in.company,

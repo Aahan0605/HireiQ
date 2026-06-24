@@ -54,10 +54,11 @@ async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_ten
 
         # 3. Insert organization invitation
         token = secrets.token_urlsafe(32)
+        email_clean = req.email.strip().lower()
         supabase.table("organization_invitations").insert({
             "id": str(uuid.uuid4()),
             "company": company,
-            "email": req.email,
+            "email": email_clean,
             "role": req.role,
             "token": token,
             "expires_at": (datetime.utcnow() + timedelta(days=7)).isoformat()
@@ -66,8 +67,8 @@ async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_ten
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         invite_link = f"{frontend_url}/accept-invite?token={token}"
         
-        asyncio.create_task(send_org_invitation_email(req.email, company, req.role, invite_link))
-        return {"message": f"Invitation sent to {req.email}", "token": token}
+        asyncio.create_task(send_org_invitation_email(email_clean, company, req.role, invite_link))
+        return {"message": f"Invitation sent to {email_clean}", "token": token}
     except HTTPException:
         raise
     except Exception as e:
@@ -118,10 +119,11 @@ async def get_invite_details(token: str):
     if expires_at < datetime.utcnow().replace(tzinfo=expires_at.tzinfo) if expires_at.tzinfo else expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="This invitation has expired.")
 
-    existing_user = supabase.table("recruiters").select("id").eq("email", invite["email"]).execute()
+    email_clean = invite["email"].strip().lower()
+    existing_user = supabase.table("recruiters").select("id").eq("email", email_clean).execute()
 
     return {
-        "email": invite["email"],
+        "email": email_clean,
         "role": invite["role"],
         "company": invite["company"],
         "account_exists": bool(existing_user.data),
@@ -142,7 +144,8 @@ async def accept_invite(token: str, req: AcceptInviteRequest):
     if expires_at < now:
         raise HTTPException(status_code=400, detail="This invitation has expired.")
 
-    existing = supabase.table("recruiters").select("*").eq("email", invite["email"]).execute()
+    email_clean = invite["email"].strip().lower()
+    existing = supabase.table("recruiters").select("*").eq("email", email_clean).execute()
 
     from api.core.security import get_password_hash, create_access_token
 
@@ -167,7 +170,7 @@ async def accept_invite(token: str, req: AcceptInviteRequest):
         new_id = str(uuid.uuid4())
         supabase.table("recruiters").insert({
             "id": new_id,
-            "email": invite["email"],
+            "email": email_clean,
             "hashed_password": get_password_hash(req.password),
             "role": invite["role"],
             "company": invite["company"],
