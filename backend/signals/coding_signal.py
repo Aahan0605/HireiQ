@@ -24,7 +24,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-TIMEOUT = 10.0
+TIMEOUT = 6.0
 
 # ─────────────────────────────────────────────────────────────
 # Rating → Normalized Score Tables

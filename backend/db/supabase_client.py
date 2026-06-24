@@ -43,6 +43,7 @@ def _candidate_to_dict(c: dict) -> dict:
         return {}
         
     status_map = {
+        "analyzing": "Analyzing",
         "screening": "Screening",
         "shortlisted": "Shortlisted",
         "interviewing": "Interviewing",
@@ -210,6 +211,7 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     
     # Map status to pipeline_stage (lowercase)
     status_to_stage = {
+        "Analyzing": "analyzing",
         "Screening": "screening",
         "Shortlisted": "shortlisted",
         "Interviewing": "interviewing",

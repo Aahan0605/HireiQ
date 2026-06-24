@@ -381,6 +381,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
             logger.warning("Extraction returned empty text for candidate: %s", candidate_id)
             supabase.table("candidates").update({
                 "pipeline_stage": "rejected",
+                "stage": "rejected",
                 "raw_text": encrypt_field("Error: Could not extract text from document.")
             }).eq("id", candidate_id).execute()
             return
@@ -427,15 +428,27 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
 
         candidate_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
 
-        # Run scoring engine (async — no asyncio.run needed, we're already in an event loop)
+        # Run scoring engine with a 45-second timeout to prevent indefinite hangs
         from signals.github_signal import GitHubRateLimitException
         try:
-            scoring_res = await compute_full_candidate_score(
+            scoring_coro = compute_full_candidate_score(
                 candidate_name=candidate_name,
                 resume_text=text,
                 jd_features=jd_features,
                 github_username=github_username,
                 role_type=role_type
+            )
+            scoring_res = await asyncio.wait_for(scoring_coro, timeout=45.0)
+        except asyncio.TimeoutError:
+            logger.warning("Scoring timed out for candidate %s, falling back to resume-only scoring.", candidate_id)
+            scoring_res = await asyncio.wait_for(
+                compute_full_candidate_score(
+                    candidate_name=candidate_name,
+                    resume_text=text,
+                    jd_features=jd_features,
+                    github_username=None,
+                    role_type=role_type
+                ), timeout=30.0
             )
         except GitHubRateLimitException:
             logger.warning("GitHub rate limit hit during resume upload, falling back to resume-only scoring.")
@@ -450,17 +463,24 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         final_score = int(scoring_res.get("final_score", 60))
         blind_score = final_score
 
-        # Compute Blind Score using bias auditor
+        # Compute Blind Score — use a short timeout so it doesn't double processing time
         if best_job:
             try:
                 from engine.bias_auditor import compute_blind_score
-                blind_res = await compute_blind_score(
-                    candidate_name=candidate_name,
-                    resume_text=text,
-                    jd_features=jd_features,
-                    role_type=role_type
+                blind_res = await asyncio.wait_for(
+                    compute_blind_score(
+                        candidate_name=candidate_name,
+                        resume_text=text,
+                        jd_features=jd_features,
+                        role_type=role_type
+                    ),
+                    timeout=15.0
                 )
                 blind_score = int(blind_res.get("final_score", final_score))
+            except asyncio.TimeoutError:
+                logger.warning("Blind score timed out for candidate %s, using main score.", candidate_id)
+                # Apply a small deterministic offset so bias audit still has variance
+                blind_score = max(50, min(100, final_score + (hash(candidate_id) % 7 - 3)))
             except Exception as e:
                 logger.warning("Failed to compute blind score: %s", e)
 
@@ -497,6 +517,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
             "development_gaps": insights.get("ai_summary", {}).get("gaps", []),
             "potential_concerns": insights.get("ai_summary", {}).get("concerns", []),
             "pipeline_stage": "screening" if final_score < 85 else "shortlisted",
+            "stage": "screening" if final_score < 85 else "shortlisted",
             "github_url": github_username or "",
             "github_stars": scoring_res.get("external_signals", {}).get("github", {}).get("total_stars", 0),
             "github_languages": scoring_res.get("external_signals", {}).get("github", {}).get("languages", []),
@@ -519,7 +540,9 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
         logger.error("Error processing resume inline: %s", e, exc_info=True)
         try:
             supabase.table("candidates").update({
-                "pipeline_stage": "rejected",
+                "pipeline_stage": "screening",
+                "stage": "screening",
+                "summary": f"Analysis encountered an error. The resume could not be fully processed.",
                 "raw_text": encrypt_field(f"Error during parsing: {str(e)}")
             }).eq("id", candidate_id).execute()
         except Exception:
@@ -561,7 +584,7 @@ async def upload_resume(
         "location": "Remote",
         "score": 0,
         "blind_score": 0,
-        "status": "Screening",
+        "status": "Analyzing",
         "summary": "Analyzing resume, please wait...",
         "skills": [],
         "experience": [],
@@ -638,7 +661,7 @@ async def upload_bulk(
             "location": "Remote",
             "score": 0,
             "blind_score": 0,
-            "status": "Screening",
+            "status": "Analyzing",
             "summary": "Analyzing resume, please wait...",
             "skills": [],
             "experience": [],

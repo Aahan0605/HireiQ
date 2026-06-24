@@ -18,7 +18,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
-TIMEOUT = 10.0
+TIMEOUT = 6.0
 
 # Predefined mock data profiles for seeded/demo candidates
 MOCK_GITHUB_PROFILES: dict[str, dict[str, Any]] = {
