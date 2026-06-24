@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api", "destination": "https://hireiq-backend-mrqc.onrender.com/api" },
     { "source": "/api/:path*", "destination": "https://hireiq-backend-mrqc.onrender.com/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

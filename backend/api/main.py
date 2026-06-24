@@ -101,10 +101,35 @@ if not jwt_secret:
 if len(jwt_secret.strip()) < 32:
     raise RuntimeError("JWT_SECRET_KEY must be at least 32 characters long.")
 
+# Validate other critical configuration settings on startup
+for env_var in ["SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_KEY", "FIELD_ENCRYPTION_KEY"]:
+    val = os.getenv(env_var)
+    if not val or not val.strip():
+        raise RuntimeError(f"{env_var} environment variable is not set or empty.")
+
+# Subclass CORSMiddleware to support dynamic Vercel previews and subdomains
+class VercelCORSMiddleware(CORSMiddleware):
+    def is_allowed_origin(self, origin: str) -> bool:
+        if super().is_allowed_origin(origin):
+            return True
+        # Dynamically authorize any secure subdomain on vercel.app
+        if origin.startswith("https://") and (origin.endswith(".vercel.app") or ".vercel.app:" in origin):
+            return True
+        return False
+
 app = FastAPI(title="HireIQ API", version="1.0.0")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Register a global unhandled exception handler to log to console and prevent PII/stack leaks
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception occurred at {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred. Please check Render logs or try again later."}
+    )
 
 @app.on_event("startup")
 def on_startup():
@@ -131,7 +156,7 @@ if "*" in _allowed_origins:
     raise RuntimeError("CORS configuration error: Cannot allow '*' origin when allow_credentials is True.")
 
 app.add_middleware(
-    CORSMiddleware,
+    VercelCORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],

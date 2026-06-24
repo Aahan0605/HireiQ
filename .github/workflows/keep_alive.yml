@@ -1,0 +1,14 @@
+name: Render Keep Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # Run every 10 minutes to prevent Render free tier shutdown (15-min limit)
+  workflow_dispatch: # Allow manual trigger from the GitHub Actions UI
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          curl -sSf -o /dev/null -w "%{http_code}" https://hireiq-backend-mrqc.onrender.com/health
