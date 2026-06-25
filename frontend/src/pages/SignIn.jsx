@@ -18,11 +18,20 @@ export default function SignIn() {
   const [role, setRole] = useState('Recruiter');
 
   const [passwordError, setPasswordError] = useState('');
+  const [wakeMessage, setWakeMessage] = useState('');
+  const wakeTimersRef = React.useRef([]);
+
+  const clearWakeMessages = () => {
+    wakeTimersRef.current.forEach(window.clearTimeout);
+    wakeTimersRef.current = [];
+    setWakeMessage('');
+  };
 
   React.useEffect(() => {
     setEmail('');
     setPassword('');
     setPasswordError('');
+    clearWakeMessages();
   }, [isRegistering]);
 
   const handleAuth = async (e) => {
@@ -38,9 +47,23 @@ export default function SignIn() {
         await register(email, password, role);
         setIsRegistering(false);
       } else {
-        await login(email, password);
-        const state = location.state;
-        navigate(state?.from?.pathname || '/dashboard', { replace: true });
+        clearWakeMessages();
+        wakeTimersRef.current = [
+          window.setTimeout(() => {
+            setWakeMessage('Waking up the server — this takes ~30 seconds on the first request. Hang tight...');
+          }, 4000),
+          window.setTimeout(() => {
+            setWakeMessage('Still loading — almost there.');
+          }, 15000),
+        ];
+
+        try {
+          await login(email, password);
+          const state = location.state;
+          navigate(state?.from?.pathname || '/dashboard', { replace: true });
+        } finally {
+          clearWakeMessages();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -133,6 +156,11 @@ export default function SignIn() {
                 {loading ? 'Processing...' : isRegistering ? 'Sign Up' : 'Sign In'}
               </span>
             </button>
+            {!isRegistering && wakeMessage && (
+              <p className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-center text-xs font-medium leading-relaxed text-cyan-100">
+                {wakeMessage}
+              </p>
+            )}
             {isRegistering && (
               <p className="text-[11px] text-center text-text-2 mt-4 leading-relaxed">
                 By signing up, you agree to our{' '}

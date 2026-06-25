@@ -1,17 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { apiFetch } from '../lib/apiFetch';
+import EmptyState from '../components/EmptyState';
 
 const API = '/api/v1';
-
-const DEFAULT_BIAS_DATA = [
-  { name: 'Alice Chen', full: 94, blind: 96, role: 'Frontend Engineer' },
-  { name: 'Marcus Jones', full: 88, blind: 91, role: 'Fullstack Engineer' },
-  { name: 'Sofia Rodriguez', full: 97, blind: 97, role: 'Backend Lead' },
-  { name: 'Tirth Patel', full: 98, blind: 95, role: 'Web3 Engineer' },
-  { name: 'Diana Park', full: 76, blind: 82, role: 'ML Engineer' },
-];
 
 export default function BiasReport() {
   const [loading, setLoading] = useState(true);
@@ -25,47 +18,63 @@ export default function BiasReport() {
     avg_blind: 0,
   });
 
-  useEffect(() => {
+  const loadBiasReport = async () => {
     setLoading(true);
-    apiFetch(`${API}/candidates/bias-audit`)
-      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
-      .then(data => {
-        const results = data.results || [];
-        const formatted = results.map(r => ({
-          name: r.candidate_name,
-          full: r.full_score,
-          blind: r.blind_score,
-          role: r.role || 'Software Engineer',
-        }));
-        
-        const finalData = formatted.length > 0 ? formatted : DEFAULT_BIAS_DATA;
-        setBiasData(finalData);
-        
-        const biasedCount = finalData.filter(c => Math.abs(c.full - c.blind) > 3).length;
-        const unbiasedPct = Math.round(((finalData.length - biasedCount) / finalData.length) * 100);
+    setError('');
 
+    try {
+      const res = await apiFetch(`${API}/candidates/bias-audit`);
+      if (!res.ok) throw new Error('Unable to load bias report.');
+
+      const data = await res.json();
+      const results = data.results || [];
+      const formatted = results.map(r => ({
+        name: r.candidate_name,
+        full: r.full_score,
+        blind: r.blind_score,
+        role: r.role || 'Software Engineer',
+      }));
+
+      setBiasData(formatted);
+
+      if (formatted.length === 0) {
         setSummary({
-          flagged_count: data.flagged_count !== undefined ? data.flagged_count : biasedCount,
-          overall_fair: data.overall_fair !== undefined ? data.overall_fair : (biasedCount === 0),
-          unbiased_pct: data.flagged_ratio !== undefined ? Math.round((1 - data.flagged_ratio) * 100) : unbiasedPct,
-          avg_full: Math.round(finalData.reduce((s, c) => s + c.full, 0) / finalData.length),
-          avg_blind: Math.round(finalData.reduce((s, c) => s + c.blind, 0) / finalData.length),
+          flagged_count: 0,
+          overall_fair: true,
+          unbiased_pct: 100,
+          avg_full: 0,
+          avg_blind: 0,
         });
-        setError('');
-      })
-      .catch(() => {
-        setError('Unable to load bias report. Showing demo analysis data.');
-        setBiasData(DEFAULT_BIAS_DATA);
-        const biasedCount = DEFAULT_BIAS_DATA.filter(c => Math.abs(c.full - c.blind) > 3).length;
-        setSummary({
-          flagged_count: biasedCount,
-          overall_fair: biasedCount === 0,
-          unbiased_pct: Math.round(((DEFAULT_BIAS_DATA.length - biasedCount) / DEFAULT_BIAS_DATA.length) * 100),
-          avg_full: 90,
-          avg_blind: 92,
-        });
-      })
-      .finally(() => setLoading(false));
+        return;
+      }
+
+      const biasedCount = formatted.filter(c => Math.abs(c.full - c.blind) > 3).length;
+      const unbiasedPct = Math.round(((formatted.length - biasedCount) / formatted.length) * 100);
+
+      setSummary({
+        flagged_count: data.flagged_count !== undefined ? data.flagged_count : biasedCount,
+        overall_fair: data.overall_fair !== undefined ? data.overall_fair : (biasedCount === 0),
+        unbiased_pct: data.flagged_ratio !== undefined ? Math.round((1 - data.flagged_ratio) * 100) : unbiasedPct,
+        avg_full: Math.round(formatted.reduce((s, c) => s + c.full, 0) / formatted.length),
+        avg_blind: Math.round(formatted.reduce((s, c) => s + c.blind, 0) / formatted.length),
+      });
+    } catch (err) {
+      setBiasData([]);
+      setSummary({
+        flagged_count: 0,
+        overall_fair: true,
+        unbiased_pct: 100,
+        avg_full: 0,
+        avg_blind: 0,
+      });
+      setError(err.message || 'Unable to load bias report.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBiasReport();
   }, []);
 
   const biasedCount = summary.flagged_count;
@@ -102,11 +111,30 @@ export default function BiasReport() {
           </span>
         </div>
 
-        {error && (
-          <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-400 text-sm">
-            ⚠️ {error}
+        {error ? (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-5 text-red-200">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-white">Bias report unavailable</p>
+                <p className="mt-1 text-sm text-red-200/80">{error}</p>
+                <button
+                  onClick={loadBiasReport}
+                  className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-red-500/20 px-4 text-sm font-semibold text-red-100 hover:bg-red-500/30 transition-colors"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+        ) : biasData.length === 0 ? (
+          <EmptyState
+            icon="ShieldCheck"
+            title="No candidates yet"
+            description="Upload resumes to see your bias audit here."
+          />
+        ) : (
+          <>
 
         {/* Bias detected banner */}
         {hasBias && (
@@ -217,6 +245,8 @@ export default function BiasReport() {
             </div>
           </div>
         </div>
+          </>
+        )}
       </div>
     </motion.div>
   );

@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import SkillGapCard from '../components/SkillGapCard';
 import { fadeUp, staggerContainer, listItem } from '../lib/animations';
-import { getCandidateById } from '../data/candidates';
 import { apiFetch } from '../lib/apiFetch';
 
 const API = '/api/v1';
@@ -20,6 +19,31 @@ const stageColors = {
   hired: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   rejected: 'bg-red-500/10 text-red-400 border-red-500/20'
 };
+
+function buildGithubFallback(candidate) {
+  if (!candidate?.github) return null;
+
+  return {
+    username: candidate.github,
+    total_repos: candidate.insights?.github_signals?.total_repos ?? 0,
+    total_stars: candidate.github_stars ?? candidate.insights?.github_signals?.total_stars ?? 0,
+    commit_frequency_per_week: (candidate.github_commits_last_year !== undefined && candidate.github_commits_last_year !== null) ? (candidate.github_commits_last_year / 52) : (candidate.insights?.github_signals?.commit_frequency_per_week ?? 0),
+    open_source_prs_estimate: candidate.insights?.github_signals?.open_source_prs_estimate ?? 0,
+    score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+    engineering_score: candidate.insights?.github_analysis?.engineering_score ?? 0,
+    open_source_score: candidate.insights?.github_analysis?.open_source_score ?? 0,
+    project_maturity_score: candidate.insights?.github_analysis?.project_maturity_score ?? 0,
+    verified_skills: candidate.insights?.github_analysis?.verified_skills ?? [],
+    unsupported_claims: candidate.insights?.github_analysis?.unsupported_claims ?? [],
+    languages: candidate.github_languages ?? candidate.insights?.github_signals?.languages ?? [],
+  };
+}
+
+function normalizeGithubData(data, candidate) {
+  const payload = data?.github || data;
+  if (payload && !payload.error) return payload;
+  return buildGithubFallback(candidate);
+}
 
 function QACard({ qa, index }) {
   const [showAnswer, setShowAnswer] = useState(false);
@@ -461,126 +485,105 @@ HireIQ Hiring Team`
     setShowResumeModal(false);
   };
 
-  // Fetch open jobs for Recommended Roles section
+  // Fetch initial profile data in parallel so the page does not waterfall on mount.
   useEffect(() => {
-    apiFetch(`${API}/jobs`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open') : []))
-      .catch(() => {});
-  }, []);
+    let cancelled = false;
+    const readJson = async (res) => ({ res, data: await res.json().catch(() => null) });
 
-  // Fetch candidate details dynamically
-  useEffect(() => {
-    const fetchCandidate = async () => {
+    const loadInitialProfile = async () => {
       setLoading(true);
+      setNotesLoading(true);
+      setGithubLoading(true);
       setError(null);
+      setGithub(null);
+
+      const candidateRequest = apiFetch(`${API}/candidates/${id}`).then(readJson);
+      const notesRequest = apiFetch(`${API}/candidates/${id}/notes`).then(readJson);
+      const interviewsRequest = apiFetch(`${API}/candidates/${id}/interviews`).then(readJson);
+      const jobsRequest = apiFetch(`${API}/jobs`).then(readJson);
+      const githubRequest = Promise.allSettled([
+        apiFetch(`${API}/candidates/${id}/insights`).then(readJson)
+      ]);
+
       try {
-        const res = await apiFetch(`${API}/candidates/${id}`);
-        if (!res.ok) {
-          if (res.status === 404) {
+        const [candidateResult, notesResult, interviewsResult, jobsResult] = await Promise.allSettled([
+          candidateRequest,
+          notesRequest,
+          interviewsRequest,
+          jobsRequest,
+        ]);
+
+        if (cancelled) return;
+
+        let loadedCandidate = null;
+        if (candidateResult.status === 'fulfilled') {
+          const { res, data } = candidateResult.value;
+          if (res.ok) {
+            loadedCandidate = data;
+            setCandidate(data);
+            if (data?.qa) {
+              setQaList(data.qa);
+            }
+          } else if (res.status === 404) {
             setError('Candidate not found. They may have been deleted.');
           } else {
             setError('Failed to load profile. Please try again.');
           }
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        setCandidate(data);
-        if (data.qa) {
-          setQaList(data.qa);
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load candidate profile.');
-        setLoading(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCandidate();
-  }, [id]);
-
-  // Fetch notes dynamically
-  useEffect(() => {
-    const fetchNotes = async () => {
-      setNotesLoading(true);
-      try {
-        const res = await apiFetch(`${API}/candidates/${id}/notes`);
-        if (res.ok) {
-          const data = await res.json();
-          setNotes(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('Failed to load notes:', err);
-      } finally {
-        setNotesLoading(false);
-      }
-    };
-    fetchNotes();
-  }, [id]);
-
-  // Fetch interviews dynamically
-  useEffect(() => {
-    const fetchInterviews = async () => {
-      try {
-        const res = await apiFetch(`${API}/candidates/${id}/interviews`);
-        if (res.ok) {
-          const data = await res.json();
-          setInterviews(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('Failed to load interviews:', err);
-      }
-    };
-    fetchInterviews();
-  }, [id]);
-
-  // Fetch GitHub stats once we know the candidate's github handle
-  useEffect(() => {
-    if (!candidate?.github) return;
-    setGithubLoading(true);
-    apiFetch(`${API}/candidates/github/${encodeURIComponent(candidate.github)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && !data.error) {
-          setGithub(data);
         } else {
-          // Fallback to database-cached stats
-          setGithub({
-            username: candidate.github,
-            total_repos: candidate.insights?.github_signals?.total_repos ?? 0,
-            total_stars: candidate.github_stars ?? candidate.insights?.github_signals?.total_stars ?? 0,
-            commit_frequency_per_week: (candidate.github_commits_last_year !== undefined && candidate.github_commits_last_year !== null) ? (candidate.github_commits_last_year / 52) : (candidate.insights?.github_signals?.commit_frequency_per_week ?? 0),
-            open_source_prs_estimate: candidate.insights?.github_signals?.open_source_prs_estimate ?? 0,
-            score: candidate.insights?.github_analysis?.engineering_score ?? 0,
-            engineering_score: candidate.insights?.github_analysis?.engineering_score ?? 0,
-            open_source_score: candidate.insights?.github_analysis?.open_source_score ?? 0,
-            project_maturity_score: candidate.insights?.github_analysis?.project_maturity_score ?? 0,
-            verified_skills: candidate.insights?.github_analysis?.verified_skills ?? [],
-            unsupported_claims: candidate.insights?.github_analysis?.unsupported_claims ?? [],
-            languages: candidate.github_languages ?? candidate.insights?.github_signals?.languages ?? [],
-          });
+          setError(candidateResult.reason?.message || 'Failed to load candidate profile.');
         }
-      })
-      .catch(() => {
-        // Fallback on network/fetch error
-        setGithub({
-          username: candidate.github,
-          total_repos: candidate.insights?.github_signals?.total_repos ?? 0,
-          total_stars: candidate.github_stars ?? candidate.insights?.github_signals?.total_stars ?? 0,
-          commit_frequency_per_week: (candidate.github_commits_last_year !== undefined && candidate.github_commits_last_year !== null) ? (candidate.github_commits_last_year / 52) : (candidate.insights?.github_signals?.commit_frequency_per_week ?? 0),
-          open_source_prs_estimate: candidate.insights?.github_signals?.open_source_prs_estimate ?? 0,
-          score: candidate.insights?.github_analysis?.engineering_score ?? 0,
-          engineering_score: candidate.insights?.github_analysis?.engineering_score ?? 0,
-          open_source_score: candidate.insights?.github_analysis?.open_source_score ?? 0,
-          project_maturity_score: candidate.insights?.github_analysis?.project_maturity_score ?? 0,
-          verified_skills: candidate.insights?.github_analysis?.verified_skills ?? [],
-          unsupported_claims: candidate.insights?.github_analysis?.unsupported_claims ?? [],
-          languages: candidate.github_languages ?? candidate.insights?.github_signals?.languages ?? [],
-        });
-      })
-      .finally(() => setGithubLoading(false));
-  }, [candidate?.github, candidate?.github_stars]);
+
+        if (notesResult.status === 'fulfilled' && notesResult.value.res.ok) {
+          setNotes(Array.isArray(notesResult.value.data) ? notesResult.value.data : []);
+        } else if (notesResult.status === 'rejected') {
+          console.error('Failed to load notes:', notesResult.reason);
+        }
+
+        if (interviewsResult.status === 'fulfilled' && interviewsResult.value.res.ok) {
+          setInterviews(Array.isArray(interviewsResult.value.data) ? interviewsResult.value.data : []);
+        } else if (interviewsResult.status === 'rejected') {
+          console.error('Failed to load interviews:', interviewsResult.reason);
+        }
+
+        if (jobsResult.status === 'fulfilled' && jobsResult.value.res.ok) {
+          const data = jobsResult.value.data;
+          setJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open') : []);
+        }
+
+        setLoading(false);
+        setNotesLoading(false);
+
+        const githubResult = await githubRequest;
+        if (cancelled) return;
+
+        const result = githubResult[0];
+        if (result.status === 'fulfilled' && result.value.res.ok) {
+          setGithub(normalizeGithubData(result.value.data, loadedCandidate));
+        } else {
+          if (result.status === 'rejected') {
+            console.error('Failed to load GitHub stats:', result.reason);
+          }
+          setGithub(buildGithubFallback(loadedCandidate));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to load candidate profile.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setNotesLoading(false);
+          setGithubLoading(false);
+        }
+      }
+    };
+
+    loadInitialProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (loading) {
     return (

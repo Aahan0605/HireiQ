@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime
 import time
@@ -38,7 +39,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, 
 from fastapi.responses import JSONResponse
 from api.core.limiter import limiter, get_user_or_ip
 
-from api.core.dependencies import get_current_user
+from api.core.dependencies import get_current_user, oauth2_scheme
 from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.limits import check_cv_upload_limit, increment_cv_parses
 from tasks.worker import process_resume_task
@@ -81,10 +82,26 @@ from db.supabase_client import (
 
 logger = logging.getLogger(__name__)
 
+def _is_seed_demo_disabled() -> bool:
+    return os.getenv("ENVIRONMENT", "development").lower() == "production"
+
+def _seed_demo_disabled_error() -> HTTPException:
+    return HTTPException(status_code=403, detail="Seeding is disabled in production.")
+
+async def require_tenant_or_block_seed_demo(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme)
+) -> str:
+    if request.url.path.rstrip("/").endswith("/candidates/seed-demo") and _is_seed_demo_disabled():
+        raise _seed_demo_disabled_error()
+
+    current_user = await get_current_user(token)
+    return await require_tenant(current_user=current_user)
+
 router = APIRouter(
     prefix="/candidates",
     tags=["candidates"],
-    dependencies=[Depends(require_tenant)]
+    dependencies=[Depends(require_tenant_or_block_seed_demo)]
 )
 
 def build_ai_summary(name: str, features: dict, job_matches: list, final_score: int) -> str:
@@ -792,7 +809,11 @@ async def get_all_candidates(
 # POST /candidates/seed-demo
 # ─────────────────────────────────────────────────────────────
 
-@router.post("/seed-demo")
+def _ensure_seed_demo_enabled() -> None:
+    if _is_seed_demo_disabled():
+        raise _seed_demo_disabled_error()
+
+@router.post("/seed-demo", dependencies=[Depends(_ensure_seed_demo_enabled)])
 async def seed_demo_candidates(tenant_id: str = Depends(require_tenant)):
     """
     POST /candidates/seed-demo — Seed 5 high-fidelity candidates into the database.
@@ -1009,6 +1030,68 @@ async def get_candidate(candidate_id: str, tenant_id: str = Depends(require_tena
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found.")
     return candidate
+
+def _github_payload_from_candidate(candidate: dict[str, Any]) -> dict[str, Any] | None:
+    github = candidate.get("github") or ""
+    insights = candidate.get("insights") or {}
+    if not isinstance(insights, dict):
+        insights = {}
+
+    signals = insights.get("github_signals") or {}
+    analysis = insights.get("github_analysis") or {}
+    if not isinstance(signals, dict):
+        signals = {}
+    if not isinstance(analysis, dict):
+        analysis = {}
+
+    if not github and not signals and not analysis:
+        return None
+
+    commits_last_year = candidate.get("github_commits_last_year")
+    commit_frequency = signals.get("commit_frequency_per_week", 0)
+    if commits_last_year is not None:
+        try:
+            commit_frequency = float(commits_last_year) / 52
+        except (TypeError, ValueError):
+            pass
+
+    return {
+        "username": github,
+        "score": round(analysis.get("engineering_score", 0) or 0),
+        "total_repos": signals.get("total_repos", 0),
+        "total_stars": candidate.get("github_stars") or signals.get("total_stars", 0),
+        "languages": candidate.get("github_languages") or signals.get("languages", []),
+        "commit_frequency_per_week": commit_frequency,
+        "open_source_prs_estimate": signals.get("open_source_prs_estimate", 0),
+        "engineering_score": round(analysis.get("engineering_score", 0) or 0),
+        "open_source_score": round(analysis.get("open_source_score", 0) or 0),
+        "project_maturity_score": round(analysis.get("project_maturity_score", 0) or 0),
+        "verified_skills": analysis.get("verified_skills", []),
+        "unsupported_claims": analysis.get("unsupported_claims", []),
+    }
+
+@router.get("/{candidate_id}/insights")
+async def get_candidate_insights(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    github_payload = None
+    if candidate.get("github"):
+        try:
+            github_payload = await get_github_signals(candidate["github"])
+        except HTTPException as exc:
+            logger.warning("Live GitHub insights failed for candidate %s: %s", candidate_id, exc.detail)
+        except Exception as exc:
+            logger.warning("Live GitHub insights failed for candidate %s: %s", candidate_id, exc)
+
+    if not github_payload or github_payload.get("error"):
+        github_payload = _github_payload_from_candidate(candidate)
+
+    return {
+        "insights": candidate.get("insights") or {},
+        "github": github_payload,
+    }
 
 # ─────────────────────────────────────────────────────────────
 # PATCH /candidates/{candidate_id}

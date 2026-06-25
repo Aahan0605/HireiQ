@@ -89,6 +89,7 @@ export default function Analyze() {
         const err = await uploadRes.json().catch(() => ({}));
         if (uploadRes.status === 402) {
           setShowUpgradeModal(true);
+          setAnalyzing(false);
           return;
         }
         throw new Error(err.detail || 'Upload failed');
@@ -98,13 +99,18 @@ export default function Analyze() {
       setProgress(30);
       setCurrentStep(1);
 
-      // Poll for completion
-      let attempts = 0;
-      const maxAttempts = 40; // 60 seconds max
-      
+      const startedAt = Date.now();
+      const timeoutMs = 60000;
+
+      const updateProgress = (nextProgress) => {
+        const rounded = Math.round(nextProgress);
+        setProgress(rounded);
+        setCurrentStep(Math.min(Math.floor((rounded / 100) * analysisSteps.length), analysisSteps.length - 1));
+      };
+
       const poll = setInterval(async () => {
-        attempts++;
-        if (attempts > maxAttempts) {
+        const elapsed = Date.now() - startedAt;
+        if (elapsed >= timeoutMs) {
           clearInterval(poll);
           toast.error('Analysis is taking longer than expected. Check the Candidates page.');
           setAnalyzing(false);
@@ -116,11 +122,23 @@ export default function Analyze() {
           if (!statusRes.ok) return;
           const candidate = await statusRes.json();
 
-          const stepProgress = Math.min(30 + (attempts / maxAttempts) * 60, 90);
-          setProgress(Math.round(stepProgress));
-          setCurrentStep(Math.min(Math.floor((stepProgress / 100) * analysisSteps.length), analysisSteps.length - 1));
+          const status = String(candidate.status || '').toLowerCase();
+          const summary = String(candidate.summary || '').toLowerCase();
+          const score = Number(candidate.score ?? candidate.final_score ?? candidate.baseScore ?? 0);
+          const isProcessing = ['processing', 'pending', 'analyzing'].includes(status) || summary.includes('analyzing resume');
+          const isError = ['error', 'failed'].includes(status) || summary.includes('encountered an error');
+          const isAnalyzed = status === 'analyzed' || score > 0;
 
-          if (candidate.status !== 'Analyzing') {
+          if (isError) {
+            clearInterval(poll);
+            setProgress(0);
+            setCurrentStep(0);
+            setAnalyzing(false);
+            toast.error('Analysis failed. Please try uploading the resume again.');
+            return;
+          }
+
+          if (isAnalyzed && !isProcessing) {
             clearInterval(poll);
             setProgress(100);
             setCurrentStep(analysisSteps.length - 1);
@@ -128,11 +146,15 @@ export default function Analyze() {
               toast.success('Analysis complete!');
               navigate(`/candidate/${candidate_id}`);
             }, 600);
+            return;
           }
+
+          const processingProgress = 30 + Math.min(40, (elapsed / timeoutMs) * 40);
+          updateProgress(Math.min(processingProgress, 70));
         } catch (e) {
           // silent - keep polling
         }
-      }, 1500);
+      }, 2000);
 
     } catch (err) {
       toast.error(err.message || 'Upload failed. Please try again.');

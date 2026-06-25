@@ -4,6 +4,7 @@ import { AlertCircle, Save, RefreshCw, Check, Zap, Lock, CreditCard, Users, User
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/apiFetch';
 import { useAuth } from '../context/AuthContext';
+import MagneticCard from '../components/MagneticCard';
 
 
 const API = '/api/v1';
@@ -42,6 +43,50 @@ const plansList = [
     ]
   }
 ];
+
+function SettingsScoringSkeleton() {
+  return (
+    <div className="space-y-6">
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
+        <div className="mb-6 flex items-center justify-between">
+          <div className="h-5 w-36 rounded bg-white/10" />
+          <div className="h-4 w-4 rounded-full bg-white/10" />
+        </div>
+        <div className="space-y-6">
+          {Array(4).fill(0).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="flex justify-between">
+                <div className="h-4 w-56 rounded bg-white/10" />
+                <div className="h-4 w-10 rounded bg-white/10" />
+              </div>
+              <div className="h-2 w-full rounded-full bg-white/10" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 h-12 rounded-lg bg-white/10" />
+        <div className="mt-5 h-10 w-36 rounded-xl bg-white/10" />
+      </MagneticCard>
+
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
+        <div className="mb-4 h-5 w-28 rounded bg-white/10" />
+        <div className="h-20 rounded-lg bg-white/10" />
+      </MagneticCard>
+
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
+        <div className="mb-4 h-5 w-36 rounded bg-white/10" />
+        <div className="grid grid-cols-3 gap-4">
+          {Array(3).fill(0).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="h-3 w-20 rounded bg-white/10" />
+              <div className="h-10 rounded-lg bg-white/10" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 h-10 w-40 rounded-xl bg-white/10" />
+      </MagneticCard>
+    </div>
+  );
+}
 
 export default function Settings() {
   const { user } = useAuth();
@@ -173,29 +218,42 @@ export default function Settings() {
 
   // Load current weights and sync billing quota/plan from backend on mount and listen for Stripe checkout callbacks
   useEffect(() => {
-    apiFetch(`${API}/settings/weights`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data) {
-          setResume(Math.round((data.resume    ?? 0.4) * 100));
-          setGithub(Math.round((data.github    ?? 0.3) * 100));
-          setLeetcode(Math.round((data.leetcode  ?? 0.2) * 100));
-          setPortfolio(Math.round((data.portfolio ?? 0.1) * 100));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let cancelled = false;
 
-    apiFetch(`${API}/settings/analytics`)
-      .then(r => r.ok ? r.json() : { total_candidates: 0 })
-      .then(data => {
+    const loadSettings = async () => {
+      setLoading(true);
+      const [weightsResult, analyticsResult] = await Promise.allSettled([
+        apiFetch(`${API}/settings/weights`).then(r => r.ok ? r.json() : null),
+        apiFetch(`${API}/settings/analytics`).then(r => r.ok ? r.json() : { total_candidates: 0 }),
+      ]);
+
+      if (cancelled) return;
+
+      if (weightsResult.status === 'fulfilled' && weightsResult.value) {
+        const data = weightsResult.value;
+        setResume(Math.round((data.resume    ?? 0.4) * 100));
+        setGithub(Math.round((data.github    ?? 0.3) * 100));
+        setLeetcode(Math.round((data.leetcode  ?? 0.2) * 100));
+        setPortfolio(Math.round((data.portfolio ?? 0.1) * 100));
+      }
+
+      if (analyticsResult.status === 'fulfilled') {
+        const data = analyticsResult.value || { total_candidates: 0 };
         setQuotaUsed(data.total_candidates ?? 0);
         if (data.plan_name) {
           setPlan(data.plan_name);
           localStorage.setItem('hireiq_saas_plan', data.plan_name);
         }
-      })
-      .catch(() => {});
+      }
+
+      setLoading(false);
+    };
+
+    loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -376,13 +434,15 @@ export default function Settings() {
         </div>
 
         {activeTab === 'scoring' ? (
+          loading ? (
+            <SettingsScoringSkeleton />
+          ) : (
           <div className="space-y-6">
             {/* Algorithm Weights */}
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
               className="bg-card border border-black/10 dark:border-white/10 rounded-xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-white">Scoring Weights</h2>
-                {loading && <RefreshCw className="h-4 w-4 text-gray-500 animate-spin" />}
               </div>
 
               <div className="space-y-5">
@@ -469,6 +529,7 @@ export default function Settings() {
               </button>
             </motion.div>
           </div>
+          )
         ) : activeTab === 'billing' ? (
           <div className="space-y-6">
             {/* Active Plan Usage Tracker */}

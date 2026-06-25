@@ -76,25 +76,27 @@ function InterviewModal({ onClose, onUpdateCount }) {
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    // Fetch from backend
-    const loadInterviews = async () => {
-      try {
-        const res = await apiFetch(`${API}/candidates/interviews/all`);
-        if (res.ok) {
-          const data = await res.json();
-          setInterviews(Array.isArray(data) ? data : []);
-        }
-      } catch (err) {
-        console.error('Failed to load interviews:', err);
+    const loadModalData = async () => {
+      const [interviewsResult, candidatesResult] = await Promise.allSettled([
+        apiFetch(`${API}/candidates/interviews/all`).then(r => r.ok ? r.json() : []),
+        apiFetch(`${API}/candidates`).then(r => r.ok ? r.json() : []),
+      ]);
+
+      if (interviewsResult.status === 'fulfilled') {
+        setInterviews(Array.isArray(interviewsResult.value) ? interviewsResult.value : []);
+      } else {
+        console.error('Failed to load interviews:', interviewsResult.reason);
+      }
+
+      if (candidatesResult.status === 'fulfilled') {
+        const data = candidatesResult.value;
+        setCandidates(Array.isArray(data) ? data : (data?.data || []));
+      } else {
+        console.error('Failed to load candidates:', candidatesResult.reason);
       }
     };
-    loadInterviews();
 
-    // Fetch candidates from DB to populate autocomplete/dropdown
-    apiFetch(`${API}/candidates`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setCandidates(Array.isArray(data) ? data : (data?.data || [])))
-      .catch(console.error);
+    loadModalData();
   }, []);
 
   const saveInterviews = (updated) => {
@@ -721,38 +723,44 @@ export default function Dashboard() {
   const [shortlistCount, setShortlistCount] = useState(3);
   const navigate = useNavigate();
 
+  const refreshDashboardStats = async () => {
+    const [jobsResult, analyticsResult, interviewsResult] = await Promise.allSettled([
+      apiFetch(`${API}/jobs`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/settings/analytics`).then(r => r.ok ? r.json() : {}),
+      apiFetch(`${API}/candidates/interviews/all`).then(r => r.ok ? r.json() : []),
+    ]);
+
+    if (jobsResult.status === 'fulfilled') {
+      const jobsData = jobsResult.value;
+      setOpenJobs(Array.isArray(jobsData) ? jobsData.filter(j => j.status === 'Open').length : 0);
+    } else {
+      setOpenJobs(0);
+    }
+
+    if (analyticsResult.status === 'fulfilled') {
+      const data = analyticsResult.value || {};
+      setAnalytics(data);
+      if (data?.total_candidates === 0) {
+        localStorage.removeItem('hireiq_interviews');
+        localStorage.removeItem('hireiq_shortlist_result');
+        localStorage.removeItem('hireiq_shortlist_pool');
+        setScheduledCount(0);
+        setShortlistCount(0);
+      }
+    } else {
+      setAnalytics({});
+    }
+
+    if (interviewsResult.status === 'fulfilled' && Array.isArray(interviewsResult.value)) {
+      const active = interviewsResult.value.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
+      setScheduledCount(active);
+    } else if (interviewsResult.status === 'rejected') {
+      console.error(interviewsResult.reason);
+    }
+  };
+
   useEffect(() => {
-    // Initial fetch of jobs count
-    apiFetch(`${API}/jobs`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setOpenJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open').length : 0))
-      .catch(() => setOpenJobs(0));
-
-    // Fetch analytics stats
-    apiFetch(`${API}/settings/analytics`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        setAnalytics(data);
-        if (data?.total_candidates === 0) {
-          localStorage.removeItem('hireiq_interviews');
-          localStorage.removeItem('hireiq_shortlist_result');
-          localStorage.removeItem('hireiq_shortlist_pool');
-          setScheduledCount(0);
-          setShortlistCount(0);
-        }
-      })
-      .catch(() => setAnalytics(null));
-
-    // Load active schedule count from backend
-    apiFetch(`${API}/candidates/interviews/all`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        if (Array.isArray(data)) {
-          const active = data.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
-          setScheduledCount(active);
-        }
-      })
-      .catch(console.error);
+    refreshDashboardStats();
 
     // Load shortlist count from localStorage safely
     try {
@@ -849,30 +857,7 @@ export default function Dashboard() {
       });
       if (!res.ok) throw new Error("Backend seeder failed.");
       toast.success("Successfully seeded 5 high-fidelity candidates! 🎉");
-      
-      // Refresh stats
-      const analyticRes = await apiFetch(`${API}/settings/analytics`);
-      if (analyticRes.ok) {
-        const stats = await analyticRes.json();
-        setAnalytics(stats);
-      }
-      
-      const jobsRes = await apiFetch(`${API}/jobs`);
-      if (jobsRes.ok) {
-        const jobsData = await jobsRes.json();
-        setOpenJobs(Array.isArray(jobsData) ? jobsData.filter(j => j.status === 'Open').length : 0);
-      }
-      
-      // Reload schedule count from backend
-      apiFetch(`${API}/candidates/interviews/all`)
-        .then(r => r.ok ? r.json() : [])
-        .then(data => {
-          if (Array.isArray(data)) {
-            const active = data.filter(i => i && (i.status === 'confirmed' || i.status === 'rescheduled')).length;
-            setScheduledCount(active);
-          }
-        })
-        .catch(console.error);
+      await refreshDashboardStats();
     } catch (err) {
       console.error(err);
       toast.error("Error seeding workspace demo data.");
@@ -976,13 +961,15 @@ export default function Dashboard() {
               </p>
             </div>
             <div className="flex flex-col sm:flex-row justify-center gap-4 pt-2">
-              <button
-                onClick={handleSeedDemo}
-                disabled={seeding}
-                className="inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 font-bold text-white shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 disabled:opacity-50"
-              >
-                {seeding ? "Loading Demo Workspace..." : "Load Demo Candidates (1-Click)"}
-              </button>
+              {import.meta.env.DEV && (
+                <button
+                  onClick={handleSeedDemo}
+                  disabled={seeding}
+                  className="inline-flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 font-bold text-white shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all duration-200 disabled:opacity-50"
+                >
+                  {seeding ? "Loading Demo Workspace..." : "Load Demo Candidates (1-Click)"}
+                </button>
+              )}
               <Link
                 to="/analyze"
                 className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-surface/30 backdrop-blur-md px-8 font-semibold text-white hover:bg-white/5 active:scale-95 transition-all duration-200"
@@ -1386,4 +1373,3 @@ export default function Dashboard() {
     </motion.div>
   );
 }
-
