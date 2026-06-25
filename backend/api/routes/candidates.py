@@ -83,7 +83,7 @@ from db.supabase_client import (
 logger = logging.getLogger(__name__)
 
 def _is_seed_demo_disabled() -> bool:
-    return os.getenv("ENVIRONMENT", "development").lower() == "production"
+    return os.getenv("ENVIRONMENT", "development").lower() != "development"
 
 def _seed_demo_disabled_error() -> HTTPException:
     return HTTPException(status_code=403, detail="Seeding is disabled in production.")
