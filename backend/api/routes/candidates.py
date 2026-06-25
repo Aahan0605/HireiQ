@@ -1640,18 +1640,33 @@ async def get_github_signals(username: str):
     if not clean:
         return {"error": "Invalid username"}
 
+    signals = None
+    profile_analysis = None
+
     try:
-        signals = await fetch_github_signals(clean)
-    except GitHubRateLimitException:
-        raise HTTPException(
-            status_code=429,
-            detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
-        )
+        supabase = get_supabase()
+        res = supabase.table("candidates").select("insights").ilike("github_url", clean).execute()
+        if res.data:
+            # Use candidate insights cache if available
+            insights = res.data[0].get("insights") or {}
+            signals = insights.get("github_signals")
+            profile_analysis = insights.get("github_analysis")
+    except Exception as e:
+        logger.warning("Failed to fetch database cache for github user %s: %s", clean, e)
 
-    if not signals:
-        return {"error": f"GitHub profile '{clean}' not found or is private"}
+    if not signals or not profile_analysis:
+        try:
+            signals = await fetch_github_signals(clean)
+        except GitHubRateLimitException:
+            raise HTTPException(
+                status_code=429,
+                detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
+            )
 
-    profile_analysis = analyze_github_profile(signals, [], "backend")
+        if not signals:
+            return {"error": f"GitHub profile '{clean}' not found or is private"}
+
+        profile_analysis = analyze_github_profile(signals, [], "backend")
     return {
         "username":                clean,
         "score":                   round(profile_analysis.get("engineering_score", 0.0)),   # 0-100
