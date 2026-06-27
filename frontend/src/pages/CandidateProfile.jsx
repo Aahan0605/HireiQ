@@ -20,6 +20,15 @@ const stageColors = {
   rejected: 'bg-red-500/10 text-red-400 border-red-500/20'
 };
 
+const stageColors = {
+  screening: 'bg-white/5 text-gray-400 border-white/10',
+  shortlisted: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  interviewing: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  offer: 'bg-violet/10 text-violet border-violet/20',
+  hired: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  rejected: 'bg-red-500/10 text-red-400 border-red-500/20'
+};
+
 function buildGithubFallback(candidate) {
   if (!candidate?.github) return null;
 
@@ -166,6 +175,13 @@ export default function CandidateProfile() {
   const [editSkills, setEditSkills] = useState('');
   const [editExperienceYears, setEditExperienceYears] = useState(0);
 
+  // AI Interview Agent States
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [interviewScorecard, setInterviewScorecard] = useState(null);
+  const [interviewCompleted, setInterviewCompleted] = useState(false);
+
   const emailTemplates = {
     screening: {
       name: "📅 Schedule Technical Screening",
@@ -256,6 +272,28 @@ HireIQ Hiring Team`
   });
 
   const [notes, setNotes] = useState([]);
+  const feedbackNotes = useMemo(() => {
+    return notes.filter(n => n.author !== 'System (Gmail Sync)' && n.author !== 'System (Outlook Sync)');
+  }, [notes]);
+
+  const derivedCommunications = useMemo(() => {
+    const sysNotes = notes.filter(n => n.author === 'System (Gmail Sync)' || n.author === 'System (Outlook Sync)' || n.author === 'System');
+    const mapped = sysNotes.map(n => {
+      let provider = 'System';
+      if (n.author.includes('Gmail')) provider = 'Gmail';
+      else if (n.author.includes('Outlook')) provider = 'Outlook';
+      return {
+        provider,
+        event: n.comment,
+        time: n.date || 'Today'
+      };
+    });
+    if (mapped.length === 0 && !loading) {
+      mapped.push({ provider: 'System', event: 'Profile imported from resume upload', time: 'Today' });
+    }
+    return mapped;
+  }, [notes, loading]);
+  const [interviews, setInterviews] = useState([]);
   const feedbackNotes = useMemo(() => {
     return notes.filter(n => n.author !== 'System (Gmail Sync)' && n.author !== 'System (Outlook Sync)');
   }, [notes]);

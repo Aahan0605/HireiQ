@@ -264,3 +264,18 @@ def get_experience_score(years: float) -> tuple[str, float]:
 def get_education_score(degree: str) -> float:
     """Return normalized score for a degree level."""
     return EDUCATION_SCORES.get(degree.lower().replace(" ", "_"), 0.10)
+
+
+# ─────────────────────────────────────────────────────────────
+# Hiring Agent Configuration (HackerRank hiring-agent integration)
+# ─────────────────────────────────────────────────────────────
+import os
+
+HIRING_AGENT_ENABLED = os.getenv('HIRING_AGENT_ENABLED', 'true').lower() == 'true'
+HIRING_AGENT_LLM_PROVIDER = os.getenv('HIRING_AGENT_LLM_PROVIDER', 'gemini')
+HIRING_AGENT_MODEL = os.getenv('HIRING_AGENT_MODEL', 'gemini-2.5-flash')
+HIRING_AGENT_FALLBACK_TO_LEGACY = os.getenv('HIRING_AGENT_FALLBACK_TO_LEGACY', 'true').lower() == 'true'
+HIRING_AGENT_MAX_RETRIES = int(os.getenv('HIRING_AGENT_MAX_RETRIES', '3'))
+HIRING_AGENT_TIMEOUT = int(os.getenv('HIRING_AGENT_TIMEOUT', '60'))
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+

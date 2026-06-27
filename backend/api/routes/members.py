@@ -9,6 +9,7 @@ from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.email import send_org_invitation_email
 from db import get_supabase
 from api.core.error_handling import safe_error_response
+from api.core.error_handling import safe_error_response
 
 router = APIRouter(prefix="/members", tags=["Team Members"])
 

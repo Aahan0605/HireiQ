@@ -7,6 +7,8 @@ from functools import lru_cache
 from supabase import create_client, Client
 from api.core.encryption import encrypt_field, decrypt_field
 
+from api.core.encryption import encrypt_field, decrypt_field
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,11 @@ def _candidate_to_dict(c: dict) -> dict:
     }
     stage_val = c.get("stage") or c.get("pipeline_stage") or "screening"
     status = status_map.get(stage_val.lower(), "Screening")
+    
+    # If the candidate has the placeholder summary, return status: "Analyzing"
+    summary_text = c.get("summary") or ""
+    if "Analyzing resume, please wait..." in summary_text:
+        status = "Analyzing"
     
     # If the candidate has the placeholder summary, return status: "Analyzing"
     summary_text = c.get("summary") or ""
@@ -215,6 +222,7 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     
     # Map status to pipeline_stage (lowercase)
     status_to_stage = {
+        "Analyzing": "analyzing",
         "Screening": "screening",
         "Shortlisted": "shortlisted",
         "Interviewing": "interviewing",
@@ -258,6 +266,13 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
     if "linkedin" in candidate:
         insights["linkedin"] = candidate["linkedin"]
     
+    github_val = candidate.get("github") or ""
+    if github_val:
+        github_val = github_val.strip()
+        github_val = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", github_val, flags=re.IGNORECASE)
+        github_val = re.sub(r"^(?:https?:/?/?)?", "", github_val, flags=re.IGNORECASE)
+        github_val = github_val.strip("/").replace(" ", "").replace("\t", "")
+
     github_val = candidate.get("github") or ""
     if github_val:
         github_val = github_val.strip()

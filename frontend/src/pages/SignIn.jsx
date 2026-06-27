@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import MagneticCard from '../components/MagneticCard';
 import { useAuth } from '../context/AuthContext';
 import { validatePassword } from '../utils/passwordValidation';
+import { validatePassword } from '../utils/passwordValidation';
 import ConstellationBackground from '../components/ConstellationBackground';
 
 export default function SignIn() {
@@ -195,6 +196,18 @@ export default function SignIn() {
             )}
           </div>
 
+          {devVerificationLink && (
+            <div className="mt-6 p-4 rounded-xl bg-violet/10 border border-violet/20 text-center">
+              <p className="text-xs text-violet font-semibold mb-2">🔧 Developer Mode Helper</p>
+              <p className="text-[11px] text-text-2 mb-3">Since you are on localhost, you can click the button below to verify your email address directly.</p>
+              <Link 
+                to={devVerificationLink}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-violet px-4 text-xs font-semibold text-white hover:bg-violet-dark transition-all"
+              >
+                Verify Email Address
+              </Link>
+            </div>
+          )}
 
         </MagneticCard>
       </motion.div>

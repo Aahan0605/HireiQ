@@ -795,6 +795,7 @@ export default function Dashboard() {
   const [discoveryResults, setDiscoveryResults] = useState([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryIsDemo, setDiscoveryIsDemo] = useState(false);
+  const [discoveryIsDemo, setDiscoveryIsDemo] = useState(false);
 
   const fetchExecAnalytics = async () => {
     setExecLoading(true);
@@ -1263,7 +1264,14 @@ export default function Dashboard() {
         <div className="space-y-6 animate-fadeIn">
           <div className="bg-card border border-black/10 dark:border-white/10 rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
               <h3 className="text-white font-semibold text-base">Outreach & Talent Discovery</h3>
+              {discoveryIsDemo && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
+                  Demo Data
+                </span>
+              )}
+            </div>
               {discoveryIsDemo && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400 uppercase tracking-wide">
                   Demo Data

@@ -20,12 +20,12 @@ from config import (
     SCORING_WEIGHTS,
     ROLE_WEIGHT_PROFILES,
 )
-from parser.feature_extractor import extract_features
+from parser.feature_extractor import extract_features_async
 from algorithms.tfidf import TFIDFVectorizer
 from algorithms.cosine_similarity import (
     cosine_similarity as cosine_similarity_sparse,
 )
-from signals.github_signal import fetch_github_signals, score_github, GitHubRateLimitException
+from signals.github_signal import fetch_github_signals, score_github, GitHubRateLimitException, GitHubRateLimitException
 from signals.coding_signal import (
     fetch_codeforces,
     fetch_codechef,
@@ -87,15 +87,14 @@ async def compute_full_candidate_score(
     """
 
     # ── Step 1: Extract resume features ──
-    resume_features = extract_features(resume_text)
+    resume_features = await extract_features_async(resume_text)
     candidate_name = resume_features.get("name") or candidate_name
     claimed_skills = resume_features.get("skills", [])
     claimed_experience = resume_features.get("experience", 0.0)
     claimed_education = resume_features.get("education", [])
     claimed_certs = resume_features.get("certifications", [])
 
-    # ── Step 2: Compute resume-based scores ──
-    base_scores = _compute_resume_scores(
+    base_scores = await _compute_resume_scores_async(
         resume_features,
         jd_features,
         resume_text,
@@ -160,6 +159,33 @@ async def compute_full_candidate_score(
         adjusted_weights = role_weights.copy()
 
     all_scores = {**base_scores, **signal_scores}
+
+    # Merge/override external scores from LLM evaluation as fallback/enrichment
+    if "hiring_agent_evaluation" in base_scores:
+        ha_eval = base_scores["hiring_agent_evaluation"]
+        ha_scores = ha_eval.get("scores", {})
+        
+        # Fallback for github_score
+        if not github_username and "open_source" in ha_scores:
+            all_scores["github_score"] = round(ha_scores["open_source"].get("score", 0.0) / 35.0, 4)
+            if "github_score" not in active_keys:
+                active_keys.add("github_score")
+                
+        # Fallback for portfolio_score
+        if not portfolio_url and "self_projects" in ha_scores:
+            all_scores["portfolio_score"] = round(ha_scores["self_projects"].get("score", 0.0) / 30.0, 4)
+            if "portfolio_score" not in active_keys:
+                active_keys.add("portfolio_score")
+                
+        # Recalculate weights if active_keys changed
+        active_weight_sum = sum(role_weights.get(k, 0.0) for k in active_keys)
+        if active_weight_sum > 0:
+            for key, weight in role_weights.items():
+                if key in active_keys:
+                    adjusted_weights[key] = weight / active_weight_sum
+                else:
+                    adjusted_weights[key] = 0.0
+
     component_breakdown = _build_component_breakdown(all_scores, adjusted_weights)
     weighted_raw = sum(
         entry["weighted_score"] for entry in component_breakdown.values()
@@ -235,6 +261,16 @@ async def compute_full_candidate_score(
     from parser.feature_extractor import generate_resume_insights
     base_insights = generate_resume_insights(resume_features, resume_text)
 
+    # Incorporate hiring-agent key strengths and areas for improvement
+    if "hiring_agent_evaluation" in base_scores:
+        ha_eval = base_scores["hiring_agent_evaluation"]
+        if "key_strengths" in ha_eval:
+            base_strengths = base_insights.get("strengths", [])
+            base_insights["strengths"] = list(dict.fromkeys(base_strengths + ha_eval["key_strengths"]))
+        if "areas_for_improvement" in ha_eval:
+            base_weaknesses = base_insights.get("weaknesses", [])
+            base_insights["weaknesses"] = list(dict.fromkeys(base_weaknesses + ha_eval["areas_for_improvement"]))
+
     insights = {
         "completeness_score": base_insights.get("completeness_score", 80),
         "ats_score": base_insights.get("ats_score", 75),
@@ -248,6 +284,7 @@ async def compute_full_candidate_score(
         "github_signals": github_raw,
         "ranking": ranking_result,
         "match_breakdown": match_breakdown,
+        "hiring_agent_evaluation": base_scores.get("hiring_agent_evaluation"),
         "resume_features": {
             "skills": claimed_skills,
             "experience_years": claimed_experience,
@@ -298,6 +335,43 @@ async def compute_full_candidate_score(
 # ─────────────────────────────────────────────────────────────
 # Resume-based scoring
 # ─────────────────────────────────────────────────────────────
+
+
+async def _compute_resume_scores_async(
+    resume_features: dict,
+    jd_features: dict,
+    resume_text: str,
+) -> dict[str, Any]:
+    """Compute all resume-derived scores, incorporating hiring-agent if enabled."""
+    scores = _compute_resume_scores(resume_features, jd_features, resume_text)
+
+    from config import HIRING_AGENT_ENABLED
+    if HIRING_AGENT_ENABLED and resume_text:
+        try:
+            from hiring_agent.evaluator import ResumeEvaluator
+            evaluator = ResumeEvaluator()
+            
+            jd_text = ""
+            if jd_features:
+                required = jd_features.get("required_skills", [])
+                preferred = jd_features.get("preferred_skills", [])
+                min_exp = jd_features.get("min_experience", 0)
+                if required or preferred or min_exp:
+                    jd_text = f"Required Skills: {', '.join(required)}\nPreferred Skills: {', '.join(preferred)}\nMin Experience: {min_exp} years"
+
+            evaluation = await evaluator.evaluate_resume(resume_text, jd_text)
+            if evaluation:
+                tech_score = evaluation.scores.technical_skills.score / 10.0
+                scores["resume_skill_match"] = round(tech_score, 4)
+                
+                prod_score = evaluation.scores.production.score / 25.0
+                scores["resume_experience"] = round(prod_score, 4)
+
+                scores["hiring_agent_evaluation"] = evaluation.model_dump()
+        except Exception as e:
+            logger.warning(f"hiring-agent evaluation failed: {e}. Using legacy scores.")
+
+    return scores
 
 
 def _compute_resume_scores(

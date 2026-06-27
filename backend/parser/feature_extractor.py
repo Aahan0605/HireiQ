@@ -348,8 +348,11 @@ def _extract_name(text: str) -> str:
         if not line:
             continue
 
+        # Clean markdown formatting characters
+        cleaned_line = re.sub(r"[#*_`~|\\-]+", "", line).strip()
+
         # Validate length (3–50 chars for realistic names)
-        if len(line) < 3 or len(line) > 50:
+        if len(cleaned_line) < 3 or len(cleaned_line) > 50:
             continue
 
         # Skip lines with forbidden keywords
@@ -363,19 +366,19 @@ def _extract_name(text: str) -> str:
             "@",
             "http",
         ]
-        if any(kw in line.lower() for kw in forbidden):
+        if any(kw in cleaned_line.lower() for kw in forbidden):
             continue
 
         # Validate: only letters, spaces, hyphens allowed
-        if not all(c.isalpha() or c.isspace() or c == "-" for c in line):
+        if not all(c.isalpha() or c.isspace() or c == "-" for c in cleaned_line):
             continue
 
         # Skip all-uppercase acronyms (AWS, PDF, etc.)
-        if line.isupper() and len(line.split()) == 1:
+        if cleaned_line.isupper() and len(cleaned_line.split()) == 1:
             continue
 
         # Valid name found
-        return line
+        return cleaned_line
 
     return ""
 
@@ -1531,4 +1534,44 @@ def generate_resume_insights(
         "concerns": concerns,
         "sources_used": sources_used,
     }
+
+
+async def extract_features_async(text: str) -> dict:
+    """
+    Extract features from resume text asynchronously using the hiring-agent LLM pipeline
+    if enabled, with fallback to the legacy rule-based extractor.
+    """
+    if not text:
+        return {
+            "name": "",
+            "email": None,
+            "phone": None,
+            "github": None,
+            "linkedin": None,
+            "skills": [],
+            "experience": 0.0,
+            "education": "unknown",
+            "certifications": [],
+            "projects": [],
+            "achievements": [],
+            "raw_text": "",
+        }
+
+    from config import HIRING_AGENT_ENABLED
+    if HIRING_AGENT_ENABLED:
+        try:
+            from hiring_agent.pdf_extractor import PDFHandler
+            from hiring_agent.transform import to_hireiq_features
+            handler = PDFHandler()
+            json_resume = await handler.extract_all_from_text(text)
+            if json_resume:
+                features = to_hireiq_features(json_resume)
+                features["raw_text"] = text
+                features["achievements"] = []
+                return features
+        except Exception as e:
+            logger.warning(f"hiring-agent async extraction failed: {e}. Falling back to legacy extractor.")
+            
+    return extract_features(text)
+
 

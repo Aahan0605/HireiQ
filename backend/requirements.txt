@@ -27,3 +27,9 @@ pytest>=7.4.0
 pytest-asyncio>=0.23.0
 bcrypt
 slowapi
+
+pymupdf
+pymupdf4llm
+jinja2
+google-generativeai
+

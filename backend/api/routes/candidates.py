@@ -33,7 +33,7 @@ import os
 import re
 from datetime import datetime
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Optional
 import uuid
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
@@ -44,6 +44,12 @@ from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.limits import check_cv_upload_limit, increment_cv_parses
 from tasks.worker import process_resume_task
 from api.core.encryption import encrypt_field
+from api.core.error_handling import safe_error_response
+
+ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+
+from api.core.encryption import encrypt_field
+from api.core.error_handling import safe_error_response
 from api.core.error_handling import safe_error_response
 
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
@@ -368,6 +374,58 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
 # POST /candidates/upload-resume (single)
 # ─────────────────────────────────────────────────────────────
 
+
+def _build_legacy_scoring_result(text: str, candidate_name: str, jd_features: dict) -> dict:
+    """Build a scoring result using the legacy rule-based feature extractor.
+    Used as fallback when the LLM pipeline is unavailable (e.g., quota exhaustion)."""
+    from parser.feature_extractor import extract_features, extract_contact
+
+    features = extract_features(text)
+    contact = extract_contact(text)
+
+    # Use name from features or contact or fallback
+    name = features.get("name") or contact.get("name") or candidate_name
+
+    skills = features.get("skills", [])
+    experience_years = features.get("experience", 0)
+    education = features.get("education_level", "other")
+
+    # Simple skill-match scoring
+    required_skills = [s.lower() for s in (jd_features.get("required_skills") or [])]
+    candidate_skills = [s.lower() for s in skills]
+    if required_skills:
+        overlap = len(set(required_skills) & set(candidate_skills))
+        skill_score = min(100, int((overlap / max(len(required_skills), 1)) * 80) + 20)
+    else:
+        skill_score = 65  # Default when no JD skills specified
+
+    # Experience-based score
+    exp_score = min(100, int(experience_years * 8 + 30))
+
+    final_score = int(skill_score * 0.5 + exp_score * 0.3 + 60 * 0.2)
+
+    return {
+        "final_score": final_score,
+        "resume_features": {
+            "name": name,
+            "skills": skills,
+            "experience_years": experience_years,
+            "education_level": education,
+            "role": "Software Engineer",
+        },
+        "external_signals": {},
+        "insights": {
+            "ai_summary": {
+                "executive_summary": f"{name} — analyzed using rule-based parser (AI pipeline unavailable). Match score: {final_score}%.",
+                "strengths": [f"Proficient in {', '.join(skills[:5])}" if skills else "Resume uploaded successfully"],
+                "gaps": [],
+                "concerns": ["AI-powered deep analysis was unavailable; results are based on keyword matching."],
+            },
+            "completeness_score": 70,
+            "ats_score": skill_score,
+        },
+    }
+
 async def _process_resume_inline(candidate_id: str, filename: str, content_b64: str, tenant_id: str):
     """Async inline resume processing — runs inside FastAPI's event loop when Celery/Redis is offline."""
     import base64 as b64
@@ -445,7 +503,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
 
         candidate_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
 
-        # Run scoring engine with a 45-second timeout to prevent indefinite hangs
+        # Run scoring engine with a 120-second timeout to accommodate rate-limit retries
         from signals.github_signal import GitHubRateLimitException
         try:
             scoring_coro = compute_full_candidate_score(
@@ -455,27 +513,30 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
                 github_username=github_username,
                 role_type=role_type
             )
-            scoring_res = await asyncio.wait_for(scoring_coro, timeout=45.0)
-        except asyncio.TimeoutError:
-            logger.warning("Scoring timed out for candidate %s, falling back to resume-only scoring.", candidate_id)
-            scoring_res = await asyncio.wait_for(
-                compute_full_candidate_score(
-                    candidate_name=candidate_name,
-                    resume_text=text,
-                    jd_features=jd_features,
-                    github_username=None,
-                    role_type=role_type
-                ), timeout=30.0
-            )
-        except GitHubRateLimitException:
-            logger.warning("GitHub rate limit hit during resume upload, falling back to resume-only scoring.")
-            scoring_res = await compute_full_candidate_score(
-                candidate_name=candidate_name,
-                resume_text=text,
-                jd_features=jd_features,
-                github_username=None,
-                role_type=role_type
-            )
+            scoring_res = await asyncio.wait_for(scoring_coro, timeout=120.0)
+        except (asyncio.TimeoutError, GitHubRateLimitException) as exc:
+            logger.warning("Scoring failed for candidate %s (%s), falling back to resume-only scoring.", candidate_id, type(exc).__name__)
+            try:
+                scoring_res = await asyncio.wait_for(
+                    compute_full_candidate_score(
+                        candidate_name=candidate_name,
+                        resume_text=text,
+                        jd_features=jd_features,
+                        github_username=None,
+                        role_type=role_type
+                    ), timeout=60.0
+                )
+            except Exception:
+                logger.warning("Resume-only scoring also failed for %s, using legacy parser.", candidate_id)
+                scoring_res = _build_legacy_scoring_result(text, candidate_name, jd_features)
+        except Exception as scoring_exc:
+            # Catch rate-limit / quota exhaustion from the retry module
+            exc_str = str(scoring_exc)
+            if "ResourceExhausted" in type(scoring_exc).__name__ or "429" in exc_str or "quota" in exc_str.lower():
+                logger.warning("API quota exhausted for candidate %s, using legacy parser fallback.", candidate_id)
+                scoring_res = _build_legacy_scoring_result(text, candidate_name, jd_features)
+            else:
+                raise
 
         final_score = int(scoring_res.get("final_score", 60))
         blind_score = final_score
@@ -537,6 +598,7 @@ async def _process_resume_inline(candidate_id: str, filename: str, content_b64: 
             "development_gaps": insights.get("ai_summary", {}).get("gaps", []),
             "potential_concerns": insights.get("ai_summary", {}).get("concerns", []),
             "pipeline_stage": "screening" if final_score < 85 else "shortlisted",
+            "stage": "screening" if final_score < 85 else "shortlisted",
             "stage": "screening" if final_score < 85 else "shortlisted",
             "github_url": github_username or "",
             "github_stars": scoring_res.get("external_signals", {}).get("github", {}).get("total_stars", 0),
@@ -865,7 +927,7 @@ async def seed_demo_candidates(tenant_id: str = Depends(require_tenant)):
             "location": "Austin, TX",
             "score": 88,
             "blind_score": 85,
-            "status": "Screening",
+            "status": "Analyzing",
             "summary": "Marcus possesses a balanced full-stack skill set with deep proficiency in Node.js, Express, PostgreSQL, and React.",
             "skills": ["Node.js", "TypeScript", "React", "PostgreSQL", "Docker", "REST APIs", "SQL", "Redis"],
             "experience": [{"title": "Fullstack Developer", "company": "RetailCorp", "date": "2020-Present"}],
@@ -1109,6 +1171,37 @@ async def update_candidate(candidate_id: str, payload: dict, tenant_id: str = De
 
     await save_candidate(candidate, tenant_id)
     return {"status": "success", "candidate": candidate}
+
+from pydantic import BaseModel
+
+class StageUpdateRequest(BaseModel):
+    stage: str
+
+@router.patch("/{candidate_id}/stage")
+async def update_candidate_stage(candidate_id: str, req: StageUpdateRequest, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    stage_to_status = {
+        "screening": "Screening",
+        "shortlisted": "Shortlisted",
+        "interviewing": "Interviewing",
+        "offer": "Offer",
+        "hired": "Hired",
+        "rejected": "Rejected"
+    }
+    
+    stage_key = req.stage.lower()
+    if stage_key not in stage_to_status:
+        raise HTTPException(status_code=400, detail=f"Invalid stage name: {req.stage}")
+        
+    status_str = stage_to_status[stage_key]
+    candidate["status"] = status_str
+    candidate["stage"] = stage_key
+    
+    await save_candidate(candidate, tenant_id)
+    return {"status": "success", "stage": stage_key, "candidate": candidate}
 
 from pydantic import BaseModel
 
@@ -1773,6 +1866,318 @@ async def get_github_signals(username: str):
         "verified_skills":         profile_analysis.get("verified_skills", []),
         "unsupported_claims":      profile_analysis.get("unsupported_claims", []),
     }
+
+# ─────────────────────────────────────────────────────────────
+# Notes & Interviews DB Persistence Endpoints
+# ─────────────────────────────────────────────────────────────
+
+import json
+
+class NoteCreateRequest(BaseModel):
+    author: str
+    comment: Optional[str] = None
+    content: Optional[str] = None
+    rating: int = 5
+    date: str = ""
+
+@router.post("/{candidate_id}/notes")
+async def add_candidate_note(candidate_id: str, req: NoteCreateRequest, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    note_text = req.comment or req.content
+    if not note_text or not note_text.strip():
+        raise HTTPException(status_code=400, detail="Note comment/content cannot be empty.")
+        
+    supabase = get_supabase()
+    note_id = str(uuid.uuid4())
+    
+    note_date = req.date
+    if not note_date:
+        note_date = datetime.utcnow().strftime("%b %d, %Y, %I:%M %p")
+        
+    serialized_content = json.dumps({
+        "author": req.author,
+        "comment": note_text,
+        "rating": req.rating,
+        "date": note_date
+    })
+    
+    db_record = {
+        "id": note_id,
+        "candidate_id": candidate_id,
+        "content": serialized_content
+    }
+    
+    try:
+        res = supabase.table("candidate_notes").insert(db_record).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to save note to database.")
+        
+        row = res.data[0]
+        return {
+            "id": row["id"],
+            "candidate_id": row["candidate_id"],
+            "author": req.author,
+            "comment": note_text,
+            "rating": req.rating,
+            "date": note_date,
+            "created_at": row.get("created_at")
+        }
+    except Exception as e:
+        raise safe_error_response(e, "Database error saving note.")
+
+@router.get("/{candidate_id}/notes")
+async def get_candidate_notes(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> list[dict]:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    supabase = get_supabase()
+    try:
+        res = supabase.table("candidate_notes").select("*").eq("candidate_id", candidate_id).order("created_at", desc=True).execute()
+        notes = []
+        for row in (res.data or []):
+            content_str = row.get("content") or ""
+            author = "System"
+            comment = content_str
+            rating = 5
+            date_str = ""
+            try:
+                parsed = json.loads(content_str)
+                if isinstance(parsed, dict):
+                    author = parsed.get("author", "System")
+                    comment = parsed.get("comment", parsed.get("content", ""))
+                    rating = parsed.get("rating", 5)
+                    date_str = parsed.get("date", "")
+            except Exception:
+                pass
+            
+            if not date_str:
+                created_at = row.get("created_at")
+                if created_at:
+                    try:
+                        clean_dt = created_at.split("+")[0].split("Z")[0]
+                        dt = datetime.fromisoformat(clean_dt)
+                        date_str = dt.strftime("%b %d, %Y, %I:%M %p")
+                    except Exception:
+                        date_str = created_at
+            notes.append({
+                "id": row.get("id"),
+                "candidate_id": row.get("candidate_id"),
+                "author": author,
+                "comment": comment,
+                "rating": rating,
+                "date": date_str,
+                "created_at": row.get("created_at")
+            })
+        return notes
+    except Exception as e:
+        raise safe_error_response(e, "Database error fetching notes.")
+
+@router.delete("/{candidate_id}/notes/{note_id}")
+async def delete_candidate_note(candidate_id: str, note_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    supabase = get_supabase()
+    try:
+        check_res = supabase.table("candidate_notes").select("id").eq("id", note_id).eq("candidate_id", candidate_id).execute()
+        if not check_res.data:
+            raise HTTPException(status_code=404, detail="Note not found for this candidate.")
+            
+        supabase.table("candidate_notes").delete().eq("id", note_id).execute()
+        return {"status": "success", "message": "Note successfully deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise safe_error_response(e, "Database error deleting note.")
+
+
+class InterviewCreateRequest(BaseModel):
+    scheduled_at: str
+    duration_minutes: int
+    interviewer_name: str
+    status: str = "scheduled"
+
+@router.post("/{candidate_id}/interviews")
+async def add_candidate_interview(candidate_id: str, req: InterviewCreateRequest, tenant_id: str = Depends(require_tenant)) -> dict:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    supabase = get_supabase()
+    interview_id = str(uuid.uuid4())
+    
+    db_record = {
+        "id": interview_id,
+        "candidate_id": candidate_id,
+        "scheduled_at": req.scheduled_at,
+        "duration_minutes": req.duration_minutes,
+        "interviewer_name": req.interviewer_name,
+        "status": req.status
+    }
+    
+    try:
+        res = supabase.table("interviews").insert(db_record).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to save interview to database.")
+        return res.data[0]
+    except Exception as e:
+        raise safe_error_response(e, "Database error saving interview.")
+
+@router.get("/{candidate_id}/interviews")
+async def get_candidate_interviews(candidate_id: str, tenant_id: str = Depends(require_tenant)) -> list[dict]:
+    candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    supabase = get_supabase()
+    try:
+        res = supabase.table("interviews").select("*").eq("candidate_id", candidate_id).execute()
+        return res.data or []
+    except Exception as e:
+        raise safe_error_response(e, "Database error fetching interviews.")
+
+@router.get("/interviews/all")
+async def get_all_interviews(tenant_id: str = Depends(require_tenant)) -> list[dict]:
+    supabase = get_supabase()
+    try:
+        candidates_res = supabase.table("candidates").select("id, full_name, career_tier").eq("recruiter_id", tenant_id).execute()
+        if not candidates_res.data:
+            return []
+            
+        candidate_map = {c["id"]: c for c in candidates_res.data}
+        candidate_ids = list(candidate_map.keys())
+        
+        interviews_res = supabase.table("interviews").select("*").in_("candidate_id", candidate_ids).execute()
+        
+        results = []
+        for iv in (interviews_res.data or []):
+            cand = candidate_map.get(iv["candidate_id"]) or {}
+            
+            scheduled_str = iv.get("scheduled_at") or ""
+            start_time_str = "09:00"
+            end_time_str = "10:00"
+            if scheduled_str:
+                try:
+                    clean_dt = scheduled_str.split("+")[0].split("Z")[0]
+                    dt = datetime.fromisoformat(clean_dt)
+                    start_time_str = dt.strftime("%H:%M")
+                    
+                    from datetime import timedelta
+                    duration = iv.get("duration_minutes") or 60
+                    dt_end = dt + timedelta(minutes=duration)
+                    end_time_str = dt_end.strftime("%H:%M")
+                except Exception as parse_err:
+                    logger.warning(f"Error parsing scheduled_at: {parse_err}")
+            
+            results.append({
+                "id": iv["id"],
+                "candidate_id": iv["candidate_id"],
+                "name": cand.get("full_name") or "Unknown",
+                "role": cand.get("career_tier") or "Software Engineer",
+                "start": start_time_str,
+                "end": end_time_str,
+                "status": iv.get("status") or "pending",
+                "scheduled_at": scheduled_str,
+                "duration_minutes": iv.get("duration_minutes") or 60,
+                "interviewer_name": iv.get("interviewer_name") or "Senior Interviewer"
+            })
+        return results
+    except Exception as e:
+        raise safe_error_response(e, "Database error fetching all interviews.")
+
+class InterviewUpdateRequest(BaseModel):
+    start: str | None = None
+    end: str | None = None
+    status: str | None = None
+    scheduled_at: str | None = None
+    duration_minutes: int | None = None
+    interviewer_name: str | None = None
+
+@router.patch("/interviews/{interview_id}")
+async def update_candidate_interview(
+    interview_id: str,
+    req: InterviewUpdateRequest,
+    tenant_id: str = Depends(require_tenant)
+) -> dict:
+    supabase = get_supabase()
+    try:
+        interview_res = supabase.table("interviews").select("candidate_id, scheduled_at, duration_minutes, interviewer_name, status").eq("id", interview_id).execute()
+        if not interview_res.data:
+            raise HTTPException(status_code=404, detail="Interview not found.")
+        
+        iv = interview_res.data[0]
+        candidate_id = iv["candidate_id"]
+        candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+        if not candidate:
+            raise HTTPException(status_code=403, detail="Not authorized to edit this interview.")
+            
+        update_data = {}
+        
+        # If frontend sends start/end time modifications, we reconstruct scheduled_at
+        if req.start or req.end:
+            # Reconstruct from current scheduled_at date part + new start time
+            # For simplicity, we can keep the date part from iv["scheduled_at"] and set the time part to req.start
+            scheduled_str = iv.get("scheduled_at") or datetime.utcnow().isoformat()
+            try:
+                date_part = scheduled_str.split("T")[0]
+                new_start = req.start or "09:00"
+                update_data["scheduled_at"] = f"{date_part}T{new_start}:00Z"
+                
+                if req.start and req.end:
+                    # Calculate new duration in minutes
+                    from datetime import datetime as dt_parser
+                    t1 = dt_parser.strptime(req.start, "%H:%M")
+                    t2 = dt_parser.strptime(req.end, "%H:%M")
+                    diff_mins = int((t2 - t1).total_seconds() / 60)
+                    update_data["duration_minutes"] = max(1, diff_mins)
+            except Exception as parse_err:
+                logger.warning(f"Error parsing start/end times in update: {parse_err}")
+                
+        if req.status is not None:
+            update_data["status"] = req.status
+        if req.scheduled_at is not None:
+            update_data["scheduled_at"] = req.scheduled_at
+        if req.duration_minutes is not None:
+            update_data["duration_minutes"] = req.duration_minutes
+        if req.interviewer_name is not None:
+            update_data["interviewer_name"] = req.interviewer_name
+            
+        if not update_data:
+            return iv
+            
+        res = supabase.table("interviews").update(update_data).eq("id", interview_id).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to update interview.")
+        return res.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise safe_error_response(e, "Database error updating interview.")
+
+@router.delete("/interviews/{interview_id}")
+async def delete_candidate_interview(interview_id: str, tenant_id: str = Depends(require_tenant)) -> dict:
+    supabase = get_supabase()
+    try:
+        interview_res = supabase.table("interviews").select("candidate_id").eq("id", interview_id).execute()
+        if not interview_res.data:
+            raise HTTPException(status_code=404, detail="Interview not found.")
+        
+        candidate_id = interview_res.data[0]["candidate_id"]
+        candidate = await fetch_candidate_by_id(candidate_id, tenant_id)
+        if not candidate:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this interview.")
+            
+        supabase.table("interviews").delete().eq("id", interview_id).execute()
+        return {"status": "success", "message": "Interview successfully deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise safe_error_response(e, "Database error deleting interview.")
 
 # ─────────────────────────────────────────────────────────────
 # Notes & Interviews DB Persistence Endpoints

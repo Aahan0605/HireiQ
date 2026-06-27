@@ -93,6 +93,24 @@ MOCK_GITHUB_PROFILES: dict[str, dict[str, Any]] = {
         "followers": 2,
         "total_forks": 0,
         "repo_keywords": ["react", "node.js", "express", "css", "html"]
+    },
+    "aahan0605": {
+        "account_age_years": 0.9,
+        "total_repos": 7,
+        "original_repos": 6,
+        "total_stars": 18,
+        "languages": ["JavaScript", "Python"],
+        "contribution_streak_estimate": 12,
+        "commit_frequency_per_week": 4.5,
+        "has_readme_ratio": 0.83,
+        "has_tests": True,
+        "top_repo_stars": 9,
+        "open_source_prs_estimate": 2,
+        "profile_completeness": 0.9,
+        "raw_bio": "AI/ML Engineer in the making | Quant Finance & FinTech enthusiast\r\nExploring where deep learning meets financial markets 🚀",
+        "followers": 7,
+        "total_forks": 0,
+        "repo_keywords": ["react", "node.js", "express", "django", "flask", "fastapi", "postgres", "redis", "docker", "git"]
     }
 }
 

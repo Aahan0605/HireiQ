@@ -26,6 +26,13 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")  # pragma: allowlist secret
 SMTP_SENDER = os.getenv("SMTP_SENDER") or FROM_EMAIL
 
+# SMTP Configuration
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = os.getenv("SMTP_PORT")
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")  # pragma: allowlist secret  # pragma: allowlist secret
+SMTP_SENDER = os.getenv("SMTP_SENDER") or FROM_EMAIL
+
 # HTML Templates for product and transactional emails
 TEMPLATES = {
     "welcome": """
@@ -147,7 +154,7 @@ async def send_html_email(to_email: str, subject: str, html_content: str) -> boo
             logger.info("Falling back to Resend API...")
 
     # 2. Check if Resend key is missing or is placeholder/dummy
-    is_dummy_key = not RESEND_API_KEY or RESEND_API_KEY == "re_dummy" or RESEND_API_KEY.startswith("re_your")  # pragma: allowlist secret
+    is_dummy_key = not RESEND_API_KEY or RESEND_API_KEY == "re_dummy" or RESEND_API_KEY.startswith("re_your")  # pragma: allowlist secret  # pragma: allowlist secret
     if is_dummy_key:
         logger.warning("⚠️  RESEND_API_KEY is missing/dummy and SMTP is unconfigured. Simulating email send to %s: Subject: '%s'", to_email, subject)
         logger.warning("Simulated Email Body for %s:\n%s", to_email, html_content)

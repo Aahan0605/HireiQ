@@ -151,7 +151,8 @@ async def register(user_in: UserRegister):
         "email": user_in.email,
         "role": user_in.role,
         "message": "Registration successful. Please check your email to verify your account.",
-        "email_verification_sent": True
+        "email_verification_sent": True,
+        "verification_token": token
     }
 
 async def perform_login_checks(user: dict, password_attempt: str) -> None:

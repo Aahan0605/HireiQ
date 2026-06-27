@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, Response, status, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -137,6 +137,15 @@ def on_startup():
     from db.models import Base
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema bootstrapped.")
+    
+    # Startup check for Resend sandbox domain in non-development environment
+    from_email = os.getenv("FROM_EMAIL", "")
+    is_dev = os.getenv("ENVIRONMENT", "development") == "development"
+    if not is_dev and "resend.dev" in from_email.lower():
+        logger.warning(
+            "WARNING: FROM_EMAIL is configured to use Resend's sandbox domain '%s' in a non-development environment! "
+            "Emails may fail or land in spam.", from_email
+        )
     
     # Startup check for Resend sandbox domain in non-development environment
     from_email = os.getenv("FROM_EMAIL", "")

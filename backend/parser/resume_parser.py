@@ -54,6 +54,21 @@ def extract_text_from_file(filepath: str | Path) -> str:
     extension = filepath.suffix.lower()
 
     if extension == ".pdf":
+        from config import HIRING_AGENT_ENABLED
+        if HIRING_AGENT_ENABLED:
+            try:
+                from hiring_agent.pymupdf_rag import to_markdown
+                import pymupdf
+                with pymupdf.open(filepath) as doc:
+                    pages = list(range(doc.page_count))
+                    text = to_markdown(doc, pages=pages)
+                    if text:
+                        return text
+            except Exception as e:
+                logger.warning(
+                    f"hiring-agent PyMuPDF RAG failed: {e}. "
+                    f"Falling back to pdfplumber."
+                )
         return _extract_from_pdf(filepath)
     elif extension in {".txt", ".md"}:
         return _extract_from_text(filepath)

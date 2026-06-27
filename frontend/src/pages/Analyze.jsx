@@ -100,7 +100,7 @@ export default function Analyze() {
       setCurrentStep(1);
 
       const startedAt = Date.now();
-      const timeoutMs = 60000;
+      const timeoutMs = 180000;
 
       const updateProgress = (nextProgress) => {
         const rounded = Math.round(nextProgress);
@@ -112,7 +112,7 @@ export default function Analyze() {
         const elapsed = Date.now() - startedAt;
         if (elapsed >= timeoutMs) {
           clearInterval(poll);
-          toast.error('Analysis is taking longer than expected. Check the Candidates page.');
+          toast.error('Analysis is still in progress. Check the Candidates page for results.');
           setAnalyzing(false);
           return;
         }

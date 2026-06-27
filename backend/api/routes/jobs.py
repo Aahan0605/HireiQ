@@ -13,6 +13,8 @@ from api.core.limits import check_job_creation_limit, increment_jobs_created
 from db import get_supabase
 from api.core.encryption import decrypt_field
 
+from api.core.encryption import decrypt_field
+
 
 logger = logging.getLogger(__name__)
 

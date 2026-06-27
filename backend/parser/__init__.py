@@ -8,6 +8,7 @@ from parser.resume_parser import (
 )
 from parser.feature_extractor import (
     extract_features,
+    extract_features_async,
     extract_jd_features,
     get_skill_categories,
     KNOWN_SKILLS,
@@ -16,6 +17,6 @@ from parser.feature_extractor import (
 __all__ = [
     "extract_text_from_file", "load_all_resumes",
     "async_extract_text", "async_load_all_resumes",
-    "extract_features", "extract_jd_features",
+    "extract_features", "extract_features_async", "extract_jd_features",
     "get_skill_categories", "KNOWN_SKILLS",
 ]

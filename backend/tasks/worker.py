@@ -10,6 +10,8 @@ import sentry_sdk
 from db import get_supabase
 from api.core.encryption import encrypt_field
 
+from api.core.encryption import encrypt_field
+
 
 # Initialize Sentry for background workers
 SENTRY_DSN = os.getenv("SENTRY_DSN")
@@ -53,6 +55,14 @@ if SENTRY_DSN:
 # Initialize Celery App
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("hireiq_tasks", broker=REDIS_URL, backend=REDIS_URL)
+
+# Configure Celery for secure rediss:// brokers if needed
+if REDIS_URL.startswith("rediss://"):
+    import ssl
+    celery_app.conf.update(
+        broker_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE},
+        redis_backend_use_ssl={"ssl_cert_reqs": ssl.CERT_NONE}
+    )
 
 # Configure Celery for secure rediss:// brokers if needed
 if REDIS_URL.startswith("rediss://"):

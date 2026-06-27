@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Lock, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
 import { validatePassword } from '../utils/passwordValidation';
+import { validatePassword } from '../utils/passwordValidation';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
