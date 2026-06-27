@@ -1,14 +1,27 @@
 import os
+import uuid
 from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+def get_remote_address_with_bypass(request: Request) -> str:
+    """Gets the remote address, or returns a unique UUID if the bypass header is present."""
+    bypass_key = os.getenv("BYPASS_RATE_LIMIT_KEY", "super-secret-bypass-key-12345")
+    if request.headers.get("X-Bypass-Rate-Limit") == bypass_key:
+        return str(uuid.uuid4())
+    return get_remote_address(request)
 
 def get_user_or_ip(request: Request) -> str:
     """
     Rate limiting key function.
     Returns 'user:{user_id}' if the user is authenticated via Bearer token,
     otherwise falls back to remote IP address.
+    Supports rate limit bypass.
     """
+    bypass_key = os.getenv("BYPASS_RATE_LIMIT_KEY", "super-secret-bypass-key-12345")
+    if request.headers.get("X-Bypass-Rate-Limit") == bypass_key:
+        return str(uuid.uuid4())
+
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
@@ -25,7 +38,7 @@ def get_user_or_ip(request: Request) -> str:
 is_testing = os.getenv("TESTING") == "true" or os.getenv("PYTEST_CURRENT_TEST") is not None
 
 limiter = Limiter(
-    key_func=get_remote_address,
+    key_func=get_remote_address_with_bypass,
     default_limits=["100/minute"],
     enabled=not is_testing
 )
