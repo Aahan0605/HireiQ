@@ -44,40 +44,6 @@ const plansList = [
   }
 ];
 
-const plansList = [
-  {
-    name: 'Free',
-    price: '$0',
-    desc: 'Basic candidate evaluation and resume parsing tool.',
-    features: [
-      '5 resume parses / month',
-      'Basic TF-IDF match score',
-      'Candidate List View'
-    ]
-  },
-  {
-    name: 'Pro',
-    price: '$79',
-    desc: 'Power features for scaling teams and active recruiters.',
-    features: [
-      'Unlimited CV uploads',
-      'Kanban Hiring pipeline board',
-      'Advanced filter controls',
-      'Real-time GitHub profile sync'
-    ]
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    desc: 'Dedicated database infrastructure and security controls.',
-    features: [
-      'custom weight templates',
-      'DB sync (Supabase/PostgreSQL)',
-      'PDF and CSV reports',
-      '24/7 Priority support SLA'
-    ]
-  }
-];
 
 function SettingsScoringSkeleton() {
   return (
@@ -150,7 +116,6 @@ export default function Settings() {
   // Billing SaaS states
   const [plan, setPlan] = useState(() => localStorage.getItem('hireiq_saas_plan') || 'Free');
   const [quotaUsed, setQuotaUsed] = useState(0);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   // Team states
@@ -380,39 +345,7 @@ export default function Settings() {
     }
   };
 
-  const handleResetPlan = async () => {
-    try {
-      const res = await apiFetch(`${API}/settings/billing/update-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_name: 'Free' })
-      });
-      if (!res.ok) throw new Error();
-      setPlan('Free');
-      localStorage.setItem('hireiq_saas_plan', 'Free');
-      toast.success("Downgraded back to Free tier.");
-    } catch {
-      toast.error("Failed to cancel subscription.");
-  const handleUpgrade = async (planName) => {
-    setCheckoutLoading(true);
-    try {
-      const res = await apiFetch(`${API}/billing/create-checkout-session`, {
-        method: 'POST',
-        body: JSON.stringify({ plan_name: planName }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast.error(err.detail || 'Failed to start checkout');
-        return;
-      }
-      const { checkout_url } = await res.json();
-      window.location.href = checkout_url;
-    } catch {
-      toast.error('Something went wrong. Please try again.');
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
+
 
   const handleResetPlan = async () => {
     try {

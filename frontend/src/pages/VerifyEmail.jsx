@@ -6,8 +6,12 @@ export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('loading'); // loading | success | error
   const [message, setMessage] = useState('');
+  const verificationStarted = React.useRef(false);
 
   useEffect(() => {
+    if (verificationStarted.current) return;
+    verificationStarted.current = true;
+
     const token = searchParams.get('token');
     if (!token) { setStatus('error'); setMessage('No verification token found.'); return; }
 

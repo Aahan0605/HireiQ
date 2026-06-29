@@ -4,7 +4,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import MagneticCard from '../components/MagneticCard';
 import { useAuth } from '../context/AuthContext';
 import { validatePassword } from '../utils/passwordValidation';
-import { validatePassword } from '../utils/passwordValidation';
 import ConstellationBackground from '../components/ConstellationBackground';
 
 export default function SignIn() {
@@ -20,6 +19,7 @@ export default function SignIn() {
 
   const [passwordError, setPasswordError] = useState('');
   const [wakeMessage, setWakeMessage] = useState('');
+  const [devVerificationLink, setDevVerificationLink] = useState('');
   const wakeTimersRef = React.useRef([]);
 
   const clearWakeMessages = () => {
@@ -45,8 +45,12 @@ export default function SignIn() {
           setPasswordError(`Password must contain: ${val.errors.join(', ')}.`);
           return;
         }
-        await register(email, password, role);
-        setIsRegistering(false);
+        const res = await register(email, password, role);
+        if (res && res.verification_token) {
+          setDevVerificationLink(`/verify-email?token=${res.verification_token}`);
+        } else {
+          setIsRegistering(false);
+        }
       } else {
         clearWakeMessages();
         wakeTimersRef.current = [

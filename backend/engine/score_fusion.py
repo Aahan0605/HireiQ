@@ -208,7 +208,8 @@ async def compute_full_candidate_score(
 
     # ── Step 9: Generate recommendations ──
     low_scores = {
-        k: v for k, v in all_scores.items() if v < 0.4 and role_weights.get(k, 0) > 0.05
+        k: v for k, v in all_scores.items()
+        if isinstance(v, (int, float)) and v < 0.4 and role_weights.get(k, 0) > 0.05
     }
     recommendations = generate_recommendations(
         missing_skills=missing_skills,
@@ -598,6 +599,8 @@ def _build_component_breakdown(
 
     for signal_key, weight in role_weights.items():
         raw_score = all_scores.get(signal_key, 0.0)
+        if raw_score is None or not isinstance(raw_score, (int, float)):
+            raw_score = 0.0
         weighted = round(raw_score * weight, 6)
         breakdown[signal_key] = {
             "raw_score": round(raw_score, 4),

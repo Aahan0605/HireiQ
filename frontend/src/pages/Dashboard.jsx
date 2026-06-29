@@ -795,7 +795,6 @@ export default function Dashboard() {
   const [discoveryResults, setDiscoveryResults] = useState([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveryIsDemo, setDiscoveryIsDemo] = useState(false);
-  const [discoveryIsDemo, setDiscoveryIsDemo] = useState(false);
 
   const fetchExecAnalytics = async () => {
     setExecLoading(true);
