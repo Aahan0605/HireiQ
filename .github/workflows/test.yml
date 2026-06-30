@@ -33,14 +33,14 @@ jobs:
         ALLOWED_ORIGINS: "http://localhost:5173"
       run: |
         cd backend
-        pytest tests/ -v > ../pytest_run.log 2>&1
+        python -m pytest tests/ -v > ../pytest_run.log 2>&1
         PYTEST_EXIT=$?
         cd ..
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
         git add pytest_run.log
         git commit -m "chore: save CI pytest log [skip ci]" || true
-        git push || true
+        git push origin HEAD:main || true
         exit $PYTEST_EXIT
 
   frontend-build:
