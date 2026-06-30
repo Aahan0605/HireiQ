@@ -4,273 +4,165 @@
 
 # 🚀 HireIQ — AI-Powered Hiring Intelligence Platform
 
+<h3>A production-grade, secure Applicant Tracking System (ATS) built to automate resume parsing, candidate scoring, and pipeline mapping with complete privacy.</h3>
+
 [![React](https://img.shields.io/badge/React_18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](#)
 [![Vite](https://img.shields.io/badge/Vite_5-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)](#)
 [![Tailwind](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](#)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#)
 [![Python](https://img.shields.io/badge/Python_3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](#)
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](#)
-
-<h3>A secure, production-grade, AI-powered Applicant Tracking System (ATS) that helps recruiters discover, evaluate, rank, and hire the best candidates faster than traditional methods.</h3>
-
-<p align="center">
-  <a href="#-product-highlights">Highlights</a> •
-  <a href="#-core-features">Features</a> •
-  <a href="#-system-architecture">Architecture</a> •
-  <a href="#-getting-started">Installation</a> •
-  <a href="#-api-endpoints">API Docs</a> •
-  <a href="#-saas--monetization">Pricing</a> •
-  <a href="#-design-system">Design System</a>
-</p>
 
 </div>
 
 ---
 
-## 🌟 Product Highlights
+## ⚡ Product Highlights
 
-| Feature | Description |
+| Capability | Description |
 | :--- | :--- |
-| **🧠 AI Resume Parsing** | TF-IDF + Cosine Similarity scoring with ATS Intelligence reports |
-| **📋 Kanban Hiring Pipeline** | Drag-and-drop candidate cards through 6-stage recruitment columns |
-| **🔍 Advanced Filters** | Filter by match score, experience years, education tier, and skill tags |
-| **🐙 GitHub Profile Sync** | Real-time webhook integration to pull commit frequency, stars, and languages |
-| **🕵️ Blind Review Mode** | Anonymize candidate identities to eliminate demographic hiring bias |
-| **⚡ ATS Resume Intelligence** | Completeness scores, ATS optimization scores, career progression analysis |
-| **📊 Interactive Radar Charts** | Visual skill distribution graphs powered by Recharts |
-| **💳 SaaS Billing Portal** | Mock B2B pricing tiers (Free / Pro / Enterprise) with credit card checkout |
-| **🎨 Constellation Background** | GPU-accelerated 60 FPS HTML5 Canvas particle system with mouse interactivity |
-| **📈 CSV & PDF Reports** | Export full candidate data as styled PDF reports or ATS-compatible CSV |
+| **🧠 AI Parsing & Scoring** | Advanced feature extraction and parameter-based alignment scoring. |
+| **📋 Kanban Pipeline** | Direct drag-and-drop board for candidate status updates. |
+| **🔍 Search & Filter** | Live multi-skill search, experience timeline, and education level filters. |
+| **🐙 Live GitHub Sync** | Direct profile analysis extracting commit stats, language share, and stars. |
+| **🕵️ Blind Review Mode** | Single-toggle anonymization to mask candidate demographic attributes. |
+| **⚡ ATS Metrics** | Automated optimization scores, completeness ratings, and structured blueprints. |
+| **📅 Optimal Scheduler** | Greedy slot selection to arrange conflict-free interview lineups. |
+| **📈 Reports & Exports** | Clean candidate portfolio exports to PDF and structured CSV tables. |
 
 ---
 
 ## ✨ Core Features
 
 > [!TIP]
-> HireIQ replaces traditional, slow, manual resume screening with secure pipelines, customizable matching parameters, and real-time signals.
+> HireIQ bypasses slow, manual CV evaluations by automatically matching candidate profiles against job profiles while tracking actual programming footprint.
 
-### 🧠 AI-Driven Resume Matching & Intelligence
-*   **Semantic Matching**: Instantly vectorizes and scores resumes against job descriptions using TF-IDF + Cosine Similarity.
-*   **ATS Resume Intelligence**: Calculates Completeness Score, ATS Optimization Score, Career Progression tier, Key Strengths, Development Gaps, and Potential Concerns.
-*   **Generative Q&A Blueprints**: Leverages Google Gemini models to construct custom behavioral and technical interview questions based on candidate skill gaps.
+### 🧠 High-Fidelity Scoring
+- **Dynamic Semantic Matching**: Measures matching alignment using custom criteria and weights defined by recruiters.
+- **Generative Blueprints**: Leverages Gemini model integration to build custom technical questions targeting candidate skill gaps.
+- **Experience Timeline Extraction**: Extracts and structures timeline arrays directly from the resume and saves them in the database for instant verification.
 
-### 📋 Visual Hiring Kanban Board
-*   **Pipeline Management**: Drag-and-drop candidate cards across 6 stages: `Screening` → `Shortlisted` → `Interviewing` → `Offer` → `Hired` / `Rejected`.
-*   **Real-time Persistence**: Stage changes are saved to Supabase via PATCH API and localStorage for offline resilience.
-*   **View Toggle**: Switch between traditional List View and visual Kanban Board with a single click.
+### 📋 Interactive Boards
+- **Stage Management**: Shift candidates seamlessly across `Screening`, `Shortlisted`, `Interviewing`, `Offer`, `Hired`, and `Rejected` columns.
+- **Dynamic Deduping**: Dashboard feeds are automatically sorted by entry date and deduplicated to show the newest evaluations.
+- **Toggle Layout**: Instant toggle between high-density list tables and Kanban board columns.
 
-### 🔍 Advanced Recruiter Filters
-*   **Score Range Slider**: Filter candidates by minimum match score (0–100%).
-*   **Experience Filter**: Set minimum years of professional experience.
-*   **Education Tier Dropdown**: Filter by Bachelors, Masters, or Ph.D.
-*   **Skill Tag Selection**: Multi-select from dynamically extracted skill tags across all candidates.
-
-### 🐙 Live Developer Signals
-*   **Webhook Syncing**: Integrates with candidate GitHub profiles to pull repository activity, contributions, stars, and languages.
-*   **Fused Scoring**: Computes a dynamic rating by blending resume parsing metrics, GitHub contributions, and portfolio presence.
-
-### 📅 Smart Pipeline Optimization
-*   **Automated Scheduling**: Employs an optimal slot-matching selection algorithm (Greedy Activity Selection) to design back-to-back, conflict-free interview blocks.
-*   **Smart Cohort Shortlisting**: Maximizes candidate match quality under resource constraints using dynamic programming (0/1 Knapsack).
-
-### 🛡️ Bias Audit & Detection
-*   **Blind Auditing**: Automatically runs blind profile scoring alongside normal scoring to identify differences in parameters (e.g. location, names) to ensure fair hiring.
-*   **Anonymization Engine**: Toggle blind mode to mask all candidate identities across the platform.
-
-### 💳 SaaS Monetization Portal
-*   **Usage Tracking**: Visual progress bars showing CV upload quota consumption.
-*   **Pricing Tiers**: Gorgeous B2B comparison cards for Free, Pro ($79/mo), and Enterprise plans.
-*   **Mock Checkout**: Glassmorphic credit card validation form with real-time card preview.
+### 🐙 Live Signals
+- **GitHub Integration**: Direct profiling mapping to verify active repository statistics, PR updates, and language usage.
+- **Radar Visuals**: Skill distributions mapped into clean, reactive interactive graphics.
 
 ---
 
 ## 🛠️ Getting Started
 
-### 📋 Prerequisites
-*   **Docker** and **Docker Compose**
-*   **Node.js** (v18+) & **Python** (3.9+) (only for local development without Docker)
+### 🐋 Docker Compose Setup (Recommended)
 
-### 🐋 Docker Quickstart (Recommended)
-
-1. Clone the repository and navigate to the directory:
+1. Clone and enter the workspace directory:
    ```bash
    git clone https://github.com/Aahan0605/HireiQ.git
    cd HireiQ
    ```
 
-2. Create a `.env` file in the root directory and define the required variables (see `.env.example` templates):
+2. Configure environment credentials inside `.env` in the root directory:
    ```env
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_SERVICE_KEY=your-service-role-key-here
    GEMINI_API_KEY=your-gemini-api-key-here
-   JWT_SECRET_KEY=change-this-to-a-long-random-string
+   JWT_SECRET_KEY=generate-a-secure-secret-phrase
    ```
 
-3. Launch the complete platform using Docker Compose:
+3. Launch the container stack:
    ```bash
    docker compose up --build
    ```
 
-4. Seed the demo recruiter workspace (`demo@hireiq.dev` / `Demo1234!`):
+4. Populate seed data into the database:
    ```bash
    docker compose exec backend python scripts/seed_demo.py
    ```
-
-5. Open your browser and navigate to [http://localhost](http://localhost) (mapped to port 80). Log in with:
-   - **Email**: `demo@hireiq.dev`
-   - **Password**: `Demo1234!`
+   * Access the local frontend dashboard at [http://localhost](http://localhost) using `demo@hireiq.dev` / `Demo1234!`.
 
 ---
 
 ### 💻 Local Development Setup (Manual)
 
-#### 1️⃣ Initialize the Backend
+#### 1. Setup Backend FastAPI
 ```bash
 cd backend
-
-# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Add environment variables
-echo "SUPABASE_URL=your-supabase-url" >> .env
-echo "SUPABASE_SERVICE_KEY=your-supabase-key" >> .env
-echo "GEMINI_API_KEY=your_gemini_key_here" >> .env
-echo "JWT_SECRET_KEY=your_secure_jwt_secret" >> .env
-
-# Run development server
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-*   **API Docs**: Access [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger page.
+* Interactive API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-#### 2️⃣ Initialize the Frontend
-Open a new terminal session in the root folder:
+#### 2. Setup Frontend React
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-*   **App UI**: Access [http://localhost:6901](http://localhost:6901) on your local browser.
-*   **Sign Up**: Register a new recruiter account directly on the Sign Up page.
+* Open [http://localhost:6901](http://localhost:6901) to interact with the web dashboard.
 
 ---
 
-### 🔒 Field Encryption & Migration
+## 🔒 Security & Field Encryption
 
-To protect PII at rest, HireIQ encrypts the `resume_text` (`raw_text` in the database) using symmetric Fernet encryption.
+To ensure candidate privacy, HireIQ encrypts all resume text before database persistence using Fernet symmetric encryption.
 
-1. **Setup**: Generate a 32-byte urlsafe base64 key and define it in your `.env`:
-   ```bash
-   FIELD_ENCRYPTION_KEY=L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=
-   ```
-2. **Migration Note**: Any existing unencrypted candidate records in the database will fail decryption and show `[unable to decrypt]` in the UI. Running a one-time migration/backfill script to encrypt legacy `raw_text` rows with the active `FIELD_ENCRYPTION_KEY` is required when moving from unencrypted to encrypted storage.
-
----
-
-### 🔒 Field Encryption & Migration
-
-To protect PII at rest, HireIQ encrypts the `resume_text` (`raw_text` in the database) using symmetric Fernet encryption.
-
-1. **Setup**: Generate a 32-byte urlsafe base64 key and define it in your `.env`:
-   ```bash
-   FIELD_ENCRYPTION_KEY=L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=
-   ```
-2. **Migration Note**: Any existing unencrypted candidate records in the database will fail decryption and show `[unable to decrypt]` in the UI. Running a one-time migration/backfill script to encrypt legacy `raw_text` rows with the active `FIELD_ENCRYPTION_KEY` is required when moving from unencrypted to encrypted storage.
+- **Configure Encryption**: Generate a base64 key and define it in your backend environment:
+  ```bash
+  FIELD_ENCRYPTION_KEY=L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=
+  ```
+  > [!IMPORTANT]
+  > Decryption requires the same key. Back up your keys securely.
 
 ---
 
-## 📂 System Architecture
+## 📡 API Reference
 
-```
-HireiQ/
-├── backend/
-│   ├── api/
-│   │   ├── core/         # JWT Security, Guards, Dependencies
-│   │   └── routes/       # Auth, Candidates, Jobs, Reports, Settings
-│   ├── db/               # Supabase Connector & Local SQLite Hybrid Layer
-│   ├── algorithms/       # Greedy Scheduler, Knapsack Shortlist, BFS Skill Graph
-│   ├── parser/           # PDF Plumber resume parser & Feature extraction
-│   └── scratch/          # Development scratch, integration tests & seed scripts
-├── frontend/
-│   └── src/
-│       ├── context/      # Global Authentication State Provider
-│       ├── lib/          # API fetch wrapper & Tilt effects
-│       ├── components/   # ConstellationBackground, MagneticCard, HeroSection
-│       └── pages/        # Dashboard, Candidates (List + Kanban), Analyze, Settings (Scoring + Billing), Landing
-└── data/                 # Sample resumes and job descriptions
-
-> [!NOTE]
-> The `backend/scratch/` directory contains development utilities, seeding modules, and integration test scripts (e.g. `test_checkout.py`, `test_members.py`) for verifying server routing and DB migrations. It is excluded in `.gitignore` and not intended for production deployment.
-```
+| Category | Endpoint | Method | Purpose |
+| :--- | :--- | :---: | :--- |
+| **Auth** | `/api/v1/auth/register` | `POST` | Register a recruiter account |
+| **Auth** | `/api/v1/auth/login` | `POST` | Login and acquire JWT credentials |
+| **Candidates** | `/api/v1/candidates` | `GET` | List candidate profiles with filters |
+| **Candidates** | `/api/v1/candidates/{id}` | `GET` | Retrieve detailed candidate profile |
+| **Candidates** | `/api/v1/candidates/{id}` | `PATCH` | Edit profile info or pipeline status |
+| **Candidates** | `/api/v1/candidates/upload-resume` | `POST` | Ingest and parse single resume |
+| **Candidates** | `/api/v1/candidates/upload-bulk` | `POST` | Batch ingest up to 1000 resumes |
+| **Candidates** | `/api/v1/candidates/{id}/generate-qa`| `POST` | Generate Gemini interview questions |
+| **Candidates** | `/api/v1/candidates/{id}/webhook/github-sync` | `POST` | Process GitHub synced webhooks |
+| **Jobs** | `/api/v1/jobs` | `GET` | Get listing of open job positions |
+| **Reports** | `/api/v1/reports/candidates/pdf` | `GET` | Export candidates in styled PDF |
+| **Reports** | `/api/v1/reports/candidates/csv` | `GET` | Export candidates in raw CSV |
+| **Settings** | `/api/v1/settings/weights` | `GET/POST` | Get/set scoring algorithm weights |
+| **Settings** | `/api/v1/settings/thresholds` | `POST` | Set match classification thresholds |
 
 ---
 
-## 📡 API Endpoints
+## 🎨 Design Tokens
 
-| Category | Method | Endpoint | Description |
-| :--- | :---: | :--- | :--- |
-| **Auth** | `POST` | `/api/v1/auth/register` | Register new recruiter account |
-| **Auth** | `POST` | `/api/v1/auth/login` | Login and obtain JWT token |
-| **Candidates** | `GET` | `/api/v1/candidates` | List all tracked candidates |
-| **Candidates** | `GET` | `/api/v1/candidates/{id}` | Get single candidate profile |
-| **Candidates** | `PATCH` | `/api/v1/candidates/{id}` | Update candidate fields (e.g., pipeline stage) |
-| **Candidates** | `DELETE` | `/api/v1/candidates/{id}` | Delete a candidate |
-| **Candidates** | `POST` | `/api/v1/candidates/upload-resume` | Upload PDF and analyze in background |
-| **Candidates** | `POST` | `/api/v1/candidates/upload-bulk` | Batch upload up to 1000 resumes |
-| **Candidates** | `POST` | `/api/v1/candidates/{id}/generate-qa` | AI-generated interview questions |
-| **Candidates** | `POST` | `/api/v1/candidates/{id}/webhook/github-sync` | Sync GitHub profile signals |
-| **Jobs** | `GET` | `/api/v1/jobs` | List all open positions |
-| **Reports** | `GET` | `/api/v1/reports/candidates/pdf` | Export candidates as styled PDF |
-| **Reports** | `GET` | `/api/v1/reports/candidates/csv` | Export candidates as ATS CSV |
-| **Settings** | `GET/POST` | `/api/v1/settings/weights` | Get/set scoring algorithm weights |
-| **Settings** | `POST` | `/api/v1/settings/thresholds` | Set match classification thresholds |
-
----
-
-## 💰 SaaS & Monetization
-
-| Plan | Price | Features |
-| :--- | :---: | :--- |
-| **Free** | $0/mo | 5 CV uploads, basic TF-IDF scoring, list view, blind audit |
-| **Pro** | $79/mo | Unlimited uploads, Kanban board, advanced filters, GitHub sync, AI Q&A |
-| **Enterprise** | Custom | Custom weights, DB sync, PDF/CSV reports, priority support SLA |
-
----
-
-## 🎨 Design System
-
-HireIQ is styled with a premium **Glassmorphism & Neon Dark** layout:
-
-| Token | Value | Usage |
+| Property | Value | Context |
 | :--- | :--- | :--- |
-| `--bg` | `#07070E` | Page background |
-| `--surface` | `#0D0D1A` | Card backgrounds |
-| `--surface-2` | `#141428` | Elevated surfaces |
-| `--mint` | `#4DFFA4` | Primary accent (emerald) |
-| `--violet` | `#10b981` | Secondary accent |
-| `--rose` | `#FF6B8A` | Error / danger states |
-| `--amber` | `#FFB347` | Warning / bias alerts |
-
-**Typography**: Bricolage Grotesque (headings) + Instrument Sans (body) + Geist Mono (code)
+| `--bg` | `#07070E` | Main space background |
+| `--surface` | `#0D0D1A` | Card containers |
+| `--surface-2` | `#141428` | Menu list highlights |
+| `--mint` | `#4DFFA4` | Primary brand accent (emerald) |
+| `--violet` | `#10b981` | Accent buttons |
+| `--rose` | `#FF6B8A` | Error/rejected labels |
+| `--amber` | `#FFB347` | Pending/warning callouts |
 
 ---
 
 ## 🧪 Tech Stack
 
-| Layer | Technologies |
-| :--- | :--- |
-| **Frontend** | React 18, Vite 5, Tailwind CSS, Framer Motion, Recharts, Lucide Icons |
-| **Backend** | FastAPI, Python 3.9+, Pydantic, Supabase PostgreSQL database |
-| **AI/ML** | TF-IDF + Cosine Similarity, Google Gemini API, pdfplumber |
-| **Auth** | JWT (PyJWT), bcrypt password hashing |
-| **Algorithms** | Merge Sort (ranking), Greedy Activity Selection (scheduling), 0/1 Knapsack (shortlisting), BFS (skill graph) |
+- **Frontend**: React 18, Vite 5, Recharts, Framer Motion, Tailwind CSS
+- **Backend**: FastAPI, Python 3.9+, Pydantic, Supabase PostgreSQL
+- **AI Model**: Google Gemini API integration (bias auditing and Q&A generation)
+- **Algorithms**: Merge Sort (ranking), Greedy Activity Selection (interview scheduling), 0/1 Knapsack (shortlisting)
 
 ---
 
 <div align="center">
-  <sub>© 2026 HireIQ · AI-Powered Hiring Intelligence Platform · Built with ❤️</sub>
+  <sub>© 2026 HireIQ · Automated Recruiter Intelligence Portal</sub>
 </div>
