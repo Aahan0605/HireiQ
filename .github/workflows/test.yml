@@ -32,7 +32,7 @@ jobs:
         SUPABASE_KEY: "dummy_supabase_key"
         ALLOWED_ORIGINS: "http://localhost:5173"
       run: |
-        pytest backend/tests/ -v
+        PYTHONPATH=backend pytest backend/tests/ -v
 
   frontend-build:
     runs-on: ubuntu-latest
