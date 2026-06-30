@@ -79,7 +79,13 @@ def compute_skill_confidence(
     certs_lower = " ".join([c.lower() for c in certs])
     
     # Projects text for matching
-    projects_text = " ".join([p.get("title", "") + " " + p.get("description", "") for p in projects]).lower()
+    projects_list = []
+    for p in projects:
+        if isinstance(p, dict):
+            projects_list.append(p.get("title", "") + " " + p.get("description", ""))
+        else:
+            projects_list.append(str(p))
+    projects_text = " ".join(projects_list).lower()
     
     for skill in claimed_skills:
         skill_lower = skill.lower()

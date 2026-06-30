@@ -35,7 +35,7 @@ from datetime import datetime
 import time
 from typing import Any, Optional, Optional
 import uuid
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, Depends, BackgroundTasks, Request, Body
 from fastapi.responses import JSONResponse
 from api.core.limiter import limiter, get_user_or_ip
 
@@ -415,6 +415,8 @@ def _build_legacy_scoring_result(text: str, candidate_name: str, jd_features: di
         },
         "external_signals": {},
         "insights": {
+            "linkedin": contact.get("linkedin") or "",
+            "github": contact.get("github") or "",
             "ai_summary": {
                 "executive_summary": f"{name} — analyzed using rule-based parser (AI pipeline unavailable). Match score: {final_score}%.",
                 "strengths": [f"Proficient in {', '.join(skills[:5])}" if skills else "Resume uploaded successfully"],
@@ -830,6 +832,7 @@ async def get_all_candidates(
     limit: int = Query(default=50, ge=1, le=500, description="Results per page"),
     search: str = Query(default="", description="Search by name or role"),
     status: str = Query(default="", description="Filter by pipeline status"),
+    sort_by: str = Query(default="match_score", description="Field to sort by (match_score or created_at)"),
 ) -> dict:
     """
     GET /candidates — returns database candidates for the active tenant context with pagination and filters.
@@ -845,8 +848,11 @@ async def get_all_candidates(
         if search:
             query = query.or_(f"full_name.ilike.%{search}%,career_tier.ilike.%{search}%")
 
-        # Order by score descending
-        query = query.order("match_score", desc=True)
+        # Order candidates
+        if sort_by == "created_at":
+            query = query.order("created_at", desc=True)
+        else:
+            query = query.order("match_score", desc=True)
 
         offset = (page - 1) * limit
         res = query.range(offset, offset + limit - 1).execute()
@@ -1318,43 +1324,30 @@ async def generate_interview_questions_gemini(skills: list[str], missing_skills:
     """
     
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={api_key}"
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                url,
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "responseMimeType": "application/json",
-                        "responseSchema": {
-                            "type": "object",
-                            "properties": {
-                                "questions": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "question": {"type": "string"},
-                                            "answer": {"type": "string"},
-                                            "skill": {"type": "string"}
-                                        },
-                                        "required": ["question", "answer", "skill"]
-                                    }
-                                }
-                            },
-                            "required": ["questions"]
-                        }
-                    }
-                },
-                timeout=20.0
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                parsed = json.loads(text)
-                return parsed.get("questions", [])
-            else:
-                logger.error(f"Gemini API returned status code {resp.status_code}: {resp.text}")
+        from hiring_agent.llm_utils import call_llm, extract_json_from_response
+        system_prompt = "You are an expert technical interviewer for a SaaS Applicant Tracking System. Respond strictly in JSON format matching the schema requested."
+        res = await call_llm(
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+            model_name="gemini-2.5-flash-lite",
+            temperature=0.1
+        )
+        parsed = json.loads(extract_json_from_response(res))
+        questions = None
+        if isinstance(parsed, list):
+            questions = parsed
+        elif isinstance(parsed, dict):
+            for key in ["questions", "interviewQuestions", "interview_questions", "data", "qa"]:
+                if key in parsed and isinstance(parsed[key], list):
+                    questions = parsed[key]
+                    break
+            if not questions:
+                for val in parsed.values():
+                    if isinstance(val, list):
+                        questions = val
+                        break
+        if questions:
+            return questions
     except Exception as e:
         logger.error(f"Failed to generate questions via Gemini API: {e}")
         
@@ -1408,7 +1401,7 @@ async def generate_candidate_qa(candidate_id: str, tenant_id: str = Depends(requ
 # ─────────────────────────────────────────────────────────────
 
 @router.post("/{candidate_id}/webhook/github-sync")
-async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id: str = Depends(require_tenant)):
+async def github_webhook_sync(candidate_id: str, payload: dict = Body(None), tenant_id: str = Depends(require_tenant)):
     """
     Robust webhook receiver or manual sync trigger. Recalculates candidate scores,
     skill confidence, match breakdowns, and AI summaries using live GitHub signals.
@@ -1555,7 +1548,8 @@ async def github_webhook_sync(candidate_id: str, payload: dict = None, tenant_id
     candidate_dict["status"] = "Strong Match" if final_score > 85 else "Match"
     candidate_dict["summary"] = scoring_res["insights"]["ai_summary"]["executive_summary"]
     candidate_dict["skills"] = scoring_res["resume_features"].get("skills", [])
-    candidate_dict["experience"] = experience_data
+    real_timeline = scoring_res["resume_features"].get("experience_timeline", [])
+    candidate_dict["experience"] = real_timeline if real_timeline else experience_data
     candidate_dict["job_matches"] = job_matches
     candidate_dict["jobMatches"] = job_matches
     candidate_dict["radar_data"] = radar_data

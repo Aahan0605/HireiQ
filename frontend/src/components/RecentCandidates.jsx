@@ -34,19 +34,53 @@ export default function RecentCandidates() {
       .then(data => setJobs(Array.isArray(data) ? data : []))
       .catch(() => {});
 
-    apiFetch(`${API}/candidates`)
+    apiFetch(`${API}/candidates?sort_by=created_at&limit=10`)
       .then(r => r.ok ? r.json() : [])
       .then(data => {
+        let list = [];
         if (Array.isArray(data)) {
-          const unique = [...new Map(data.map(c => [c?.name?.toLowerCase(), c])).values()].slice(0, 5);
-          setCandidates(unique);
+          list = data;
+        } else if (data && Array.isArray(data.data)) {
+          list = data.data;
+        } else {
+          throw new Error("Invalid data format");
         }
+
+        const sorted = [...list].sort((a, b) => {
+          const dateA = new Date(a.analyzed_at || a.created_at || 0);
+          const dateB = new Date(b.analyzed_at || b.created_at || 0);
+          return dateB - dateA;
+        });
+
+        const seen = new Set();
+        const unique = [];
+        for (const c of sorted) {
+          const nameLower = c?.name?.toLowerCase();
+          if (nameLower && !seen.has(nameLower)) {
+            seen.add(nameLower);
+            unique.push(c);
+          }
+        }
+        setCandidates(unique.slice(0, 5));
       })
       .catch(() => {
         // fallback to local static data
         const local = getAllCandidates();
-        const unique = [...new Map(local.map(c => [c?.name?.toLowerCase(), c])).values()].slice(0, 5);
-        setCandidates(unique);
+        const sortedLocal = [...local].sort((a, b) => {
+          const dateA = new Date(a.analyzed_at || a.created_at || 0);
+          const dateB = new Date(b.analyzed_at || b.created_at || 0);
+          return dateB - dateA;
+        });
+        const seenLocal = new Set();
+        const uniqueLocal = [];
+        for (const c of sortedLocal) {
+          const nameLower = c?.name?.toLowerCase();
+          if (nameLower && !seenLocal.has(nameLower)) {
+            seenLocal.add(nameLower);
+            uniqueLocal.push(c);
+          }
+        }
+        setCandidates(uniqueLocal.slice(0, 5));
       })
       .finally(() => setLoading(false));
   }, []);

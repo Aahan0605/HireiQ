@@ -46,17 +46,12 @@ export default function Analyze() {
   ];
 
   const onDrop = useCallback((accepted) => {
-    if (plan === 'Free' && quotaUsed >= 5) {
-      toast.error('Resume parsing limit reached. Upgrade to Pro to upload more candidates!');
-      setShowUpgradeModal(true);
-      return;
-    }
     if (mode === 'single') {
       setFiles(accepted.slice(0, 1));
     } else {
       setFiles(accepted.slice(0, 1000));
     }
-  }, [mode, plan, quotaUsed]);
+  }, [mode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -189,11 +184,6 @@ export default function Analyze() {
   };
 
   const handleAnalyze = () => {
-    if (plan === 'Free' && quotaUsed >= 5) {
-      toast.error('Resume parsing limit reached. Upgrade to Pro to upload more candidates!');
-      setShowUpgradeModal(true);
-      return;
-    }
     mode === 'single' ? handleSingle() : handleBulk();
   };
 
@@ -247,7 +237,7 @@ export default function Analyze() {
                       : 'border-border hover:border-violet/50 hover:bg-surface-3 cursor-pointer'
                   }`}
                 >
-                  {plan === 'Free' && quotaUsed >= 5 ? (
+                  {false ? (
                     <div className="flex flex-col items-center gap-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-glow-rose/10">
                         <ShieldAlert className="h-8 w-8" />
@@ -357,7 +347,7 @@ export default function Analyze() {
 
       {/* Upgrade to Pro Modal */}
       <AnimatePresence>
-        {showUpgradeModal && (
+        {false && showUpgradeModal && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 

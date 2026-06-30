@@ -1053,6 +1053,17 @@ def to_hireiq_features(json_resume: JSONResume) -> dict:
                 github_username = p.username or (p.url.rstrip("/").split("/")[-1] if p.url else "")
             elif net == "linkedin" or "linkedin.com" in p_url:
                 linkedin_url = p.url
+                
+    experience_timeline = []
+    if json_resume.work:
+        for job in json_resume.work:
+            date_str = f"{job.startDate or ''} - {job.endDate or 'Present'}"
+            experience_timeline.append({
+                "company": job.name or "",
+                "title": job.position or "",
+                "date": date_str,
+                "description": job.summary or ""
+            })
 
     return {
         'name': name,
@@ -1066,5 +1077,6 @@ def to_hireiq_features(json_resume: JSONResume) -> dict:
         'projects': projects_list,
         'github': github_username,
         'linkedin': linkedin_url,
+        'experience_timeline': experience_timeline,
     }
 

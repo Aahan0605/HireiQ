@@ -83,7 +83,10 @@ def compute_match_breakdown(
         matching_projects = 0
         project_text_combined = ""
         for p in projects:
-            p_text = (p.get("title", "") + " " + p.get("description", "")).lower()
+            if isinstance(p, dict):
+                p_text = (p.get("title", "") + " " + p.get("description", "")).lower()
+            else:
+                p_text = str(p).lower()
             project_text_combined += " " + p_text
             
         matched_project_skills = sum(1 for s in all_jd_skills if s in project_text_combined)

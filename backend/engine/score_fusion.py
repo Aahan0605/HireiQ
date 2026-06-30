@@ -293,6 +293,7 @@ async def compute_full_candidate_score(
             "certifications": claimed_certs,
             "projects": resume_features.get("projects", []),
             "name": resume_features.get("name"),
+            "experience_timeline": resume_features.get("experience_timeline", []),
         },
     }
 
@@ -315,6 +316,7 @@ async def compute_full_candidate_score(
             "education": claimed_education,
             "certifications": claimed_certs,
             "name": resume_features.get("name"),
+            "experience_timeline": resume_features.get("experience_timeline", []),
         },
         "external_signals": {
             "github": github_raw,
@@ -897,6 +899,10 @@ def _generate_recruiter_summary(
     # Build a highly detailed, professional, and descriptive executive summary
     role_display = role_type.replace("_", " ").title()
     edu_val = resume_features.get("education", "unknown")
+    if isinstance(edu_val, list):
+        edu_val = edu_val[0] if edu_val else "unknown"
+    if not isinstance(edu_val, str):
+        edu_val = str(edu_val) if edu_val is not None else "unknown"
     edu_map = {
         "btech": "Bachelor of Technology (B.Tech)",
         "mtech": "Master of Technology (M.Tech)",
@@ -910,7 +916,7 @@ def _generate_recruiter_summary(
         "bachelors": "Bachelor's Degree",
         "masters": "Master's Degree",
     }
-    edu_display = edu_map.get(edu_val.lower(), edu_val.upper())
+    edu_display = edu_map.get(edu_val.lower(), edu_val)
     edu_str = f" with a verified background in {edu_display}" if edu_val and edu_val != "unknown" else ""
 
     summary_parts = [

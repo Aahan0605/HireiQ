@@ -56,6 +56,33 @@ ALLOW_NO_GITHUB: set[str] = {
 }
 
 
+def _safe_float_experience(val: Any) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val)
+        except ValueError:
+            return 0.0
+    if isinstance(val, dict):
+        for key in ["experience_years", "years", "duration", "years_of_experience", "score", "value"]:
+            if key in val:
+                return _safe_float_experience(val[key])
+        return 0.0
+    if isinstance(val, list):
+        if not val:
+            return 0.0
+        if isinstance(val[0], dict):
+            return float(len(val))
+        try:
+            return float(val[0])
+        except (ValueError, TypeError):
+            return 0.0
+    return 0.0
+
+
 def verify_claims(
     resume_features: dict[str, Any],
     external_signals: dict[str, Any],
@@ -93,7 +120,7 @@ def verify_claims(
     flagged_skills: list[str] = []
 
     claimed_skills = [s.lower() for s in resume_features.get("skills", [])]
-    claimed_experience = resume_features.get("experience", 0.0)
+    claimed_experience = _safe_float_experience(resume_features.get("experience", 0.0))
 
     github_data = external_signals.get("github", {})
     linkedin_data = external_signals.get("linkedin", {})
@@ -205,12 +232,9 @@ def _check_experience_vs_linkedin(
     if not linkedin_data:
         return trust_score, flags
 
-    # LinkedIn experience estimation from connection/recommendation signals
-    # If we had actual LinkedIn data, we'd compare directly.
-    # With resume-extracted signals, we check for consistency markers.
-    linkedin_years = linkedin_data.get("experience_years", None)
+    linkedin_years_raw = linkedin_data.get("experience_years", None)
 
-    if linkedin_years is None:
+    if linkedin_years_raw is None:
         # Try to infer from account age or connection count
         conn_count = linkedin_data.get("connection_count", 0)
         rec_count = linkedin_data.get("recommendation_count", 0)
@@ -229,6 +253,7 @@ def _check_experience_vs_linkedin(
                 })
         return trust_score, flags
 
+    linkedin_years = _safe_float_experience(linkedin_years_raw)
     delta = abs(claimed_experience - linkedin_years)
     if delta > 1.5:
         deduction = 0.15
@@ -279,10 +304,10 @@ def _check_timeline_consistency(
     flags: list[dict],
 ) -> tuple[float, list[dict]]:
     """CHECK 4: Compare claimed experience duration with GitHub account age."""
-    if not github_data or not github_data.get("account_age_years"):
+    if not github_data or github_data.get("account_age_years") is None:
         return trust_score, flags
 
-    account_age = github_data["account_age_years"]
+    account_age = _safe_float_experience(github_data["account_age_years"])
 
     # If resume claims significantly more experience than GitHub account age
     if claimed_experience > account_age + 2:

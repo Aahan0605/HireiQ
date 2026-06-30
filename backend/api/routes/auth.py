@@ -5,7 +5,7 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, validator
 from api.core.security import verify_password, get_password_hash, create_access_token
@@ -75,7 +75,7 @@ async def fetch_user_by_email(email: str) -> dict | None:
         raise e
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserRegister):
+async def register(user_in: UserRegister, background_tasks: BackgroundTasks):
     """Register a new recruiter account."""
     try:
         existing_user = await fetch_user_by_email(user_in.email)
@@ -130,7 +130,7 @@ async def register(user_in: UserRegister):
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
     verification_link = f"{frontend_url}/verify-email?token={token}"
     
-    asyncio.create_task(send_verification_email(user_in.email, verification_link))
+    background_tasks.add_task(send_verification_email, user_in.email, verification_link)
     
     # Track user registration event in PostHog
     import posthog
@@ -341,7 +341,7 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
     }
 
 @router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest):
+async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks):
     """Always return 200 to prevent email enumeration."""
     try:
         user = await fetch_user_by_email(req.email)
@@ -356,7 +356,7 @@ async def forgot_password(req: ForgotPasswordRequest):
             
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
             reset_link = f"{frontend_url}/reset-password?token={token}"
-            asyncio.create_task(send_password_reset_email(req.email, reset_link))
+            background_tasks.add_task(send_password_reset_email, req.email, reset_link)
     except Exception as e:
         logger.error(f"Error in forgot_password: {e}")
     return {"message": "If that email exists, a reset link has been sent."}

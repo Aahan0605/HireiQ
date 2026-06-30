@@ -650,6 +650,8 @@ def extract_features(text: str) -> dict:
     projects = _extract_projects(text)
     achievements = _extract_achievements(text)
 
+    experience_timeline = extract_experience(text)
+
     return {
         "name": name,
         "email": contact.get("email"),
@@ -663,6 +665,7 @@ def extract_features(text: str) -> dict:
         "projects": projects,
         "achievements": achievements,
         "raw_text": text,
+        "experience_timeline": experience_timeline,
     }
 
 
@@ -1050,11 +1053,23 @@ def extract_experience(text: str) -> list[dict]:
                     desc_lines.append(lines[j])
                 j += 1
 
-            company_clean = re.sub(r"[-–|•]", "", company_line).strip()
+            comp = company_line
+            title = "Software Engineer"
+            for sep in [" - ", " – ", " | ", " : ", " -", " –", " |", " :"]:
+                if sep in company_line:
+                    parts = company_line.split(sep, 1)
+                    comp = parts[0].strip()
+                    title = parts[1].strip()
+                    break
+
+            company_clean = re.sub(r"[-–|•]", "", comp).strip()
+            title_clean = re.sub(r"[-–|•]", "", title).strip()
+
             if company_clean and len(company_clean) > 2:
                 experiences.append(
                     {
                         "company": company_clean,
+                        "title": title_clean,
                         "date": date_str,
                         "description": " ".join(desc_lines[:2]) if desc_lines else "",
                     }

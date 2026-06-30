@@ -129,3 +129,13 @@ async def test_candidates_api():
         )
         assert good_note_res.status_code == 200
         assert good_note_res.json()["comment"] == "This is a great note!"
+
+        # 6. Test github-sync webhook allows empty body (does not return 422)
+        sync_res = await ac.post(
+            f"/api/v1/candidates/{candidate_id}/webhook/github-sync",
+            headers=headers
+        )
+        # It should fail with 400 ("No GitHub profile set for candidate.") because the mock candidate has no github profile
+        # but it MUST NOT fail with 422!
+        assert sync_res.status_code == 400
+        assert "No GitHub profile set" in sync_res.json()["detail"]

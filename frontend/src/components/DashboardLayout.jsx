@@ -129,30 +129,7 @@ export default function DashboardLayout() {
             </span>
           </div>
 
-          <div className="px-2 space-y-1.5">
-            <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-              <span>{plan} Usage</span>
-              <span>{plan === 'Free' ? `${quotaUsed}/5 parses` : `${quotaUsed}/∞ parses`}</span>
-            </div>
-            {plan === 'Free' && (
-              <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-                <div 
-                  className={`h-full rounded-full bg-gradient-to-r ${
-                    quotaUsed >= 5 ? 'from-rose-500 to-red-500' : 'from-emerald-400 to-emerald-600'
-                  }`} 
-                  style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} 
-                />
-              </div>
-            )}
-            {plan === 'Free' && (
-              <Link 
-                to="/settings?tab=billing" 
-                className="mt-2 block text-center rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 hover:border-emerald-500/60 p-2 text-xs font-semibold text-emerald-400 hover:text-white transition-all hover:scale-[1.02] shadow-glow-mint"
-              >
-                Upgrade to Pro ⚡
-              </Link>
-            )}
-          </div>
+
 
           <button
             onClick={logout}
@@ -214,31 +191,7 @@ export default function DashboardLayout() {
                   </span>
                 </div>
 
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                    <span>{plan} Usage</span>
-                    <span>{plan === 'Free' ? `${quotaUsed}/5 parses` : `${quotaUsed}/∞ parses`}</span>
-                  </div>
-                  {plan === 'Free' && (
-                    <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-                      <div 
-                        className={`h-full rounded-full bg-gradient-to-r ${
-                          quotaUsed >= 5 ? 'from-rose-500 to-red-500' : 'from-emerald-400 to-emerald-600'
-                        }`} 
-                        style={{ width: `${Math.min(100, (quotaUsed / 5) * 100)}%` }} 
-                      />
-                    </div>
-                  )}
-                  {plan === 'Free' && (
-                    <Link 
-                      to="/settings?tab=billing" 
-                      onClick={() => setMobileOpen(false)}
-                      className="mt-2 block text-center rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 hover:border-emerald-500/60 p-2 text-xs font-semibold text-emerald-400 hover:text-white transition-all shadow-glow-mint"
-                    >
-                      Upgrade to Pro ⚡
-                    </Link>
-                  )}
-                </div>
+
               </div>
             </div>
           </motion.div>

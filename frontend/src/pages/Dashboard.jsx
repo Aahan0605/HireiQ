@@ -526,7 +526,15 @@ function ShortlistModal({ onClose, onUpdateCount }) {
     apiFetch(`${API}/candidates`)
       .then(r => r.ok ? r.json() : [])
       .then(data => {
-        let list = data;
+        let list = [];
+        if (Array.isArray(data)) {
+          list = data;
+        } else if (data && Array.isArray(data.data)) {
+          list = data.data;
+        } else {
+          throw new Error("Invalid data format");
+        }
+
         if (list.length === 0) {
           list = ALL_CANDIDATES;
         }

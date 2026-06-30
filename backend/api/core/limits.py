@@ -2,8 +2,8 @@ from fastapi import HTTPException, status
 from db import get_supabase
 
 PLAN_QUOTAS = {
-    "free": {"parses": 5, "jobs": 1, "seats": 1},
-    "pro": {"parses": 50, "jobs": 10, "seats": 3},
+    "free": {"parses": 999999, "jobs": 999999, "seats": 999999},
+    "pro": {"parses": 999999, "jobs": 999999, "seats": 999999},
     "enterprise": {"parses": 999999, "jobs": 999999, "seats": 999999}
 }
 

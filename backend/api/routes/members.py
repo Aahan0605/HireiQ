@@ -3,7 +3,7 @@ import secrets
 import os
 import asyncio
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from api.core.rbac import require_tenant, require_permission, Permission
 from api.core.email import send_org_invitation_email
@@ -40,7 +40,7 @@ async def list_members(tenant_id: str = Depends(require_tenant)):
         raise safe_error_response(e, "Failed to fetch team members.")
 
 @router.post("/invite", dependencies=[Depends(require_permission(Permission.MANAGE_MEMBERS))])
-async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_tenant)):
+async def invite_member(req: InviteRequest, background_tasks: BackgroundTasks, tenant_id: str = Depends(require_tenant)):
     supabase = get_supabase()
     try:
         # 1. Fetch current recruiter's company
@@ -68,7 +68,7 @@ async def invite_member(req: InviteRequest, tenant_id: str = Depends(require_ten
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
         invite_link = f"{frontend_url}/accept-invite?token={token}"
         
-        asyncio.create_task(send_org_invitation_email(email_clean, company, req.role, invite_link))
+        background_tasks.add_task(send_org_invitation_email, email_clean, company, req.role, invite_link)
         return {"message": f"Invitation sent to {email_clean}", "token": token}
     except HTTPException:
         raise

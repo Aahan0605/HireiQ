@@ -91,16 +91,74 @@ def _candidate_to_dict(c: dict) -> dict:
         {"subject": "ATS Score", "A": round(c.get("ats_score", 0.0) or c.get("match_score", 0.0)), "fullMark": 100}
     ]
     
-    experience = [
-        {"title": "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
-    ]
+    experience = []
+    db_exp = c.get("experience")
+    if db_exp:
+        if isinstance(db_exp, list):
+            experience = db_exp
+        elif isinstance(db_exp, str):
+            try:
+                import json
+                experience = json.loads(db_exp)
+            except Exception:
+                pass
+
+    if not experience:
+        raw_text = decrypt_field(c.get("raw_text") or "")
+        if raw_text:
+            try:
+                from parser.feature_extractor import extract_experience
+                extracted_exp = extract_experience(raw_text)
+                for e in extracted_exp:
+                    experience.append({
+                        "title": e.get("title") or "Software Engineer",
+                        "company": e.get("company") or "Various",
+                        "date": e.get("date") or e.get("duration") or "Various Dates",
+                        "description": e.get("description", "")
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to extract experience: {e}")
+
+    if not experience:
+        experience = [
+            {"title": c.get("career_tier") or "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
+        ]
     
     raw_insights = c.get("insights") or {}
-    if not isinstance(raw_insights, dict):
+    if isinstance(raw_insights, str):
+        try:
+            import json
+            raw_insights = json.loads(raw_insights)
+        except Exception:
+            raw_insights = {}
+    elif not isinstance(raw_insights, dict):
         raw_insights = {}
     import copy
     db_insights = copy.deepcopy(raw_insights)
     has_resume = bool(db_insights.get("resume_base64"))
+    
+    github_val = c.get("github_url") or ""
+    raw_linkedin = db_insights.get("linkedin") or db_insights.get("linkedin_details") or ""
+    if isinstance(raw_linkedin, dict):
+        linkedin_val = raw_linkedin.get("linkedin_url") or ""
+    else:
+        linkedin_val = str(raw_linkedin)
+    if not github_val or not linkedin_val:
+        raw_text = decrypt_field(c.get("raw_text") or "")
+        if raw_text:
+            try:
+                from parser.feature_extractor import extract_contact
+                contact = extract_contact(raw_text)
+                if not github_val and contact.get("github"):
+                    import re
+                    gh = contact.get("github").strip()
+                    gh = re.sub(r"^(?:https?:/?/?)?(?:www\.)?github\.com/", "", gh, flags=re.IGNORECASE)
+                    gh = re.sub(r"^(?:https?:/?/?)?", "", gh, flags=re.IGNORECASE)
+                    github_val = gh.strip("/").replace(" ", "").replace("\t", "")
+                if not linkedin_val and contact.get("linkedin"):
+                    linkedin_val = contact.get("linkedin").strip()
+            except Exception as e:
+                logger.warning(f"Failed to extract contact details from fallback: {e}")
         
     score = float(c.get("match_score") or 0.0)
     
@@ -165,11 +223,11 @@ def _candidate_to_dict(c: dict) -> dict:
         "email": c.get("email") or "",
         "phone": c.get("phone") or "",
         "role": c.get("career_tier") or "Software Engineer",
-        "github": c.get("github_url") or "",
+        "github": github_val,
         "github_stars": c.get("github_stars") or 0,
         "github_languages": c.get("github_languages") or [],
         "github_commits_last_year": c.get("github_commits_last_year") or 0,
-        "linkedin": db_insights.get("linkedin") or "",
+        "linkedin": linkedin_val,
         "location": c.get("location") or "Remote",
         "score": round(c.get("match_score", 0.0) or 0.0),
         "blind_score": round(c.get("blind_score", 0.0) or 0.0),
@@ -309,7 +367,8 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "blind_score": float(candidate.get("blind_score") or match_score),
         "interview_questions": candidate.get("qa") or [],
         "summary": candidate.get("summary"),
-        "insights": insights
+        "insights": insights,
+        "experience": candidate.get("experience") or []
     }
     
     # Experience years

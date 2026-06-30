@@ -216,7 +216,8 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "resume_filename": filename,
             "interview_questions": [],
             "insights": insights,
-            "summary": insights.get("ai_summary", {}).get("executive_summary", "")
+            "summary": insights.get("ai_summary", {}).get("executive_summary", ""),
+            "experience": scoring_res.get("resume_features", {}).get("experience_timeline", [])
         }
         
         if best_job:
