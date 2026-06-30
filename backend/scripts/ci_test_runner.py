@@ -84,6 +84,16 @@ def upload_log(log_content):
 def main():
     exit_code, log_content = run_tests()
     
+    # Write to GITHUB_STEP_SUMMARY so we can see the full log on the Actions page
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_file:
+        try:
+            with open(summary_file, "a") as sf:
+                sf.write(f"### Pytest Run Log (Exit Code: {exit_code})\n\n```\n{log_content}\n```\n")
+            print("[CI Test Runner] Log written to GITHUB_STEP_SUMMARY.")
+        except Exception as e:
+            print(f"[CI Test Runner] Failed to write to GITHUB_STEP_SUMMARY: {e}")
+            
     # Only upload logs if the test execution failed
     if exit_code != 0:
         print(f"[CI Test Runner] Pytest failed with exit code {exit_code}. Uploading log to Supabase...")
