@@ -31,21 +31,12 @@ jobs:
         JWT_SECRET_KEY: "dummy_jwt_secret_key_for_testing_123456789" # pragma: allowlist secret
         FIELD_ENCRYPTION_KEY: "L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=" # pragma: allowlist secret
         SUPABASE_URL: "https://ndkjiycehjdkcqupphuu.supabase.co"
-        SUPABASE_KEY: "dummy_supabase_key"
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         ALLOWED_ORIGINS: "http://localhost:5173"
       run: |
         cd backend
-        PYTEST_EXIT=0
-        python -m pytest tests/ -v > ../pytest_run.log 2>&1 || PYTEST_EXIT=$?
-        cd ..
-        if [ $PYTEST_EXIT -ne 0 ]; then
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add pytest_run.log
-          git commit -m "chore: save CI pytest log [skip ci]" || true
-          git push origin HEAD:ci-pytest-logs --force || true
-        fi
-        exit $PYTEST_EXIT
+        python scripts/ci_test_runner.py
 
   frontend-build:
     runs-on: ubuntu-latest
