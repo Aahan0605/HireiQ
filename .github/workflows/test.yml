@@ -35,8 +35,8 @@ jobs:
         ALLOWED_ORIGINS: "http://localhost:5173"
       run: |
         cd backend
-        python -m pytest tests/ -v > ../pytest_run.log 2>&1
-        PYTEST_EXIT=$?
+        PYTEST_EXIT=0
+        python -m pytest tests/ -v > ../pytest_run.log 2>&1 || PYTEST_EXIT=$?
         cd ..
         if [ $PYTEST_EXIT -ne 0 ]; then
           git config --global user.name "GitHub Actions"
