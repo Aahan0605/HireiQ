@@ -237,7 +237,7 @@ export default function Analyze() {
                       : 'border-border hover:border-violet/50 hover:bg-surface-3 cursor-pointer'
                   }`}
                 >
-                  {false ? (
+                  {plan === 'Free' && quotaUsed >= 5 ? (
                     <div className="flex flex-col items-center gap-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 shadow-glow-rose/10">
                         <ShieldAlert className="h-8 w-8" />
@@ -347,7 +347,7 @@ export default function Analyze() {
 
       {/* Upgrade to Pro Modal */}
       <AnimatePresence>
-        {false && showUpgradeModal && (
+        {showUpgradeModal && (
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 

@@ -93,7 +93,6 @@ export default function Candidates() {
   const [shortlisted, setShortlisted] = useState(new Set()); // top-3 highlight
   const [deltas, setDeltas]         = useState({});          // rank delta badges
   const [sortAsc, setSortAsc]       = useState(false);       // toggle sort direction
-  const blindReview = false;
   
   // Advanced filters state
   const [showFilters, setShowFilters] = useState(false);
@@ -103,6 +102,9 @@ export default function Candidates() {
   const [selectedSkills, setSelectedSkills] = useState(new Set());
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'kanban'
   const [activePool, setActivePool] = useState('All');
+  const [blindReview, setBlindReview] = useState(() => {
+    return localStorage.getItem('hireiq_blind_review') === 'true';
+  });
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
@@ -866,7 +868,7 @@ export default function Candidates() {
                     {stageCandidates.map(c => {
                       const score = Math.round(c?.final_score || c?.score || 0);
                       const displayName = blindReview 
-                        ? `Candidate ${c?.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
+                        ? `Candidate ${c?.id ? String(c.id).substring(0, 4).toUpperCase() : 'XXXX'}` 
                         : c?.name;
 
                       return (
@@ -938,7 +940,7 @@ export default function Candidates() {
                 const delta         = deltas[c?.id];
 
                 const displayName = blindReview 
-                  ? `Candidate ${c?.id ? c.id.substring(0, 4).toUpperCase() : 'XXXX'}` 
+                  ? `Candidate ${c?.id ? String(c.id).substring(0, 4).toUpperCase() : 'XXXX'}` 
                   : (c?.name || 'Anonymous Candidate');
 
                 const displayInitials = blindReview ? '🕵️' : (c?.name?.split(' ')?.map(n => n[0])?.join('')?.slice(0, 2) || 'C');

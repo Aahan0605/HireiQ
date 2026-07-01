@@ -69,13 +69,6 @@ function AppRoutes() {
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
 
-        <Route path="/accept-invite" element={<AcceptInvite />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfService />} />
-
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfService />} />
-
 
         {/* All dashboard pages share the sidebar layout */}
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
