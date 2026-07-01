@@ -31,8 +31,8 @@ jobs:
         JWT_SECRET_KEY: "dummy_jwt_secret_key_for_testing_123456789" # pragma: allowlist secret
         FIELD_ENCRYPTION_KEY: "L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=" # pragma: allowlist secret
         SUPABASE_URL: "https://ndkjiycehjdkcqupphuu.supabase.co"
-        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || 'dummy_supabase_service_key' }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'dummy_supabase_key' }}
         ALLOWED_ORIGINS: "http://localhost:5173"
       run: |
         cd backend
