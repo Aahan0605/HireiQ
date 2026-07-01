@@ -5,6 +5,8 @@ on:
     branches: [ main, test-ci-fail ]
   pull_request:
     branches: [ main ]
+permissions:
+  contents: write
 
 jobs:
   backend-tests:
