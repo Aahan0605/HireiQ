@@ -669,6 +669,8 @@ async def _process_resume_inline(
             insights["linkedin"] = contact.get("linkedin")
         insights["completeness_score"] = insights.get("completeness_score") or 80
         insights["ats_score"] = insights.get("ats_score") or 75
+        insights["evaluation_breakdown"] = scoring_res.get("evaluation_breakdown") or {}
+        insights["experience"] = scoring_res.get("resume_features", {}).get("experience_timeline", [])
 
         # Use name extracted from resume if available, otherwise filename-based name
         extracted_name = (

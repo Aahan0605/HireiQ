@@ -55,6 +55,18 @@ def _candidate_to_dict(c: dict) -> dict:
     stage_val = c.get("stage") or c.get("pipeline_stage") or "screening"
     status = status_map.get(stage_val.lower(), "Screening")
     
+    raw_insights = c.get("insights") or {}
+    if isinstance(raw_insights, str):
+        try:
+            import json
+            raw_insights = json.loads(raw_insights)
+        except Exception:
+            raw_insights = {}
+    elif not isinstance(raw_insights, dict):
+        raw_insights = {}
+    import copy
+    db_insights = copy.deepcopy(raw_insights)
+    
     # If the candidate has the placeholder summary, return status: "Analyzing"
     summary_text = c.get("summary") or ""
     if "Analyzing resume, please wait..." in summary_text:
@@ -93,6 +105,8 @@ def _candidate_to_dict(c: dict) -> dict:
     
     experience = []
     db_exp = c.get("experience")
+    if not db_exp:
+        db_exp = db_insights.get("experience")
     if db_exp:
         if isinstance(db_exp, list):
             experience = db_exp
@@ -124,17 +138,7 @@ def _candidate_to_dict(c: dict) -> dict:
             {"title": c.get("career_tier") or "Software Engineer", "company": "Previous Company", "date": f"{c.get('experience_years', 0)} Years"}
         ]
     
-    raw_insights = c.get("insights") or {}
-    if isinstance(raw_insights, str):
-        try:
-            import json
-            raw_insights = json.loads(raw_insights)
-        except Exception:
-            raw_insights = {}
-    elif not isinstance(raw_insights, dict):
-        raw_insights = {}
-    import copy
-    db_insights = copy.deepcopy(raw_insights)
+    # db_insights is parsed at the top of the function
     has_resume = bool(db_insights.get("resume_base64"))
     
     github_val = c.get("github_url") or ""
@@ -217,6 +221,8 @@ def _candidate_to_dict(c: dict) -> dict:
     insights["executive_summary"] = db_insights.get("ai_summary", {}).get("executive_summary") or db_insights.get("executive_summary") or c.get("summary") or ""
         
     eval_breakdown = c.get("evaluation_breakdown") or {}
+    if not eval_breakdown:
+        eval_breakdown = db_insights.get("evaluation_breakdown") or {}
     if isinstance(eval_breakdown, str):
         try:
             import json
@@ -330,6 +336,16 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
             if k not in insights or insights[k] is None:
                 insights[k] = v
 
+    # Put evaluation_breakdown inside insights to avoid database column missing error
+    eval_breakdown = candidate.get("evaluation_breakdown") or {}
+    if eval_breakdown:
+        insights["evaluation_breakdown"] = eval_breakdown
+
+    # Put experience inside insights to avoid database column missing error
+    experience_list = candidate.get("experience") or []
+    if experience_list:
+        insights["experience"] = experience_list
+
     if "linkedin" in candidate:
         insights["linkedin"] = candidate["linkedin"]
     
@@ -377,8 +393,6 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "interview_questions": candidate.get("qa") or [],
         "summary": candidate.get("summary"),
         "insights": insights,
-        "experience": candidate.get("experience") or [],
-        "evaluation_breakdown": candidate.get("evaluation_breakdown") or {}
     }
     
     # Experience years

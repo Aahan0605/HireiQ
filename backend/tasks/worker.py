@@ -215,10 +215,9 @@ def process_resume_task(candidate_id: str, filename: str, content_b64: str, tena
             "blind_score": blind_score,
             "resume_filename": filename,
             "interview_questions": [],
-            "insights": insights,
+            "insights": {**insights, "evaluation_breakdown": scoring_res.get("evaluation_breakdown") or {}},
             "summary": insights.get("ai_summary", {}).get("executive_summary", ""),
-            "experience": scoring_res.get("resume_features", {}).get("experience_timeline", []),
-            "evaluation_breakdown": scoring_res.get("evaluation_breakdown") or {}
+            "experience": scoring_res.get("resume_features", {}).get("experience_timeline", [])
         }
         
         if best_job:
