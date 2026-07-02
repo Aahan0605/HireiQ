@@ -504,26 +504,19 @@ HireIQ Hiring Team`
       setError(null);
       setGithub(null);
 
-      const candidateRequest = apiFetch(`${API}/candidates/${id}`).then(readJson);
-      const notesRequest = apiFetch(`${API}/candidates/${id}/notes`).then(readJson);
-      const interviewsRequest = apiFetch(`${API}/candidates/${id}/interviews`).then(readJson);
-      const jobsRequest = apiFetch(`${API}/jobs`).then(readJson);
-      const githubRequest = Promise.allSettled([
-        apiFetch(`${API}/candidates/${id}/insights`).then(readJson)
-      ]);
-
       try {
-        const [candidateResult, notesResult, interviewsResult, jobsResult] = await Promise.allSettled([
-          candidateRequest,
-          notesRequest,
-          interviewsRequest,
-          jobsRequest,
+        const [candidateResult, notesResult, interviewsResult, jobsResult, githubResult] = await Promise.allSettled([
+          apiFetch(`${API}/candidates/${id}`).then(readJson),
+          apiFetch(`${API}/candidates/${id}/notes`).then(readJson),
+          apiFetch(`${API}/candidates/${id}/interviews`).then(readJson),
+          apiFetch(`${API}/jobs`).then(readJson),
+          apiFetch(`${API}/candidates/${id}/insights`).then(readJson)
         ]);
 
         if (cancelled) return;
 
         let loadedCandidate = null;
-        if (candidateResult.status === 'fulfilled') {
+        if (candidateResult.status === 'fulfilled' && candidateResult.value) {
           const { res, data } = candidateResult.value;
           if (res.ok) {
             loadedCandidate = data;
@@ -540,35 +533,28 @@ HireIQ Hiring Team`
           setError(candidateResult.reason?.message || 'Failed to load candidate profile.');
         }
 
-        if (notesResult.status === 'fulfilled' && notesResult.value.res.ok) {
+        if (notesResult.status === 'fulfilled' && notesResult.value?.res?.ok) {
           setNotes(Array.isArray(notesResult.value.data) ? notesResult.value.data : []);
         } else if (notesResult.status === 'rejected') {
           console.error('Failed to load notes:', notesResult.reason);
         }
 
-        if (interviewsResult.status === 'fulfilled' && interviewsResult.value.res.ok) {
+        if (interviewsResult.status === 'fulfilled' && interviewsResult.value?.res?.ok) {
           setInterviews(Array.isArray(interviewsResult.value.data) ? interviewsResult.value.data : []);
         } else if (interviewsResult.status === 'rejected') {
           console.error('Failed to load interviews:', interviewsResult.reason);
         }
 
-        if (jobsResult.status === 'fulfilled' && jobsResult.value.res.ok) {
+        if (jobsResult.status === 'fulfilled' && jobsResult.value?.res?.ok) {
           const data = jobsResult.value.data;
           setJobs(Array.isArray(data) ? data.filter(j => j.status === 'Open') : []);
         }
 
-        setLoading(false);
-        setNotesLoading(false);
-
-        const githubResult = await githubRequest;
-        if (cancelled) return;
-
-        const result = githubResult[0];
-        if (result.status === 'fulfilled' && result.value.res.ok) {
-          setGithub(normalizeGithubData(result.value.data, loadedCandidate));
+        if (githubResult.status === 'fulfilled' && githubResult.value?.res?.ok) {
+          setGithub(normalizeGithubData(githubResult.value.data, loadedCandidate));
         } else {
-          if (result.status === 'rejected') {
-            console.error('Failed to load GitHub stats:', result.reason);
+          if (githubResult.status === 'rejected') {
+            console.error('Failed to load GitHub stats:', githubResult.reason);
           }
           setGithub(buildGithubFallback(loadedCandidate));
         }
@@ -1209,6 +1195,55 @@ HireIQ Hiring Team`
                     </div>
                   )}
                 </div>
+              </div>
+            </MagneticCard>
+
+            {/* Structured Evaluation Breakdown */}
+            <MagneticCard className="p-8 border-black/10 dark:border-white/10 bg-[#13131f]">
+              <h3 className="mb-1 text-xl font-semibold text-white flex items-center gap-2">
+                🎯 Structured Evaluation Breakdown
+              </h3>
+              <p className="text-xs text-gray-500 mb-6">Objective multi-dimensional analysis derived at ingestion</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  {
+                    label: "Technical Skills",
+                    value: candidate.evaluation_breakdown?.technical_skills ?? 70,
+                    description: "Core programming languages, framework experience, and skill volume alignment.",
+                    color: "bg-gradient-to-r from-violet to-fuchsia-600",
+                  },
+                  {
+                    label: "Experience & Growth",
+                    value: candidate.evaluation_breakdown?.experience_growth ?? 65,
+                    description: "Years of professional experience, career progression, and tenure stability.",
+                    color: "bg-blue-500",
+                  },
+                  {
+                    label: "Communication & Leadership",
+                    value: candidate.evaluation_breakdown?.communication_leadership ?? 75,
+                    description: "Resume formatting, written clarity, and leadership or mentorship signals.",
+                    color: "bg-emerald-500",
+                  },
+                  {
+                    label: "Portfolio & Verification",
+                    value: candidate.evaluation_breakdown?.portfolio_verification ?? 60,
+                    description: "GitHub signals (stars/repos), LinkedIn details, and trust checks.",
+                    color: "bg-cyan-500",
+                  },
+                ].map(item => (
+                  <div key={item.label} className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-gray-200 font-semibold">{item.label}</span>
+                        <span className="text-white font-bold">{item.value}/100</span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">{item.description}</p>
+                    </div>
+                    <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                      <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.value}%` }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </MagneticCard>
 

@@ -296,6 +296,14 @@ async def compute_full_candidate_score(
             "experience_timeline": resume_features.get("experience_timeline", []),
         },
     }
+    evaluation_breakdown = _calculate_evaluation_breakdown(
+        resume_features=resume_features,
+        resume_text=resume_text,
+        jd_features=jd_features,
+        github_signals=github_raw,
+        trust_result=trust_result,
+        insights=insights,
+    )
 
     return {
         "candidate_name": candidate_name,
@@ -332,6 +340,7 @@ async def compute_full_candidate_score(
         "missing_skills": missing_skills,
         "recommendations": recommendations,
         "insights": insights,
+        "evaluation_breakdown": evaluation_breakdown,
     }
 
 
@@ -999,4 +1008,142 @@ def _generate_recruiter_summary(
         "interview_focus": interview_focus[:5],
         "verdict": verdict,
         "match_percentage": round(match_pct, 1),
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# Structured 4-Category Evaluation Breakdown
+# ─────────────────────────────────────────────────────────────
+
+def _calculate_evaluation_breakdown(
+    resume_features: dict,
+    resume_text: str,
+    jd_features: dict,
+    github_signals: dict,
+    trust_result: dict,
+    insights: dict,
+) -> dict[str, int]:
+    """
+    Calculate 4 distinct category evaluation scores from 0 to 100:
+    1. Technical Skills
+    2. Experience & Growth
+    3. Communication & Leadership
+    4. Portfolio & Verification
+    """
+    import re
+    
+    def safe_float(val, default=0.0):
+        if val is None:
+            return default
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, str):
+            try:
+                return float(val)
+            except ValueError:
+                nums = re.findall(r"\d+\.?\d*", val)
+                if nums:
+                    return float(nums[0])
+        if isinstance(val, list) and val:
+            return safe_float(val[0], default)
+        if isinstance(val, dict):
+            for k in ("years", "value", "amount", "total"):
+                if k in val:
+                    return safe_float(val[k], default)
+        return default
+
+    # 1. Technical Skills
+    skills = resume_features.get("skills", []) or []
+    jd_required = jd_features.get("required_skills", []) or []
+    matched_skills = [s for s in skills if any(s.lower() == r.lower() for r in jd_required)]
+    
+    if not jd_required:
+        skills_match_score = 30
+    else:
+        skills_match_score = int((len(matched_skills) / max(1, len(jd_required))) * 50)
+        
+    unique_skills_score = min(10, len(skills)) * 3
+    
+    programming_languages = ["python", "java", "javascript", "typescript", "c++", "c#", "go", "rust", "ruby", "swift", "kotlin"]
+    lang_count = sum(1 for lang in programming_languages if lang in resume_text.lower())
+    lang_score = min(20, lang_count * 4)
+    
+    tech_skills = min(100, max(10, skills_match_score + unique_skills_score + lang_score))
+    
+    # 2. Experience & Growth
+    exp_years = safe_float(resume_features.get("experience", 0.0))
+    exp_score = int(min(10.0, exp_years) * 5)
+    
+    career_progression = insights.get("career_progression", "")
+    if "principal" in career_progression.lower() or "lead" in career_progression.lower() or "director" in career_progression.lower() or "senior leadership" in career_progression.lower():
+        prog_score = 30
+    elif "mid-senior" in career_progression.lower():
+        prog_score = 25
+    elif "independent" in career_progression.lower() or "mid-level" in career_progression.lower():
+        prog_score = 20
+    elif "early" in career_progression.lower() or "associate" in career_progression.lower():
+        prog_score = 12
+    else:
+        prog_score = 5
+        
+    timeline = resume_features.get("experience_timeline", []) or []
+    timeline_score = min(4, len(timeline)) * 5
+    
+    exp_growth = min(100, max(10, exp_score + prog_score + timeline_score))
+    
+    # 3. Communication & Leadership
+    words = len(resume_text.split())
+    if words < 150:
+        writing_score = 10
+    elif words >= 800:
+        writing_score = 40
+    elif words >= 500:
+        writing_score = 30
+    else:
+        writing_score = 20
+        
+    leadership_keywords = ["led", "managed", "oversee", "supervised", "lead", "director", "manager", "team of", "mentored", "coached", "guided"]
+    lead_count = sum(1 for word in leadership_keywords if word in resume_text.lower())
+    lead_score = min(30, lead_count * 5)
+    
+    comm_signals_score = 0
+    if resume_features.get("email"):
+        comm_signals_score += 15
+    if resume_features.get("location"):
+        comm_signals_score += 15
+        
+    comm_leadership = min(100, max(10, writing_score + lead_score + comm_signals_score))
+    
+    # 4. Portfolio & Verification
+    verification_score = 0
+    if resume_features.get("email"):
+        verification_score += 10
+    if resume_features.get("phone"):
+        verification_score += 10
+    if resume_features.get("linkedin"):
+        verification_score += 10
+        
+    github_score = 0
+    github_raw = github_signals or {}
+    if resume_features.get("github") or github_raw:
+        github_score += 15
+        stars = github_raw.get("total_stars", 0) or 0
+        github_score += int(min(10, stars) * 1.5)
+        repos = github_raw.get("total_repos", 0) or 0
+        github_score += int(min(10, repos) * 1.0)
+        
+    # Verified skills ratio
+    verified_skills = trust_result.get("verified_skills", []) or []
+    if verified_skills and skills:
+        ratio_score = int((len(verified_skills) / max(1, len(skills))) * 30)
+    else:
+        ratio_score = 15
+        
+    portfolio_verification = min(100, max(10, verification_score + github_score + ratio_score))
+    
+    return {
+        "technical_skills": tech_skills,
+        "experience_growth": exp_growth,
+        "communication_leadership": comm_leadership,
+        "portfolio_verification": portfolio_verification,
     }

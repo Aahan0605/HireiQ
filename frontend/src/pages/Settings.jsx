@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { apiFetch } from '../lib/apiFetch';
 import { useAuth } from '../context/AuthContext';
 import MagneticCard from '../components/MagneticCard';
+import Skeleton from '../components/ui/Skeleton';
 
 
 const API = '/api/v1';
@@ -48,42 +49,52 @@ const plansList = [
 function SettingsScoringSkeleton() {
   return (
     <div className="space-y-6">
-      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card" maxTilt={0}>
         <div className="mb-6 flex items-center justify-between">
-          <div className="h-5 w-36 rounded bg-white/10" />
-          <div className="h-4 w-4 rounded-full bg-white/10" />
+          <Skeleton width="9rem" height={20} />
+          <Skeleton width="1rem" height={16} borderRadius={9999} />
         </div>
         <div className="space-y-6">
           {Array(4).fill(0).map((_, i) => (
             <div key={i} className="space-y-2">
               <div className="flex justify-between">
-                <div className="h-4 w-56 rounded bg-white/10" />
-                <div className="h-4 w-10 rounded bg-white/10" />
+                <Skeleton width="14rem" height={16} />
+                <Skeleton width="2.5rem" height={16} />
               </div>
-              <div className="h-2 w-full rounded-full bg-white/10" />
+              <Skeleton width="100%" height={8} borderRadius={9999} />
             </div>
           ))}
         </div>
-        <div className="mt-6 h-12 rounded-lg bg-white/10" />
-        <div className="mt-5 h-10 w-36 rounded-xl bg-white/10" />
+        <div className="mt-6">
+          <Skeleton width="100%" height={48} borderRadius={8} />
+        </div>
+        <div className="mt-5">
+          <Skeleton width="9rem" height={40} borderRadius={12} />
+        </div>
       </MagneticCard>
 
-      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
-        <div className="mb-4 h-5 w-28 rounded bg-white/10" />
-        <div className="h-20 rounded-lg bg-white/10" />
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card" maxTilt={0}>
+        <div className="mb-4">
+          <Skeleton width="7rem" height={20} />
+        </div>
+        <Skeleton width="100%" height={80} borderRadius={8} />
       </MagneticCard>
 
-      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
-        <div className="mb-4 h-5 w-36 rounded bg-white/10" />
+      <MagneticCard className="p-6 border-black/10 dark:border-white/10 bg-card" maxTilt={0}>
+        <div className="mb-4">
+          <Skeleton width="9rem" height={20} />
+        </div>
         <div className="grid grid-cols-3 gap-4">
           {Array(3).fill(0).map((_, i) => (
             <div key={i} className="space-y-2">
-              <div className="h-3 w-20 rounded bg-white/10" />
-              <div className="h-10 rounded-lg bg-white/10" />
+              <Skeleton width="5rem" height={12} />
+              <Skeleton width="100%" height={40} borderRadius={8} />
             </div>
           ))}
         </div>
-        <div className="mt-5 h-10 w-40 rounded-xl bg-white/10" />
+        <div className="mt-5">
+          <Skeleton width="10rem" height={40} borderRadius={12} />
+        </div>
       </MagneticCard>
     </div>
   );

@@ -392,6 +392,7 @@ async def analyze_single(request: SingleAnalysisRequest) -> CandidateResult:
         recommendations=result.get("recommendations", []),
         resume_features=result.get("resume_features"),
         external_signals=result.get("external_signals"),
+        evaluation_breakdown=result.get("evaluation_breakdown"),
     )
 
 

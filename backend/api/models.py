@@ -89,6 +89,7 @@ class CandidateResult(BaseModel):
     recommendations: list[str]
     resume_features: dict | None = None
     external_signals: dict | None = None
+    evaluation_breakdown: dict | None = None
 
 
 class RankingResponse(BaseModel):

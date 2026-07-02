@@ -118,6 +118,7 @@ class Candidate(Base):
     radar_data = Column(Text)      # JSON Array string
     qa = Column(Text)              # JSON string
     insights = Column(Text)        # JSON string
+    evaluation_breakdown = Column(Text)  # JSON string
     analyzed_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

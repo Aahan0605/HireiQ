@@ -216,6 +216,14 @@ def _candidate_to_dict(c: dict) -> dict:
     insights["ats_score"] = float(c.get("ats_score") or 0.0)
     insights["executive_summary"] = db_insights.get("ai_summary", {}).get("executive_summary") or db_insights.get("executive_summary") or c.get("summary") or ""
         
+    eval_breakdown = c.get("evaluation_breakdown") or {}
+    if isinstance(eval_breakdown, str):
+        try:
+            import json
+            eval_breakdown = json.loads(eval_breakdown)
+        except Exception:
+            eval_breakdown = {}
+
     return {
         "id": str(c.get("id")),
         "organization_id": str(c.get("recruiter_id")),
@@ -246,6 +254,7 @@ def _candidate_to_dict(c: dict) -> dict:
         "radarData": radar_data,
         "qa": c.get("interview_questions") or [],
         "insights": insights,
+        "evaluation_breakdown": eval_breakdown,
         "analyzed_at": c.get("created_at")
     }
 
@@ -368,7 +377,8 @@ async def save_candidate(candidate: dict, recruiter_id: str = None) -> dict:
         "interview_questions": candidate.get("qa") or [],
         "summary": candidate.get("summary"),
         "insights": insights,
-        "experience": candidate.get("experience") or []
+        "experience": candidate.get("experience") or [],
+        "evaluation_breakdown": candidate.get("evaluation_breakdown") or {}
     }
     
     # Experience years

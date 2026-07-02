@@ -5,6 +5,7 @@ import { Briefcase, MapPin, Clock, Trash2, Edit2, X } from 'lucide-react';
 import { apiFetch } from '../lib/apiFetch';
 import EmptyState from '../components/EmptyState';
 import MagneticCard from '../components/MagneticCard';
+import Skeleton from '../components/ui/Skeleton';
 
 const API = '/api/v1';
 
@@ -22,30 +23,30 @@ const EMPTY_FORM = {
 
 function JobCardSkeleton() {
   return (
-    <MagneticCard className="h-44 p-5 border-black/10 dark:border-white/10 bg-card animate-pulse" maxTilt={0}>
+    <MagneticCard className="h-44 p-5 border-black/10 dark:border-white/10 bg-card" maxTilt={0}>
       <div className="flex h-full flex-col justify-between">
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="h-4 w-36 rounded bg-white/10" />
-            <div className="h-6 w-16 rounded-full bg-white/10" />
+            <Skeleton width="9rem" height={16} />
+            <Skeleton width="4rem" height={24} borderRadius={9999} />
           </div>
           <div className="flex gap-2">
-            <div className="h-5 w-20 rounded-full bg-white/10" />
-            <div className="h-5 w-24 rounded-full bg-white/10" />
-            <div className="h-5 w-16 rounded-full bg-white/10" />
+            <Skeleton width="5rem" height={20} borderRadius={9999} />
+            <Skeleton width="6rem" height={20} borderRadius={9999} />
+            <Skeleton width="4rem" height={20} borderRadius={9999} />
           </div>
-          <div className="h-3 w-28 rounded bg-white/10" />
+          <Skeleton width="7rem" height={12} />
           <div className="flex gap-2">
-            <div className="h-5 w-16 rounded-full bg-white/10" />
-            <div className="h-5 w-20 rounded-full bg-white/10" />
-            <div className="h-5 w-14 rounded-full bg-white/10" />
+            <Skeleton width="4rem" height={20} borderRadius={9999} />
+            <Skeleton width="5rem" height={20} borderRadius={9999} />
+            <Skeleton width="3.5rem" height={20} borderRadius={9999} />
           </div>
         </div>
         <div className="flex items-center justify-between border-t border-white/5 pt-3">
-          <div className="h-7 w-24 rounded-lg bg-white/10" />
+          <Skeleton width="6rem" height={28} borderRadius={8} />
           <div className="flex gap-2">
-            <div className="h-7 w-7 rounded-lg bg-white/10" />
-            <div className="h-7 w-7 rounded-lg bg-white/10" />
+            <Skeleton width="1.75rem" height={28} borderRadius={8} />
+            <Skeleton width="1.75rem" height={28} borderRadius={8} />
           </div>
         </div>
       </div>
