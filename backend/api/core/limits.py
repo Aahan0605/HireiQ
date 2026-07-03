@@ -3,17 +3,26 @@ from db import get_supabase
 
 # Per-plan usage quotas enforced server-side (see check_* functions below).
 #
-# NOTE: These limits were previously all set to 999999, which effectively
-# DISABLED monetization enforcement — free accounts had the same unlimited usage
-# as paid ones. The values below are sensible launch defaults; confirm the exact
-# numbers against the pricing shown in PricingSection.jsx before going live.
-# "enterprise" remains effectively unlimited by design.
+# These are aligned to the tiers advertised in frontend PricingSection.jsx:
+#   - Starter  $49/mo  -> "Up to 50 analyzes/mo"
+#   - Pro     $149/mo  -> "Unlimited analyzes"
+#   - Enterprise Custom -> unlimited
+# The pricing page has NO free tier, but new registrations default to plan="free"
+# (see auth.register). "free" is therefore treated as a small pre-purchase trial.
+# "business" is retained for backwards-compat with the billing webhook's price
+# mapping; it mirrors an unlimited paid tier.
+#
+# CAVEAT: the billing webhook maps Stripe prices to plan names "pro"/"business",
+# but the pricing UI names the paid tiers "Starter"/"Pro"/"Enterprise". Reconcile
+# the plan-name vocabulary (and add STRIPE_PRICE_STARTER) before launch — see
+# AUDIT_LOG P1-1.
 _UNLIMITED = 10**9
 
 PLAN_QUOTAS = {
-    "free": {"parses": 25, "jobs": 3, "seats": 1},
-    "pro": {"parses": 1000, "jobs": 50, "seats": 5},
-    "business": {"parses": 5000, "jobs": 200, "seats": 20},
+    "free": {"parses": 10, "jobs": 1, "seats": 1},          # trial default for new signups
+    "starter": {"parses": 50, "jobs": 10, "seats": 3},      # $49/mo — "Up to 50 analyzes/mo"
+    "pro": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},       # $149/mo — "Unlimited analyzes"
+    "business": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},  # billing-compat, unlimited
     "enterprise": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},
 }
 

@@ -36,8 +36,10 @@ Backend test suite: **44 passed**, stable across repeated runs (no flakiness obs
 ### P1-1 · Usage quotas were effectively disabled (no server-side monetization enforcement) — FIXED (defaults) / NEEDS OWNER CONFIRMATION (numbers)
 - **File:** `backend/api/core/limits.py`
 - **Root cause:** `PLAN_QUOTAS` set `parses/jobs/seats = 999999` for **every** tier including `free`. The enforcement plumbing (`check_cv_upload_limit`, `check_job_creation_limit`, `check_seat_limit`) worked correctly but had nothing to enforce — a free account had identical unlimited usage to a paid one. For a paid launch this means **there is no product reason to upgrade**, and the "enforce quotas server-side" requirement was unmet.
-- **Fix:** Set real launch-default quotas — `free: 25 parses / 3 jobs / 1 seat`, `pro: 1000 / 50 / 5`, `business: 5000 / 200 / 20`, `enterprise: unlimited`. Added a `business` tier (referenced by pricing) that was missing from the map.
-- **Owner follow-up:** Confirm these numbers match `frontend/src/components/PricingSection.jsx`. Also note `cv_upload_count` is a lifetime counter — decide whether quotas should reset monthly (billing-period reset is not yet implemented).
+- **Fix:** Set real quotas **aligned to `PricingSection.jsx`** — `free` (trial): 10 parses / 1 job / 1 seat; `starter` ($49, "Up to 50 analyzes/mo"): 50 / 10 / 3; `pro` ($149, "Unlimited analyzes"): unlimited; `enterprise`: unlimited. Kept `business` (unlimited) for billing-webhook compatibility.
+- **Plan-name mismatch found (needs owner action):** The billing webhook maps Stripe prices to plan names `pro`/`business`, but the pricing UI advertises `Starter`/`Pro`/`Enterprise`, and there is **no `STRIPE_PRICE_STARTER`**. A customer who buys "Starter" has no code path to land on the `starter` plan. Reconcile the plan-name vocabulary and add the Starter price mapping before launch.
+- **No free tier on the pricing page:** new signups default to `plan="free"`, which the pricing page doesn't list. `free` is treated here as a limited trial — confirm that's the intended pre-purchase experience.
+- **Owner follow-up:** `cv_upload_count` is a **lifetime** counter — the "50 analyzes/**mo**" copy implies a monthly reset that is **not yet implemented**. Add billing-period reset before advertising monthly quotas.
 
 ### P1-2 · Bulk upload had no per-file or total size limit — FIXED
 - **File:** `backend/api/routes/candidates.py` (`upload_bulk`)
