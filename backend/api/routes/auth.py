@@ -75,7 +75,8 @@ async def fetch_user_by_email(email: str) -> dict | None:
         raise e
 
 @router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserRegister, background_tasks: BackgroundTasks):
+@limiter.limit("5/hour")
+async def register(request: Request, user_in: UserRegister, background_tasks: BackgroundTasks):
     """Register a new recruiter account."""
     try:
         existing_user = await fetch_user_by_email(user_in.email)
@@ -146,14 +147,22 @@ async def register(user_in: UserRegister, background_tasks: BackgroundTasks):
     except Exception:
         pass
     
-    return {
+    response = {
         "id": user_id,
         "email": user_in.email,
         "role": user_in.role,
         "message": "Registration successful. Please check your email to verify your account.",
         "email_verification_sent": True,
-        "verification_token": token
     }
+
+    # SECURITY: never expose the raw verification token in production responses —
+    # doing so lets anyone self-verify without receiving the email, defeating
+    # email verification entirely. Only surface it in local development to support
+    # the dev "click to verify" convenience link on the sign-in page.
+    if os.getenv("ENVIRONMENT", "development").lower() == "development":
+        response["verification_token"] = token
+
+    return response
 
 async def perform_login_checks(user: dict, password_attempt: str) -> None:
     now = datetime.now(timezone.utc)
@@ -341,7 +350,8 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
     }
 
 @router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks):
+@limiter.limit("5/hour")
+async def forgot_password(request: Request, req: ForgotPasswordRequest, background_tasks: BackgroundTasks):
     """Always return 200 to prevent email enumeration."""
     try:
         user = await fetch_user_by_email(req.email)
@@ -362,7 +372,8 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
     return {"message": "If that email exists, a reset link has been sent."}
 
 @router.post("/reset-password")
-async def reset_password(req: ResetPasswordRequest):
+@limiter.limit("10/hour")
+async def reset_password(request: Request, req: ResetPasswordRequest):
     try:
         supabase = get_supabase()
         res = supabase.table("recruiters").select("*").eq("password_reset_token", req.token).execute()

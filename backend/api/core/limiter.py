@@ -4,10 +4,26 @@ from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+
+def _bypass_requested(request: Request) -> bool:
+    """
+    Returns True only when a rate-limit bypass key is explicitly configured via
+    the environment AND the incoming request presents the matching header.
+
+    The bypass has no default value: if BYPASS_RATE_LIMIT_KEY is unset or blank
+    (the production default), no header can ever bypass rate limiting. This
+    prevents an external client from disabling brute-force protection with a
+    guessable/hardcoded key.
+    """
+    bypass_key = (os.getenv("BYPASS_RATE_LIMIT_KEY") or "").strip()
+    if not bypass_key:
+        return False
+    return request.headers.get("X-Bypass-Rate-Limit") == bypass_key
+
+
 def get_remote_address_with_bypass(request: Request) -> str:
-    """Gets the remote address, or returns a unique UUID if the bypass header is present."""
-    bypass_key = os.getenv("BYPASS_RATE_LIMIT_KEY", "super-secret-bypass-key-12345")
-    if request.headers.get("X-Bypass-Rate-Limit") == bypass_key:
+    """Gets the remote address, or returns a unique UUID if bypass is configured and requested."""
+    if _bypass_requested(request):
         return str(uuid.uuid4())
     return get_remote_address(request)
 
@@ -16,10 +32,9 @@ def get_user_or_ip(request: Request) -> str:
     Rate limiting key function.
     Returns 'user:{user_id}' if the user is authenticated via Bearer token,
     otherwise falls back to remote IP address.
-    Supports rate limit bypass.
+    Supports rate limit bypass only when explicitly configured via env.
     """
-    bypass_key = os.getenv("BYPASS_RATE_LIMIT_KEY", "super-secret-bypass-key-12345")
-    if request.headers.get("X-Bypass-Rate-Limit") == bypass_key:
+    if _bypass_requested(request):
         return str(uuid.uuid4())
 
     auth_header = request.headers.get("Authorization")
