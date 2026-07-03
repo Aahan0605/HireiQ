@@ -99,6 +99,20 @@ Backend test suite: **44 passed**, stable across repeated runs (no flakiness obs
 - **Files:** `.github/workflows/ci.yml`, `test.yml` (`SUPABASE_URL: "https://ndkjiycehjdkcqupphuu.supabase.co"`)
 - **Impact:** Minor info disclosure (the project ref, not a secret key). Prefer sourcing from `${{ secrets.* }}` with a dummy fallback, consistent with the other vars.
 
+### P2-10 · Failed CI runs write pytest logs into the Supabase candidates table — OBSERVED
+- **File:** `backend/scripts/ci_test_runner.py` (`upload_log`)
+- **Root cause:** On any test failure the runner inserts a candidate row (`full_name: "CI Run Log"`, the full pytest output in `raw_text`/`insights.log`) linked to the first real recruiter it finds. Since CI's `SUPABASE_URL` is a real project ref, if a real `SUPABASE_KEY` is configured in Actions secrets, **every failed CI run pollutes the production candidates table** with fake records containing internal stack traces — and attaches them to a real recruiter's tenant.
+- **Recommendation:** Point CI at a dedicated test/staging Supabase project, or drop the DB upload entirely (the `GITHUB_STEP_SUMMARY` write already surfaces logs on the Actions page). Confirm the exit code is still propagated (it is — `sys.exit(exit_code)`).
+
+### P2-11 · Frontend served without security headers at the Vercel edge — FIXED
+- **File:** `frontend/vercel.json`
+- **Root cause:** The backend set `X-Frame-Options`/HSTS/etc. on API responses, but the static frontend HTML (marketing + app shell) served by Vercel had no such headers — leaving the app clickjackable and without edge HSTS.
+- **Fix:** Added a `headers` block to `vercel.json` applying `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Strict-Transport-Security`, and a restrictive `Permissions-Policy` to all routes.
+
+### P3-3 · Production runs on Render free tier with ENVIRONMENT=staging — OBSERVED
+- **File:** `render.yaml`
+- **Impact:** `plan: free` means the backend cold-starts after 15 min idle (30–60s first-request hang) — a real churn risk for paying users, currently papered over by the `keep_alive.yml` cron. For a paid launch, upgrade to a paid Render instance (removes cold starts and the keep-alive hack). Also `ENVIRONMENT: staging` on what may be the production service is a smell — set it to `production` so prod-only guards behave as intended. (Blueprint secrets are correctly `sync: false`, i.e. not committed — good.)
+
 ---
 
 ## P3 — Nice-to-have

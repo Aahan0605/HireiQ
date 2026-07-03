@@ -22,16 +22,25 @@ Snapshot after the first hardening pass (Phase 1 code/repo audit + security-rele
 - **Quota reset / billing-period accounting**: not implemented (see item 4).
 - **LinkedIn import**: already a "coming soon" stub per git history — keep it labeled as such.
 
+## ✅ Done in the Phase 2–5 pass
+- **Frontend runtime verified locally**: dev server runs clean — no console errors, routing/ProtectedRoute/NotFound all correct, error boundary not tripped.
+- **Landing PII removed** (real name in the public hero → fictional demo), verified in-browser (P2-9).
+- **Performance**: routes code-split; initial JS bundle **1.83 MB → 384 KB** (recharts loads only on chart pages) — makes the Lighthouse-90 landing target realistic. Toast libraries consolidated to `sonner` (P2-5). framer-motion + React Router deprecation warnings cleared.
+- **Edge security headers** added to `vercel.json` (P2-11).
+- **Competitive research** delivered in `COMPETITIVE_NOTES.md` (Phase 4) with a concrete Phase-5 direction.
+- **CI integrity**: confirmed `ci_test_runner.py` propagates the pytest exit code (failures do fail CI — genuinely fixed, not quieted). Flagged that failed CI runs pollute the Supabase candidates table (P2-10).
+
 ## 📋 Prioritized punch list (remaining, not yet done)
-1. Wire resume parsing to a durable queue + add a reconciliation job for candidates stuck in `Analyzing` (P3-2).
-2. Consolidate to a single toast library — remove `react-hot-toast`, keep `sonner` (P2-5).
-3. Make `/health` stop returning raw DB error strings to unauthenticated callers (P2-6).
-4. Migrate `datetime.utcnow()` → timezone-aware (P3-1).
-5. **Phase 2 (product walk-through)** — not yet executed end-to-end: signup→verify→login→reset email flows against a real provider; single + corrupted/scanned/non-English resume failure paths; Kanban drag persistence across refresh; filters/GitHub sync/Blind Review/scheduler/exports correctness; mobile/responsive + accessibility (keyboard, contrast on `--mint`/`--bg`).
-6. **Phase 3 (live deployment audit)** — needs Vercel/Render dashboard access: console/network errors on the live site, env-var drift, CI green-vs-skipping verification, keep-alive necessity, Docker builds from scratch, security headers/HSTS/CSP in prod, Sentry wired both ends.
-7. **Phase 4 (competitive research)** and **Phase 5 (visual/3D overhaul)** — intentionally not started; gated behind 1–3 being fixed *and verified in production*.
+1. Resolve the **two conflicting pricing definitions** (dead `PricingSection.jsx` vs live `Landing.jsx`) — delete the dead one or wire it up (P2-8).
+2. Implement **monthly quota reset** — "5 parses/month" copy vs. lifetime `cv_upload_count` (P1-1).
+3. Point **CI at a test Supabase project** (or drop the DB log upload) so failures don't write to prod (P2-10).
+4. Wire resume parsing to a durable queue + reconcile candidates stuck in `Analyzing` (P3-2).
+5. `/health` should stop returning raw DB error strings to unauthenticated callers (P2-6).
+6. Migrate `datetime.utcnow()` → timezone-aware (P3-1).
+7. **Phase 2 dynamic flows** — still need a running backend + real data to exercise end-to-end: signup→verify→login→reset against a live email provider; corrupted/scanned/non-English resume failure paths; Kanban drag persistence across refresh; filters/GitHub sync/Blind Review/scheduler/CSV+PDF export correctness; mobile breakpoints; full a11y (keyboard nav, `--mint`-on-`--bg` contrast).
+8. **Phase 5 full visual overhaul** — targeted improvements shipped, but the from-scratch hero redesign is deliberately deferred. Per the competitive research, recommend a **static/product-screenshot hero first** (protects Lighthouse) with an optional lazy-loaded React Three Fiber accent behind `prefers-reduced-motion` — not a blocking 3D hero. This is a design-heavy effort best done interactively.
 
 ## What this pass did NOT verify (be aware)
-- Anything requiring the **live site, production database, or Vercel/Render dashboards** — I don't have those credentials in this environment. All "NEEDS OWNER ACTION" items above fall here.
-- Real **email deliverability** (Resend/SMTP) — only the code paths were reviewed, not live sends.
-- **Frontend runtime** — no dev server was run; frontend findings are from static review only.
+- Anything requiring the **live site, production database, or Vercel/Render dashboards** — no credentials in this environment. All "NEEDS OWNER ACTION" items fall here, plus: live console/network errors on hirei-q.vercel.app, env-var drift, live CI run status (gh not authed), keep-alive necessity, Docker-build-from-scratch, and prod header verification.
+- Real **email deliverability** (Resend/SMTP) — code paths reviewed, not live sends.
+- **Dynamic app flows** — the frontend was run, but authenticated flows (upload, kanban, exports) need a live backend + DB to exercise.
