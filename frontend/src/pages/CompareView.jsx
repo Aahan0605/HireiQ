@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from 'recharts';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend, Tooltip } from 'recharts';
 import { Loader2 } from 'lucide-react';
 import { getCandidateById } from '../data/candidates';
 import { apiFetch } from '../lib/apiFetch';
+import ChartTooltip from '../components/ChartTooltip';
 
 // ── Skill category definitions ────────────────────────────────
 // Each category maps to a set of skill keywords.
@@ -185,6 +186,7 @@ export default function CompareView() {
               <RadarChart data={radarData}>
                 <PolarGrid stroke="rgba(255,255,255,0.08)" />
                 <PolarAngleAxis dataKey="subject" tick={{ fill: '#9494B0', fontSize: 11 }} />
+                <Tooltip content={<ChartTooltip />} />
                 <Radar name={a.name} dataKey={a.name} stroke="#9D74FF" fill="#9D74FF" fillOpacity={0.3} />
                 <Radar name={b.name} dataKey={b.name} stroke="#22d3ee" fill="#22d3ee" fillOpacity={0.3} />
                 <Legend wrapperStyle={{ color: '#9494B0', fontSize: 12 }} />
