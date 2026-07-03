@@ -27,6 +27,7 @@ Snapshot after the first hardening pass (Phase 1 code/repo audit + security-rele
 - **Landing PII removed** (real name in the public hero → fictional demo), verified in-browser (P2-9).
 - **Performance**: routes code-split; initial JS bundle **1.83 MB → 384 KB** (recharts loads only on chart pages) — makes the Lighthouse-90 landing target realistic. Toast libraries consolidated to `sonner` (P2-5). framer-motion + React Router deprecation warnings cleared.
 - **Edge security headers** added to `vercel.json` (P2-11).
+- **Hero visual**: added an animated "candidates → skills → job matches" network graph to the landing hero — dependency-free SVG (2.8 KB lazy chunk, no three.js), `prefers-reduced-motion` aware, verified rendering with a clean console. Deleted the 3 dead landing components so `Landing.jsx` is the single source of truth.
 - **Competitive research** delivered in `COMPETITIVE_NOTES.md` (Phase 4) with a concrete Phase-5 direction.
 - **CI integrity**: confirmed `ci_test_runner.py` propagates the pytest exit code (failures do fail CI — genuinely fixed, not quieted). Flagged that failed CI runs pollute the Supabase candidates table (P2-10).
 
@@ -38,7 +39,7 @@ Snapshot after the first hardening pass (Phase 1 code/repo audit + security-rele
 5. `/health` should stop returning raw DB error strings to unauthenticated callers (P2-6).
 6. Migrate `datetime.utcnow()` → timezone-aware (P3-1).
 7. **Phase 2 dynamic flows** — still need a running backend + real data to exercise end-to-end: signup→verify→login→reset against a live email provider; corrupted/scanned/non-English resume failure paths; Kanban drag persistence across refresh; filters/GitHub sync/Blind Review/scheduler/CSV+PDF export correctness; mobile breakpoints; full a11y (keyboard nav, `--mint`-on-`--bg` contrast).
-8. **Phase 5 full visual overhaul** — targeted improvements shipped, but the from-scratch hero redesign is deliberately deferred. Per the competitive research, recommend a **static/product-screenshot hero first** (protects Lighthouse) with an optional lazy-loaded React Three Fiber accent behind `prefers-reduced-motion` — not a blocking 3D hero. This is a design-heavy effort best done interactively.
+8. **Phase 5 hero** — animated network graph shipped (SVG, not three.js, to protect the Lighthouse win). If you specifically want true WebGL fidelity, swap `SkillMatchGraph.jsx` for a lazy-loaded React Three Fiber version behind the same `reducedMotion` prop + a device check — the integration point (a lazy `<Suspense>` slot in the hero) is already in place. Remaining Phase 5 polish (scroll-reveal consistency, animated chart entries, real testimonials) is incremental from here.
 
 ## What this pass did NOT verify (be aware)
 - Anything requiring the **live site, production database, or Vercel/Render dashboards** — no credentials in this environment. All "NEEDS OWNER ACTION" items fall here, plus: live console/network errors on hirei-q.vercel.app, env-var drift, live CI run status (gh not authed), keep-alive necessity, Docker-build-from-scratch, and prod header verification.

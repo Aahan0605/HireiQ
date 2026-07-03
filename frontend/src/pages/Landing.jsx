@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck, Mail, MapPin, Phone, Globe, Users, Heart } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
 import { usePrefersReducedMotion, useCountUp, useIntersection, useMagneticTilt } from '../lib/hooks';
+
+// Lazy so the graph never blocks the hero's first paint.
+const SkillMatchGraph = lazy(() => import('../components/SkillMatchGraph'));
 
 const MotionLink = motion.create(Link);
 
@@ -370,6 +373,19 @@ export default function Landing() {
           >
             Explore B2B Plans
           </motion.a>
+        </motion.div>
+
+        {/* Skill-match network visualization: candidates -> skills -> job matches */}
+        <motion.div
+          variants={itemVariants}
+          className="w-full max-w-3xl mx-auto mb-14 rounded-2xl border border-white/10 bg-[#0d0d1a]/40 backdrop-blur-md px-4 py-6 sm:px-8"
+        >
+          <p className="text-[10px] font-mono uppercase tracking-widest text-gray-500 text-center mb-4">
+            How HireIQ matches talent
+          </p>
+          <Suspense fallback={<div className="h-[180px]" />}>
+            <SkillMatchGraph reducedMotion={prefersReducedMotion} />
+          </Suspense>
         </motion.div>
 
         {/* Interactive Dashboard Showcase Widget */}
