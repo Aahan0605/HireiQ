@@ -671,12 +671,19 @@ export default function Landing() {
             <HelpCircle className="text-emerald-400" /> Frequently Asked Questions
           </h2>
 
-          <div className="space-y-4">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={scrollContainerVariants}
+            className="space-y-4"
+          >
             {faqs.map((faq, idx) => {
               const isOpen = activeFaq === idx;
               return (
-                <div 
+                <motion.div
                   key={idx}
+                  variants={scrollItemVariants}
                   className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
                 >
                   <button
@@ -704,10 +711,10 @@ export default function Landing() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
       </section>
 
