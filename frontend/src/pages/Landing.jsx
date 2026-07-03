@@ -5,7 +5,7 @@ import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Awar
 import ConstellationBackground from '../components/ConstellationBackground';
 import { usePrefersReducedMotion, useCountUp, useIntersection, useMagneticTilt } from '../lib/hooks';
 
-const MotionLink = motion(Link);
+const MotionLink = motion.create(Link);
 
 export default function Landing() {
   const [activeFaq, setActiveFaq] = useState(null);
@@ -24,7 +24,7 @@ export default function Landing() {
   const totalCandidatesRef = useCountUp(48, prefersReducedMotion ? 0 : 1.4, showcaseInView);
   const githubVerifiedRef = useCountUp(32, prefersReducedMotion ? 0 : 1.4, showcaseInView);
 
-  const sentence = '"Aahan Gajera is a Mid-Level Software Engineer candidate with a verified background in Bachelor of Technology (B.Tech), demonstrating 2.0 years of experience. Live engineering analytics successfully verified practical usage and competence in React and Python (score: 67/100)."';
+  const sentence = '"Jordan Rivera is a Mid-Level Software Engineer candidate with a verified background in Bachelor of Technology (B.Tech), demonstrating 2.0 years of experience. Live engineering analytics successfully verified practical usage and competence in React and Python (score: 67/100)."';
   const words = sentence.split(' ');
 
   const sentenceVariants = {
@@ -428,7 +428,7 @@ export default function Landing() {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      Aahan Gajera <span className="text-[9px] px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 font-semibold border border-cyan-400/20">Mid-Level</span>
+                      Jordan Rivera <span className="text-[9px] px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 font-semibold border border-cyan-400/20">Mid-Level</span>
                     </h4>
                     <p className="text-[10px] text-gray-500 mt-0.5">Sourced via Resume upload</p>
                   </div>

@@ -1,30 +1,42 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
 import { Toaster as SonnerToaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import GrainOverlay from './components/GrainOverlay';
-import DashboardLayout from './components/DashboardLayout';
+
+// Eager: entry points and lightweight auth/legal pages that must render instantly.
 import Landing from './pages/Landing';
 import SignIn from './pages/SignIn';
-import Dashboard from './pages/Dashboard';
-import Analyze from './pages/Analyze';
-import CandidateProfile from './pages/CandidateProfile';
-import Candidates from './pages/Candidates';
-import Settings from './pages/Settings';
-import Jobs from './pages/Jobs';
-import JobMatches from './pages/JobMatches';
-import BiasReport from './pages/BiasReport';
-import CompareView from './pages/CompareView';
-import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
-import VerifyEmail from './pages/VerifyEmail';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import AcceptInvite from './pages/AcceptInvite';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
+
+// Lazy: authenticated dashboard pages (pull in recharts and other heavy deps).
+// Code-splitting these keeps the landing/marketing bundle lean for first paint.
+const DashboardLayout = lazy(() => import('./components/DashboardLayout'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Analyze = lazy(() => import('./pages/Analyze'));
+const CandidateProfile = lazy(() => import('./pages/CandidateProfile'));
+const Candidates = lazy(() => import('./pages/Candidates'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Jobs = lazy(() => import('./pages/Jobs'));
+const JobMatches = lazy(() => import('./pages/JobMatches'));
+const BiasReport = lazy(() => import('./pages/BiasReport'));
+const CompareView = lazy(() => import('./pages/CompareView'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-bg flex items-center justify-center">
+      <div className="h-6 w-6 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+    </div>
+  );
+}
 
 
 const DASH_PREFIXES = [
@@ -56,41 +68,41 @@ function AppRoutes() {
   return (
     <>
       <GrainOverlay />
-      <Toaster position="top-center" reverseOrder={false} toastOptions={{ style: { background: '#131324', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '14px', borderRadius: '12px' } }} />
       <SonnerToaster theme="dark" closeButton richColors position="top-center" />
       <MarketingNav />
-      <Routes>
-        <Route path="/"       element={<Landing />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/accept-invite" element={<AcceptInvite />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfService />} />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/"       element={<Landing />} />
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
 
-
-        {/* All dashboard pages share the sidebar layout */}
-        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-          <Route path="/dashboard"          element={<Dashboard />} />
-          <Route path="/analyze"            element={<Analyze />} />
-          <Route path="/candidates"         element={<Candidates />} />
-          <Route path="/candidate/:id"      element={<CandidateProfile />} />
-          <Route path="/jobs"               element={<Jobs />} />
-          <Route path="/jobs/:id/matches"   element={<JobMatches />} />
-          <Route path="/bias-report"        element={<BiasReport />} />
-          <Route path="/settings"           element={<Settings />} />
-          <Route path="/compare"            element={<CompareView />} />
-        </Route>
-        <Route path="*"                     element={<NotFound />} />
-      </Routes>
+          {/* All dashboard pages share the sidebar layout */}
+          <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+            <Route path="/dashboard"          element={<Dashboard />} />
+            <Route path="/analyze"            element={<Analyze />} />
+            <Route path="/candidates"         element={<Candidates />} />
+            <Route path="/candidate/:id"      element={<CandidateProfile />} />
+            <Route path="/jobs"               element={<Jobs />} />
+            <Route path="/jobs/:id/matches"   element={<JobMatches />} />
+            <Route path="/bias-report"        element={<BiasReport />} />
+            <Route path="/settings"           element={<Settings />} />
+            <Route path="/compare"            element={<CompareView />} />
+          </Route>
+          <Route path="*"                     element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </>
   );
 }
 
 export default function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <ErrorBoundary>
           <AppRoutes />

@@ -6,7 +6,7 @@ import MagneticCard from './MagneticCard';
 
 export default function HeroSection() {
   const prefersReducedMotion = usePrefersReducedMotion();
-  const MotionLink = motion(Link);
+  const MotionLink = motion.create(Link);
 
   const customStagger = {
     hidden: { opacity: 0 },
