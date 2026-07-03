@@ -27,7 +27,7 @@ Snapshot after the first hardening pass (Phase 1 code/repo audit + security-rele
 - **Landing PII removed** (real name in the public hero → fictional demo), verified in-browser (P2-9).
 - **Performance**: routes code-split; initial JS bundle **1.83 MB → 384 KB** (recharts loads only on chart pages) — makes the Lighthouse-90 landing target realistic. Toast libraries consolidated to `sonner` (P2-5). framer-motion + React Router deprecation warnings cleared.
 - **Edge security headers** added to `vercel.json` (P2-11).
-- **Hero visual**: added an animated "candidates → skills → job matches" network graph to the landing hero — dependency-free SVG (2.8 KB lazy chunk, no three.js), `prefers-reduced-motion` aware, verified rendering with a clean console. Deleted the 3 dead landing components so `Landing.jsx` is the single source of truth.
+- **Landing polish**: deleted the 3 dead landing components so `Landing.jsx` is the single source of truth. (An animated hero network graph was trialled then removed at the owner's request — didn't fit the aesthetic.) Instead: elevated the "Recruiter Pro" pricing card so it's clearly the recommended tier (raised, emerald glow, solid badge, hover-lift), added hover-lift micro-interactions to feature cards, and added `focus-visible` keyboard rings to pricing CTAs. All reduced-motion safe; verified in-browser with a clean console.
 - **Competitive research** delivered in `COMPETITIVE_NOTES.md` (Phase 4) with a concrete Phase-5 direction.
 - **CI integrity**: confirmed `ci_test_runner.py` propagates the pytest exit code (failures do fail CI — genuinely fixed, not quieted). Flagged that failed CI runs pollute the Supabase candidates table (P2-10).
 

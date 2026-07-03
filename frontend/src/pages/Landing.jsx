@@ -507,7 +507,7 @@ export default function Landing() {
           variants={scrollContainerVariants}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
         >
-          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">🤖</span>
               <h3 className="font-bold text-sm text-white mb-2">AI Resume Parsing</h3>
@@ -516,7 +516,7 @@ export default function Landing() {
               </p>
             </div>
           </motion.div>
-          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-cyan-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-cyan-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">📈</span>
               <h3 className="font-bold text-sm text-white mb-2">GitHub Footprint Sync</h3>
@@ -525,7 +525,7 @@ export default function Landing() {
               </p>
             </div>
           </motion.div>
-          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-violet/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-violet/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">🔒</span>
               <h3 className="font-bold text-sm text-white mb-2">Anonymized Bias Audit</h3>
@@ -534,7 +534,7 @@ export default function Landing() {
               </p>
             </div>
           </motion.div>
-          <motion.div variants={scrollItemVariants} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-yellow-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
+          <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-yellow-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
               <span className="text-2xl mb-4 block">📅</span>
               <h3 className="font-bold text-sm text-white mb-2">Greedy Scheduling</h3>
