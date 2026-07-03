@@ -71,14 +71,14 @@ We have successfully resolved the production issues to ensure high availability,
 
 ## 🔍 9. End-to-End Live Verification of Resume Upload & Analysis
 We executed the browser-based Playwright verification script against the deployed production site (`https://hirei-q.vercel.app`), verifying:
-1. **Successful Authentication & Upload**: Logged in as `aahan060505@gmail.com` and uploaded the test resume for `Parshva Shah` (`media__1782326986715.pdf`).
+1. **Successful Authentication & Upload**: Logged in with a test recruiter account and uploaded a sample resume.
 2. **State Transition & Polling**: The frontend displayed the `"Analyzing"` state and polled the backend correctly without any premature page transitions.
 3. **Database Insertion & Background Execution**: The backend successfully created a candidate row, ran the 360° scoring pipeline, and stored the correct details:
-   - **Name**: `Parshva Shah`
-   - **GitHub Profile**: `SoulBreaker9` (Extracted from hyperlink!)
-   - **LinkedIn Profile**: `linkedin.com/in/parshva-shah-0473b3319` (Extracted from hyperlink!)
+   - **Name**: parsed from the resume document
+   - **GitHub Profile**: extracted from the resume hyperlink
+   - **LinkedIn Profile**: extracted from the resume hyperlink
    - **GitHub Languages**: `["Jupyter Notebook", "Python", "TypeScript"]`
-4. **Correct Resume Analysis**: The name extraction (`"Parshva Shah"`) and extracted resume features successfully propagated to the generated AI executive summary, replacing the old placeholder text (`"Media 1782326986715"`).
+4. **Correct Resume Analysis**: The name extraction (the parsed candidate name) and extracted resume features successfully propagated to the generated AI executive summary, replacing the old placeholder text (a filename-derived placeholder).
 
 ---
 
@@ -94,4 +94,4 @@ We executed the browser-based Playwright verification script against the deploye
 - **Solution**:
   - Updated `get_github_signals` in [candidates.py](file:///Users/aahanajaygajera/Desktop/al&ml/hireiq/backend/api/routes/candidates.py) to first query the Supabase `candidates` table for the target GitHub handle (`github_url` field).
   - If a matching candidate profile with cached insights is found, the backend returns the stored data directly instead of requesting the live rate-limited GitHub API.
-- **Verification**: Tested against the live deployed endpoint, verifying it correctly returns the cached value `7` for `SoulBreaker9`.
+- **Verification**: Tested against the live deployed endpoint, verifying it correctly returns the the cached value for the test GitHub handle.

@@ -17,12 +17,22 @@ from db import get_supabase
 from db.supabase_client import save_candidate
 
 async def seed():
+    # SECURITY: never seed demo data (or a known-password demo account) outside
+    # local development. In production this would create a predictable login.
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    if environment != "development":
+        raise SystemExit(
+            f"Refusing to seed demo data: ENVIRONMENT={environment!r} (expected 'development')."
+        )
+
     supabase = get_supabase()
-    
-    # 1. Create a demo recruiter
+
+    # 1. Create a demo recruiter with a freshly generated random password.
+    import secrets
     email = "demo@hireiq.dev"
     company = "HireIQ Corp"
-    
+    demo_password = secrets.token_urlsafe(16)
+
     # Check if exists
     res = supabase.table("recruiters").select("*").eq("email", email).execute()
     if res.data:
@@ -31,7 +41,7 @@ async def seed():
         print(f"Recruiter {email} already exists with ID: {recruiter_id}")
     else:
         recruiter_id = str(uuid.uuid4())
-        hashed_password = bcrypt.hashpw("Demo1234!".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed_password = bcrypt.hashpw(demo_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         recruiter = {
             "id": recruiter_id,
             "email": email,
@@ -44,6 +54,8 @@ async def seed():
         }
         supabase.table("recruiters").insert(recruiter).execute()
         print(f"Created demo recruiter: {email} with ID: {recruiter_id}")
+        print(f"  Demo login  ->  email: {email}   password: {demo_password}")
+        print("  (This password is shown once. Re-run against a fresh DB to rotate it.)")
         
     # 2. Create demo jobs
     jobs = [
