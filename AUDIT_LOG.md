@@ -84,11 +84,10 @@ Backend test suite: **44 passed**, stable across repeated runs (no flakiness obs
 - **File:** `backend/api/main.py` (`/health`)
 - **Impact:** On DB failure, `/health` returns `"error": str(e)` unauthenticated, which can disclose internal connection details. Consider returning a generic message publicly and logging the detail server-side only.
 
-### P2-8 · Dead landing-page components imported nowhere — FIXED (documented) / OWNER: delete
+### P2-8 · Dead landing-page components imported nowhere — FIXED (deleted)
 - **Files:** `frontend/src/components/HeroSection.jsx`, `FeaturesSection.jsx`, `PricingSection.jsx`
-- **Root cause:** The Phase-5 brief names these as the landing-page components to edit, but `Landing.jsx` is a ~650-line monolith that inlines its own hero/features/pricing. These three components (and their pricing numbers) are **not imported anywhere** — editing them would have zero visible effect and they silently drift from the live copy (they already disagree on price and quota).
-- **Action taken:** Quotas re-aligned to the live `Landing.jsx` pricing; PII fix applied to the live hero in `Landing.jsx` (not the dead `HeroSection.jsx`).
-- **Owner follow-up:** Delete the dead components, or refactor `Landing.jsx` to actually use them (cleaner for the Phase 5 overhaul). Until then, `Landing.jsx` is the single source of truth for landing content.
+- **Root cause:** The Phase-5 brief names these as the landing-page components to edit, but `Landing.jsx` is a ~650-line monolith that inlines its own hero/features/pricing. These three components (and their pricing numbers) were **not imported anywhere** — editing them would have zero visible effect and they silently drifted from the live copy (they disagreed on both price and quota).
+- **Fix:** Deleted all three dead components (verified no dangling references; `MagneticCard`, which they imported, is retained since real pages use it). Added a source-of-truth comment to `Landing.jsx`'s `pricingPlans` tying it to backend `PLAN_QUOTAS`. `Landing.jsx` is now the single, unambiguous source of landing/pricing content.
 
 ### P2-9 · Landing PII: real person's name in the public hero mockup — FIXED
 - **File:** `frontend/src/pages/Landing.jsx`

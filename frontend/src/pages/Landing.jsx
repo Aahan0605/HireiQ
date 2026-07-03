@@ -209,6 +209,8 @@ export default function Landing() {
     }
   ];
 
+  // Source of truth for public pricing. Must stay in sync with backend
+  // PLAN_QUOTAS in backend/api/core/limits.py (free=5 parses, pro=unlimited).
   const pricingPlans = [
     {
       name: "Free Trial",
