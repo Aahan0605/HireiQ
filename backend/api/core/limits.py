@@ -3,25 +3,19 @@ from db import get_supabase
 
 # Per-plan usage quotas enforced server-side (see check_* functions below).
 #
-# These are aligned to the tiers advertised in frontend PricingSection.jsx:
-#   - Starter  $49/mo  -> "Up to 50 analyzes/mo"
-#   - Pro     $149/mo  -> "Unlimited analyzes"
-#   - Enterprise Custom -> unlimited
-# The pricing page has NO free tier, but new registrations default to plan="free"
-# (see auth.register). "free" is therefore treated as a small pre-purchase trial.
-# "business" is retained for backwards-compat with the billing webhook's price
-# mapping; it mirrors an unlimited paid tier.
-#
-# CAVEAT: the billing webhook maps Stripe prices to plan names "pro"/"business",
-# but the pricing UI names the paid tiers "Starter"/"Pro"/"Enterprise". Reconcile
-# the plan-name vocabulary (and add STRIPE_PRICE_STARTER) before launch — see
-# AUDIT_LOG P1-1.
+# Aligned to the pricing ACTUALLY rendered on the landing page (Landing.jsx
+# `pricingPlans`) — note that PricingSection.jsx is dead code and was NOT the
+# source of truth:
+#   - Free Trial   $0     -> "5 resume parses / month"
+#   - Recruiter Pro $79/mo -> "Unlimited CV uploads"
+#   - Enterprise   Custom -> unlimited
+# "business" is retained only for backwards-compat with the billing webhook's
+# price mapping and mirrors an unlimited paid tier.
 _UNLIMITED = 10**9
 
 PLAN_QUOTAS = {
-    "free": {"parses": 10, "jobs": 1, "seats": 1},          # trial default for new signups
-    "starter": {"parses": 50, "jobs": 10, "seats": 3},      # $49/mo — "Up to 50 analyzes/mo"
-    "pro": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},       # $149/mo — "Unlimited analyzes"
+    "free": {"parses": 5, "jobs": 2, "seats": 1},           # Free Trial — "5 resume parses / month"
+    "pro": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},       # Recruiter Pro $79 — "Unlimited CV uploads"
     "business": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},  # billing-compat, unlimited
     "enterprise": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},
 }

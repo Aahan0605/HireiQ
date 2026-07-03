@@ -36,10 +36,9 @@ Backend test suite: **44 passed**, stable across repeated runs (no flakiness obs
 ### P1-1 · Usage quotas were effectively disabled (no server-side monetization enforcement) — FIXED (defaults) / NEEDS OWNER CONFIRMATION (numbers)
 - **File:** `backend/api/core/limits.py`
 - **Root cause:** `PLAN_QUOTAS` set `parses/jobs/seats = 999999` for **every** tier including `free`. The enforcement plumbing (`check_cv_upload_limit`, `check_job_creation_limit`, `check_seat_limit`) worked correctly but had nothing to enforce — a free account had identical unlimited usage to a paid one. For a paid launch this means **there is no product reason to upgrade**, and the "enforce quotas server-side" requirement was unmet.
-- **Fix:** Set real quotas **aligned to `PricingSection.jsx`** — `free` (trial): 10 parses / 1 job / 1 seat; `starter` ($49, "Up to 50 analyzes/mo"): 50 / 10 / 3; `pro` ($149, "Unlimited analyzes"): unlimited; `enterprise`: unlimited. Kept `business` (unlimited) for billing-webhook compatibility.
-- **Plan-name mismatch found (needs owner action):** The billing webhook maps Stripe prices to plan names `pro`/`business`, but the pricing UI advertises `Starter`/`Pro`/`Enterprise`, and there is **no `STRIPE_PRICE_STARTER`**. A customer who buys "Starter" has no code path to land on the `starter` plan. Reconcile the plan-name vocabulary and add the Starter price mapping before launch.
-- **No free tier on the pricing page:** new signups default to `plan="free"`, which the pricing page doesn't list. `free` is treated here as a limited trial — confirm that's the intended pre-purchase experience.
-- **Owner follow-up:** `cv_upload_count` is a **lifetime** counter — the "50 analyzes/**mo**" copy implies a monthly reset that is **not yet implemented**. Add billing-period reset before advertising monthly quotas.
+- **Fix:** Set real quotas aligned to the pricing **actually rendered** on the landing page (`Landing.jsx` `pricingPlans`): `free` (Free Trial, "5 resume parses / month"): 5 parses / 2 jobs / 1 seat; `pro` (Recruiter Pro $79, "Unlimited CV uploads"): unlimited; `enterprise`: unlimited. Kept `business` (unlimited) for billing-webhook compatibility.
+- **Two conflicting pricing definitions (needs owner decision):** `PricingSection.jsx` advertises `Starter $49 / Pro $149`, but that component is **dead code** (imported nowhere). The landing page inlines a *different* set — `Free Trial $0 / Recruiter Pro $79 / Enterprise`. Quotas are aligned to the live one; delete or reconcile the dead `PricingSection.jsx` so the two don't drift further (see P2-8).
+- **Owner follow-up:** `cv_upload_count` is a **lifetime** counter — the "5 resume parses / **month**" copy implies a monthly reset that is **not yet implemented**. Add billing-period reset before advertising monthly quotas.
 
 ### P1-2 · Bulk upload had no per-file or total size limit — FIXED
 - **File:** `backend/api/routes/candidates.py` (`upload_bulk`)
@@ -84,6 +83,17 @@ Backend test suite: **44 passed**, stable across repeated runs (no flakiness obs
 ### P2-6 · Health endpoint leaks raw DB error string to unauthenticated clients — OBSERVED
 - **File:** `backend/api/main.py` (`/health`)
 - **Impact:** On DB failure, `/health` returns `"error": str(e)` unauthenticated, which can disclose internal connection details. Consider returning a generic message publicly and logging the detail server-side only.
+
+### P2-8 · Dead landing-page components imported nowhere — FIXED (documented) / OWNER: delete
+- **Files:** `frontend/src/components/HeroSection.jsx`, `FeaturesSection.jsx`, `PricingSection.jsx`
+- **Root cause:** The Phase-5 brief names these as the landing-page components to edit, but `Landing.jsx` is a ~650-line monolith that inlines its own hero/features/pricing. These three components (and their pricing numbers) are **not imported anywhere** — editing them would have zero visible effect and they silently drift from the live copy (they already disagree on price and quota).
+- **Action taken:** Quotas re-aligned to the live `Landing.jsx` pricing; PII fix applied to the live hero in `Landing.jsx` (not the dead `HeroSection.jsx`).
+- **Owner follow-up:** Delete the dead components, or refactor `Landing.jsx` to actually use them (cleaner for the Phase 5 overhaul). Until then, `Landing.jsx` is the single source of truth for landing content.
+
+### P2-9 · Landing PII: real person's name in the public hero mockup — FIXED
+- **File:** `frontend/src/pages/Landing.jsx`
+- **Root cause:** The hero "candidate card" mockup hard-coded a real individual's name ("Aahan Gajera") and an inferred profile/score, shown to every visitor of the public marketing page.
+- **Fix:** Replaced with a clearly fictional demo candidate ("Jordan Rivera"). Verified in-browser that the live hero no longer contains the real name.
 
 ### P2-7 · Real Supabase project ref hardcoded in CI workflows — OBSERVED
 - **Files:** `.github/workflows/ci.yml`, `test.yml` (`SUPABASE_URL: "https://ndkjiycehjdkcqupphuu.supabase.co"`)
