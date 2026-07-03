@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from fastapi import FastAPI, Request, Response, status, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -107,14 +107,29 @@ for env_var in ["SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_SERVICE_KEY", "FIELD_E
     if not val or not val.strip():
         raise RuntimeError(f"{env_var} environment variable is not set or empty.")
 
-# Subclass CORSMiddleware to support dynamic Vercel previews and subdomains
+# Subclass CORSMiddleware to optionally support dynamic Vercel preview subdomains.
+#
+# SECURITY: Allowing *any* *.vercel.app origin with allow_credentials=True lets an
+# attacker host a malicious app on their own vercel.app subdomain and make
+# credentialed cross-origin requests against this API. This wildcard is therefore
+# OFF by default and only enabled when ALLOW_VERCEL_PREVIEWS=true (intended for
+# staging, never production). Set VERCEL_PREVIEW_PREFIX to further constrain which
+# preview subdomains are permitted (e.g. your project's deployment prefix).
+_ALLOW_VERCEL_PREVIEWS = os.getenv("ALLOW_VERCEL_PREVIEWS", "false").lower() == "true"
+_VERCEL_PREVIEW_PREFIX = (os.getenv("VERCEL_PREVIEW_PREFIX") or "").strip()
+
+
 class VercelCORSMiddleware(CORSMiddleware):
     def is_allowed_origin(self, origin: str) -> bool:
         if super().is_allowed_origin(origin):
             return True
-        # Dynamically authorize any secure subdomain on vercel.app
-        if origin.startswith("https://") and (origin.endswith(".vercel.app") or ".vercel.app:" in origin):
-            return True
+        if _ALLOW_VERCEL_PREVIEWS and origin.startswith("https://") and (
+            origin.endswith(".vercel.app") or ".vercel.app:" in origin
+        ):
+            if not _VERCEL_PREVIEW_PREFIX:
+                return True
+            host = origin.split("://", 1)[-1]
+            return host.startswith(_VERCEL_PREVIEW_PREFIX)
         return False
 
 app = FastAPI(title="HireIQ API", version="1.0.0")
@@ -137,15 +152,6 @@ def on_startup():
     from db.models import Base
     Base.metadata.create_all(bind=engine)
     logger.info("Database schema bootstrapped.")
-    
-    # Startup check for Resend sandbox domain in non-development environment
-    from_email = os.getenv("FROM_EMAIL", "")
-    is_dev = os.getenv("ENVIRONMENT", "development") == "development"
-    if not is_dev and "resend.dev" in from_email.lower():
-        logger.warning(
-            "WARNING: FROM_EMAIL is configured to use Resend's sandbox domain '%s' in a non-development environment! "
-            "Emails may fail or land in spam.", from_email
-        )
     
     # Startup check for Resend sandbox domain in non-development environment
     from_email = os.getenv("FROM_EMAIL", "")
