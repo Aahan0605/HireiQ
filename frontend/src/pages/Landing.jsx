@@ -1,12 +1,9 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Sparkles, HelpCircle, ArrowRight, Star, Quote, ChevronDown, Award, Github, Linkedin, Terminal, Calendar, ShieldCheck, Mail, MapPin, Phone, Globe, Users, Heart } from 'lucide-react';
 import ConstellationBackground from '../components/ConstellationBackground';
 import { usePrefersReducedMotion, useCountUp, useIntersection, useMagneticTilt } from '../lib/hooks';
-
-// Lazy so the graph never blocks the hero's first paint.
-const SkillMatchGraph = lazy(() => import('../components/SkillMatchGraph'));
 
 const MotionLink = motion.create(Link);
 
@@ -375,19 +372,6 @@ export default function Landing() {
           </motion.a>
         </motion.div>
 
-        {/* Skill-match network visualization: candidates -> skills -> job matches */}
-        <motion.div
-          variants={itemVariants}
-          className="w-full max-w-3xl mx-auto mb-14 rounded-2xl border border-white/10 bg-[#0d0d1a]/40 backdrop-blur-md px-4 py-6 sm:px-8"
-        >
-          <p className="text-[10px] font-mono uppercase tracking-widest text-gray-500 text-center mb-4">
-            How HireIQ matches talent
-          </p>
-          <Suspense fallback={<div className="h-[180px]" />}>
-            <SkillMatchGraph reducedMotion={prefersReducedMotion} />
-          </Suspense>
-        </motion.div>
-
         {/* Interactive Dashboard Showcase Widget */}
         <motion.div
           ref={showcaseRef}
@@ -620,21 +604,26 @@ export default function Landing() {
           className="grid grid-cols-1 md:grid-cols-3 gap-8"
         >
           {pricingPlans.map((plan, idx) => (
-            <motion.div 
+            <motion.div
               key={idx}
               variants={scrollItemVariants}
-              className={`rounded-2xl border p-6 flex flex-col justify-between bg-white/5 backdrop-blur-md relative overflow-hidden transition-all ${
-                plan.popular 
-                  ? 'border-emerald-500/50 shadow-lg' 
-                  : 'border-white/5 hover:border-white/10'
+              whileHover={prefersReducedMotion ? {} : { y: -6 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+              className={`rounded-2xl border p-6 flex flex-col justify-between backdrop-blur-md relative overflow-hidden ${
+                plan.popular
+                  ? 'border-emerald-500/60 bg-emerald-500/[0.06] shadow-xl shadow-emerald-500/10 md:-translate-y-4 md:scale-[1.03]'
+                  : 'border-white/5 bg-white/5 hover:border-white/15'
               }`}
             >
               {plan.popular && (
-                <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-black tracking-widest px-3 py-1 rounded-bl">
-                  POPULAR
-                </div>
+                <>
+                  <div className="absolute -inset-px rounded-2xl bg-gradient-to-b from-emerald-500/20 to-transparent opacity-60 pointer-events-none" />
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-[#07070e] text-[8px] font-black tracking-widest px-3 py-1 rounded-bl">
+                    MOST POPULAR
+                  </div>
+                </>
               )}
-              <div>
+              <div className="relative z-10">
                 <h3 className="font-bold text-sm text-white mb-2">{plan.name}</h3>
                 <div className="text-3xl font-black text-white mb-2">{plan.price}</div>
                 <p className="text-xs text-gray-400 leading-relaxed mb-6">{plan.description}</p>
@@ -650,7 +639,7 @@ export default function Landing() {
               {plan.buttonLink.startsWith('#') ? (
                 <a
                   href={plan.buttonLink}
-                  className={`block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
+                  className={`relative z-10 block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07070e] ${
                     plan.popular
                       ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:opacity-95'
                       : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
@@ -661,7 +650,7 @@ export default function Landing() {
               ) : (
                 <Link
                   to={plan.buttonLink}
-                  className={`block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
+                  className={`relative z-10 block w-full py-2.5 rounded-xl text-center text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07070e] ${
                     plan.popular
                       ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg hover:opacity-95'
                       : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
