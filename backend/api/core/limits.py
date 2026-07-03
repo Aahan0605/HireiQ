@@ -1,10 +1,20 @@
 from fastapi import HTTPException, status
 from db import get_supabase
 
+# Per-plan usage quotas enforced server-side (see check_* functions below).
+#
+# NOTE: These limits were previously all set to 999999, which effectively
+# DISABLED monetization enforcement — free accounts had the same unlimited usage
+# as paid ones. The values below are sensible launch defaults; confirm the exact
+# numbers against the pricing shown in PricingSection.jsx before going live.
+# "enterprise" remains effectively unlimited by design.
+_UNLIMITED = 10**9
+
 PLAN_QUOTAS = {
-    "free": {"parses": 999999, "jobs": 999999, "seats": 999999},
-    "pro": {"parses": 999999, "jobs": 999999, "seats": 999999},
-    "enterprise": {"parses": 999999, "jobs": 999999, "seats": 999999}
+    "free": {"parses": 25, "jobs": 3, "seats": 1},
+    "pro": {"parses": 1000, "jobs": 50, "seats": 5},
+    "business": {"parses": 5000, "jobs": 200, "seats": 20},
+    "enterprise": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},
 }
 
 def get_recruiter(recruiter_id: str) -> dict:
