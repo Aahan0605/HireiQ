@@ -175,19 +175,6 @@ To ensure candidate privacy, HireIQ encrypts all resume text before database per
 
 ---
 
-## 📚 Project Documentation
-
-| Document | Purpose |
-| :--- | :--- |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Render + Vercel deployment configuration and environment variables |
-| [BACKUP.md](BACKUP.md) | Database backup and restore procedures |
-| [AUDIT_LOG.md](AUDIT_LOG.md) | Pre-launch security/quality audit findings, organized by severity |
-| [LAUNCH_READINESS.md](LAUNCH_READINESS.md) | What's verified and safe to charge for vs. what's still outstanding |
-| [COMPETITIVE_NOTES.md](COMPETITIVE_NOTES.md) | AI-ATS competitive landscape research informing the product design |
-| `backend/legal/` | Privacy policy, terms of service, cookie policy, and DPA source docs |
-
----
-
 <div align="center">
   <sub>© 2026 HireIQ · Automated Recruiter Intelligence Portal</sub>
 </div>
