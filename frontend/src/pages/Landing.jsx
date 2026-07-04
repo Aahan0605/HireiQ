@@ -308,6 +308,18 @@ export default function Landing() {
         className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 pt-32 pb-20 max-w-5xl mx-auto text-center"
       >
 
+        <motion.div variants={itemVariants} className="mb-6">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-4 py-1.5 text-xs font-semibold text-emerald-300 backdrop-blur-md">
+            <span className="relative flex h-2 w-2">
+              {!prefersReducedMotion && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+            </span>
+            AI-native applicant tracking for technical teams
+          </span>
+        </motion.div>
+
         <h1 className="mb-6 text-4xl font-black tracking-tight text-white sm:text-6xl md:text-7xl leading-[1.1] text-balance">
           <span className="block overflow-hidden py-2 -my-2">
             <motion.span variants={titleLineVariants} className="block">
@@ -353,14 +365,15 @@ export default function Landing() {
             }}
             whileTap={{ scale: 0.97 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            className="group relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 text-sm font-bold text-white shadow-lg shadow-emerald-500/20"
+            className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-8 text-sm font-bold text-white shadow-lg shadow-emerald-500/20"
           >
-            Go to Recruiter Dashboard
+            Start for Free
+            <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-0.5" />
           </MotionLink>
           <motion.a
             href="#pricing"
-            whileHover={prefersReducedMotion ? {} : { 
-              scale: 1.02, 
+            whileHover={prefersReducedMotion ? {} : {
+              scale: 1.02,
               borderColor: "rgba(255, 255, 255, 0.2)",
               backgroundColor: "rgba(255, 255, 255, 0.08)"
             }}
@@ -368,8 +381,26 @@ export default function Landing() {
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
             className="inline-flex h-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-8 text-sm font-semibold text-white"
           >
-            Explore B2B Plans
+            See Pricing
           </motion.a>
+        </motion.div>
+
+        {/* Capability stat strip — factual product capabilities, not usage claims */}
+        <motion.div
+          variants={itemVariants}
+          className="mb-16 grid w-full max-w-2xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md sm:grid-cols-4"
+        >
+          {[
+            { value: '<5s', label: 'Avg. parse time' },
+            { value: '100', label: 'Resumes / batch' },
+            { value: '6', label: 'Pipeline stages' },
+            { value: '360°', label: 'Candidate scoring' },
+          ].map((stat) => (
+            <div key={stat.label} className="flex flex-col items-center gap-1 bg-[#0a0a15]/40 px-4 py-5">
+              <span className="font-display text-2xl font-black text-white">{stat.value}</span>
+              <span className="text-[11px] font-medium text-gray-500 text-center">{stat.label}</span>
+            </div>
+          ))}
         </motion.div>
 
         {/* Interactive Dashboard Showcase Widget */}
@@ -509,7 +540,9 @@ export default function Landing() {
         >
           <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
-              <span className="text-2xl mb-4 block">🤖</span>
+              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+                <Sparkles size={20} className="text-emerald-400" />
+              </div>
               <h3 className="font-bold text-sm text-white mb-2">AI Resume Parsing</h3>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Scan semantic structures to extract skills, experience years, degrees, and certificates within 5 seconds.
@@ -518,7 +551,9 @@ export default function Landing() {
           </motion.div>
           <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-cyan-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
-              <span className="text-2xl mb-4 block">📈</span>
+              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-500/20 bg-cyan-500/10">
+                <Github size={20} className="text-cyan-400" />
+              </div>
               <h3 className="font-bold text-sm text-white mb-2">GitHub Footprint Sync</h3>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Verify actual commits, star counts, polyglot language frequencies, and test coverage indicators directly.
@@ -527,7 +562,9 @@ export default function Landing() {
           </motion.div>
           <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-violet/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
-              <span className="text-2xl mb-4 block">🔒</span>
+              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/10">
+                <ShieldCheck size={20} className="text-violet-400" />
+              </div>
               <h3 className="font-bold text-sm text-white mb-2">Anonymized Bias Audit</h3>
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Hide demographic data, locations, and names with one click to enforce objective skill-based reviews.
@@ -536,10 +573,12 @@ export default function Landing() {
           </motion.div>
           <motion.div variants={scrollItemVariants} whileHover={prefersReducedMotion ? {} : { y: -5 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }} className="bg-white/5 border border-white/5 rounded-2xl p-6 hover:border-yellow-500/20 hover:bg-white/10 transition-all duration-300 flex flex-col justify-between min-h-[200px]">
             <div>
-              <span className="text-2xl mb-4 block">📅</span>
-              <h3 className="font-bold text-sm text-white mb-2">Greedy Scheduling</h3>
+              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
+                <Calendar size={20} className="text-amber-400" />
+              </div>
+              <h3 className="font-bold text-sm text-white mb-2">Conflict-Free Scheduling</h3>
               <p className="text-[11px] text-gray-400 leading-relaxed">
-                Schedule technical interviews without conflicts using greedy activity interval optimizations.
+                Auto-arrange technical interviews without overlaps using optimal interval scheduling.
               </p>
             </div>
           </motion.div>
