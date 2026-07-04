@@ -12,6 +12,9 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#)
 [![Python](https://img.shields.io/badge/Python_3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](#)
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+**[Live Demo →](https://hirei-q.vercel.app)**
 
 </div>
 
@@ -169,6 +172,19 @@ To ensure candidate privacy, HireIQ encrypts all resume text before database per
 - **Backend**: FastAPI, Python 3.9+, Pydantic, Supabase PostgreSQL
 - **AI Model**: Google Gemini API integration (bias auditing and Q&A generation)
 - **Algorithms**: Merge Sort (ranking), Greedy Activity Selection (interview scheduling), 0/1 Knapsack (shortlisting)
+
+---
+
+## 📚 Project Documentation
+
+| Document | Purpose |
+| :--- | :--- |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Render + Vercel deployment configuration and environment variables |
+| [BACKUP.md](BACKUP.md) | Database backup and restore procedures |
+| [AUDIT_LOG.md](AUDIT_LOG.md) | Pre-launch security/quality audit findings, organized by severity |
+| [LAUNCH_READINESS.md](LAUNCH_READINESS.md) | What's verified and safe to charge for vs. what's still outstanding |
+| [COMPETITIVE_NOTES.md](COMPETITIVE_NOTES.md) | AI-ATS competitive landscape research informing the product design |
+| `backend/legal/` | Privacy policy, terms of service, cookie policy, and DPA source docs |
 
 ---
 

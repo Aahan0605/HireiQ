@@ -79,3 +79,4 @@ debug_*.py
 
 # Supabase CLI temp files
 supabase/.temp/
+.supabase/
