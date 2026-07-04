@@ -4,6 +4,20 @@ Snapshot after the first hardening pass (Phase 1 code/repo audit + security-rele
 
 ---
 
+## ✅ End-to-end verified against a live backend (2026-07-04)
+Ran the FastAPI backend against the real Supabase with a throwaway test account, then drove the flows through the actual UI. All test data was deleted afterward (0 rows left).
+- **Auth chain**: register → email-verify → login all work (email send is simulated locally — `RESEND_API_KEY` unset — but the token/verify/login logic is correct).
+- **Resume upload → parse → score**: uploaded a real PDF; parsed name/skills/experience and scored 67. **Gemini was rate-limited (free-tier 5 req/min → 429s) and the pipeline correctly fell back to deterministic scoring instead of crashing** (sidebar showed "Worker: Fallback"). This validates the graceful-degradation requirement.
+- **Kanban**: candidate rendered in the right column; stage change persisted across a full page refresh (no dup/loss).
+- **Hired flow**: bulk move to Hired persisted and fired the celebration path with zero console errors.
+- **Exports**: CSV (valid, correct Hired status + parsed skills) and PDF (valid 1-page doc) both 200.
+- **Failure cases**: empty file → 400 "Uploaded file is empty" (confirms the P1-3 fix), unsupported type → 415, **corrupt PDF → graceful "Analysis encountered an error" with score 0, no crash / no infinite Analyzing**.
+
+New observations from the live run:
+- **Gemini key is free-tier (5 req/min)** — fine because the fallback works, but at real volume every upload will hit the limit and use degraded scoring. Budget a paid Gemini tier before launch if LLM-quality scoring/Q&A is a selling point.
+- **Resume parser picks up some noise skills** (e.g. tool names like "Windsurf", "Antigravity" surfaced as skills). Cosmetic, not a failure.
+- **`/health` can return 503 on the very first request** (2s DB-check timeout is shorter than cold TLS warmup ~2.5s). On Render cold starts this could briefly report unhealthy — consider raising the timeout to ~4s.
+
 ## ✅ Safe to charge real money for (with the owner follow-ups below done)
 - **Authentication**: bcrypt hashing, JWT with startup-validated secret, login lockout after 5 failures, email-verification enforced, anti-enumeration on password reset. Now rate-limited on register / login / forgot / reset.
 - **Billing**: real Stripe hosted Checkout + signature-verified, idempotent webhooks. No raw card data touches the app (PCI-appropriate).

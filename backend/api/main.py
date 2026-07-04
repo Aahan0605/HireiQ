@@ -234,7 +234,9 @@ async def health(response: Response):
                 client.table("recruiters").select("id").limit(1).execute()
             await loop.run_in_executor(None, run_query)
         
-        await asyncio.wait_for(check_db(), timeout=2.0)
+        # 4s covers cold TLS/connection warmup on the first request after an
+        # idle/cold start; a 2s cap intermittently reported false "unhealthy".
+        await asyncio.wait_for(check_db(), timeout=4.0)
         db_status = "connected"
     except Exception as e:
         error_msg = str(e)
