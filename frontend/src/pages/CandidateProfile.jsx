@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, Tooltip } from 'recharts';
 import { Mail, Github, Linkedin, MapPin, Award, ArrowLeft, Terminal, Layout, Loader2, Calendar, Download, Star, GitBranch, Activity, X, AlertCircle, Phone, Edit, FileText, Cpu } from 'lucide-react';
 import { toast } from 'sonner';
 import MagneticCard from '../components/MagneticCard';
 import SkillGapCard from '../components/SkillGapCard';
+import ChartTooltip from '../components/ChartTooltip';
 import { fadeUp, staggerContainer, listItem } from '../lib/animations';
 import { apiFetch } from '../lib/apiFetch';
 
@@ -999,6 +1000,7 @@ HireIQ Hiring Team`
                   <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
                     <PolarGrid stroke="rgba(255,255,255,0.1)" />
                     <PolarAngleAxis dataKey="subject" tick={{ fill: '#9494B0', fontSize: 10 }} />
+                    <Tooltip content={<ChartTooltip />} />
                     <Radar name={candidate?.name} dataKey="A" stroke="#9D74FF" fill="#9D74FF" fillOpacity={0.4} />
                   </RadarChart>
                 </ResponsiveContainer>

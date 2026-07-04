@@ -1169,7 +1169,7 @@ export default function Dashboard() {
                       <BarChart data={execData.conversion_stages} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <XAxis dataKey="stage" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                         <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                         <Bar dataKey="count" name="Applicants" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -1187,7 +1187,7 @@ export default function Dashboard() {
                       <BarChart data={execData.monthly_hiring} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                         <XAxis dataKey="month" stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
                         <YAxis stroke="#6b7280" fontSize={10} tickLine={false} axisLine={false} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                         <Bar dataKey="hires" name="Hires" fill="#10b981" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>

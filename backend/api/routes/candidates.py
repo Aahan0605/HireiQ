@@ -57,6 +57,9 @@ from api.core.encryption import encrypt_field
 from api.core.error_handling import safe_error_response
 
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt"}
+MAX_RESUME_FILE_SIZE = 10 * 1024 * 1024  # 10 MB per file
+MAX_BULK_FILES = 100  # cap batch size to bound per-request memory/latency
+MAX_BULK_TOTAL_BYTES = 200 * 1024 * 1024  # 200 MB aggregate per batch
 
 
 from api.models import (
@@ -764,10 +767,20 @@ async def upload_resume(
     # 1. Enforce active tenant quota limits
     check_cv_upload_limit(None, tenant_id)
 
-    # 2. Create a unique candidate ID
+    # 2. Read file content and validate size BEFORE creating any DB record, so an
+    #    oversized upload cannot leave an orphaned "Analyzing" candidate behind.
+    content = await file.read()
+    if len(content) > MAX_RESUME_FILE_SIZE:
+        raise HTTPException(
+            status_code=413, detail="File too large. Maximum size is 10 MB."
+        )
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # 3. Create a unique candidate ID
     candidate_id = str(uuid.uuid4())
 
-    # 3. Setup a placeholder candidate record
+    # 4. Setup a placeholder candidate record
     raw_name = file.filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ")
     name = " ".join(w.capitalize() for w in raw_name.split())
     placeholder = {
@@ -791,14 +804,6 @@ async def upload_resume(
 
     # Save placeholder to DB
     await save_candidate(placeholder, tenant_id)
-
-    # 4. Read file content and validate size
-    content = await file.read()
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413, detail="File too large. Maximum size is 10 MB."
-        )
 
     # 5. Base64 encode and use FastAPI background tasks for reliable async processing
     import base64
@@ -834,12 +839,16 @@ async def upload_bulk(
     files: list[UploadFile] = File(...),
     tenant_id: str = Depends(require_tenant),
 ):
-    if len(files) > 1000:
-        raise HTTPException(status_code=400, detail="Maximum 1000 files per batch.")
+    if len(files) > MAX_BULK_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_BULK_FILES} files per batch.",
+        )
 
     import base64
 
     results = []
+    total_bytes = 0
 
     for file in files:
         filename = file.filename or ""
@@ -854,6 +863,40 @@ async def upload_bulk(
                 }
             )
             continue
+
+        # Read + validate size BEFORE creating any DB record or consuming quota.
+        content = await file.read()
+        if len(content) == 0:
+            results.append(
+                {
+                    "candidate_id": None,
+                    "name": filename,
+                    "status": "Rejected",
+                    "error": "File is empty.",
+                }
+            )
+            continue
+        if len(content) > MAX_RESUME_FILE_SIZE:
+            results.append(
+                {
+                    "candidate_id": None,
+                    "name": filename,
+                    "status": "Rejected",
+                    "error": "File too large. Maximum size is 10 MB.",
+                }
+            )
+            continue
+        total_bytes += len(content)
+        if total_bytes > MAX_BULK_TOTAL_BYTES:
+            results.append(
+                {
+                    "candidate_id": None,
+                    "name": filename,
+                    "status": "Rejected",
+                    "error": "Batch size limit exceeded. Please split into smaller batches.",
+                }
+            )
+            break
 
         check_cv_upload_limit(None, tenant_id)
 
@@ -881,7 +924,6 @@ async def upload_bulk(
         }
         await save_candidate(placeholder, tenant_id)
 
-        content = await file.read()
         content_b64 = base64.b64encode(content).decode("utf-8")
         background_tasks.add_task(
             _process_resume_inline, candidate_id, file.filename, content_b64, tenant_id

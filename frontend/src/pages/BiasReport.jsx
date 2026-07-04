@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { apiFetch } from '../lib/apiFetch';
 import EmptyState from '../components/EmptyState';
@@ -7,6 +7,7 @@ import EmptyState from '../components/EmptyState';
 const API = '/api/v1';
 
 export default function BiasReport() {
+  const prefersReducedMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [biasData, setBiasData] = useState([]);
@@ -206,15 +207,19 @@ export default function BiasReport() {
               <h3 className="text-theme-1 font-semibold mb-4 text-sm">Bias Distribution</h3>
               <svg viewBox="0 0 100 100" className="w-28 h-28" role="img" aria-label="Donut chart representing the distribution of unbiased candidates vs candidates with potential bias">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
-                {/* Unbiased arc */}
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#22c55e" strokeWidth="12"
-                  strokeDasharray={`${(unbiasedPct / 100) * circumference} ${circumference}`}
+                {/* Unbiased arc (draws in on load) */}
+                <motion.circle cx="50" cy="50" r="40" fill="none" stroke="#22c55e" strokeWidth="12"
+                  initial={{ strokeDasharray: prefersReducedMotion ? `${(unbiasedPct / 100) * circumference} ${circumference}` : `0 ${circumference}` }}
+                  animate={{ strokeDasharray: `${(unbiasedPct / 100) * circumference} ${circumference}` }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.9, ease: 'easeOut', delay: 0.2 }}
                   strokeDashoffset={circumference * 0.25}
                   strokeLinecap="round"
                 />
-                {/* Biased arc */}
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#f59e0b" strokeWidth="12"
-                  strokeDasharray={`${biasedDash} ${circumference}`}
+                {/* Biased arc (draws in after the unbiased arc) */}
+                <motion.circle cx="50" cy="50" r="40" fill="none" stroke="#f59e0b" strokeWidth="12"
+                  initial={{ strokeDasharray: prefersReducedMotion ? `${biasedDash} ${circumference}` : `0 ${circumference}` }}
+                  animate={{ strokeDasharray: `${biasedDash} ${circumference}` }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.7, ease: 'easeOut', delay: 0.9 }}
                   strokeDashoffset={circumference * 0.25 - (unbiasedPct / 100) * circumference}
                   strokeLinecap="round"
                 />

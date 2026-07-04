@@ -76,11 +76,14 @@
    docker compose up --build
    ```
 
-4. Populate seed data into the database:
+4. (Local development only) Populate seed data into the database:
    ```bash
    docker compose exec backend python scripts/seed_demo.py
    ```
-   * Access the local frontend dashboard at [http://localhost](http://localhost) using `demo@hireiq.dev` / `Demo1234!`.
+   The seed script prints the generated demo login to your console. It refuses to
+   run outside a `development` environment, so no default credentials ship to
+   production. Open the local dashboard at [http://localhost](http://localhost) and
+   sign in with the credentials shown in the seed output.
 
 ---
 
@@ -110,12 +113,18 @@ npm run dev
 
 To ensure candidate privacy, HireIQ encrypts all resume text before database persistence using Fernet symmetric encryption.
 
-- **Configure Encryption**: Generate a base64 key and define it in your backend environment:
+- **Configure Encryption**: Generate your own base64 Fernet key and define it in your backend environment. Never reuse a key from documentation or version control:
   ```bash
-  FIELD_ENCRYPTION_KEY=L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=
+  # Generate a fresh key:
+  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+  # Then set it (example placeholder — replace with your generated value):
+  FIELD_ENCRYPTION_KEY=<your-generated-fernet-key>
   ```
   > [!IMPORTANT]
-  > Decryption requires the same key. Back up your keys securely.
+  > Decryption requires the same key. Store it only in your deployment's secret
+  > manager (e.g. Render environment variables), never in the repo. Back it up
+  > securely — losing it makes existing encrypted data unrecoverable.
 
 ---
 

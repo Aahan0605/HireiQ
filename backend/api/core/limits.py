@@ -1,10 +1,23 @@
 from fastapi import HTTPException, status
 from db import get_supabase
 
+# Per-plan usage quotas enforced server-side (see check_* functions below).
+#
+# Aligned to the pricing ACTUALLY rendered on the landing page (Landing.jsx
+# `pricingPlans`) — note that PricingSection.jsx is dead code and was NOT the
+# source of truth:
+#   - Free Trial   $0     -> "5 resume parses / month"
+#   - Recruiter Pro $79/mo -> "Unlimited CV uploads"
+#   - Enterprise   Custom -> unlimited
+# "business" is retained only for backwards-compat with the billing webhook's
+# price mapping and mirrors an unlimited paid tier.
+_UNLIMITED = 10**9
+
 PLAN_QUOTAS = {
-    "free": {"parses": 999999, "jobs": 999999, "seats": 999999},
-    "pro": {"parses": 999999, "jobs": 999999, "seats": 999999},
-    "enterprise": {"parses": 999999, "jobs": 999999, "seats": 999999}
+    "free": {"parses": 5, "jobs": 2, "seats": 1},           # Free Trial — "5 resume parses / month"
+    "pro": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},       # Recruiter Pro $79 — "Unlimited CV uploads"
+    "business": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},  # billing-compat, unlimited
+    "enterprise": {"parses": _UNLIMITED, "jobs": _UNLIMITED, "seats": _UNLIMITED},
 }
 
 def get_recruiter(recruiter_id: str) -> dict:

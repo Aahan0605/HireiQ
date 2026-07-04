@@ -1,7 +1,7 @@
 import pytest
 import os
 # Ensure dummy keys are present before imports
-os.environ.setdefault("FIELD_ENCRYPTION_KEY", "L9V8Sba4Nr33J_NcEL1w9PYSiaYvTGTicgDzPPtjdn4=")  # pragma: allowlist secret
+os.environ.setdefault("FIELD_ENCRYPTION_KEY", "DJrZdgYjpmxR7Wl1g8vbouKfu-x1zXeJ7tFpzFq_FVs=")  # pragma: allowlist secret
 os.environ.setdefault("JWT_SECRET_KEY", "mock-jwt-secret-key-here-that-is-long-enough-for-validation-32-chars")  # pragma: allowlist secret
 
 from api.core.limiter import limiter
