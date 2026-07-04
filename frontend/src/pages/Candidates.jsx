@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { getAllCandidates } from '../data/candidates';
 import { apiFetch } from '../lib/apiFetch';
 import EmptyState from '../components/EmptyState';
+import CelebrationBurst from '../components/CelebrationBurst';
 
 const API = '/api/v1';
 
@@ -86,6 +87,7 @@ const KANBAN_STAGES = [
 
 export default function Candidates() {
   const [candidates, setCandidates] = useState([]);
+  const [celebrate, setCelebrate]   = useState(0); // bump to fire the Hired burst
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
   const [search, setSearch]         = useState('');
@@ -504,7 +506,12 @@ export default function Candidates() {
         body: JSON.stringify({ stage: stageKey.toLowerCase() })
       });
       if (!res.ok) throw new Error('Backend failed to patch candidate stage');
-      toast.success('Candidate status updated successfully.');
+      if (stageKey === 'Hired') {
+        setCelebrate((n) => n + 1);
+        toast.success(`🎉 ${candidate?.name || 'Candidate'} marked as Hired!`);
+      } else {
+        toast.success('Candidate status updated successfully.');
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to update status on server.');
@@ -589,6 +596,10 @@ export default function Candidates() {
         toast.success(`Updated ${selectedIds.length} candidate(s) to ${stageKey}.`);
       }
 
+      if (stageKey === 'Hired' && successfulIds.length > 0) {
+        setCelebrate((n) => n + 1);
+      }
+
       setSelected(new Set());
     } catch (err) {
       toast.dismiss();
@@ -633,6 +644,7 @@ export default function Candidates() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
       className="min-h-screen bg-page p-6 lg:p-10">
+      <CelebrationBurst trigger={celebrate} />
       <div className={`${viewMode === 'kanban' ? 'max-w-7xl' : 'max-w-4xl'} mx-auto transition-all duration-300`}>
 
         {/* Header */}

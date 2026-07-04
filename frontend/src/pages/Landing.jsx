@@ -549,11 +549,14 @@ export default function Landing() {
       {/* Testimonials Section */}
       <section className="relative z-10 py-20 px-6 border-y border-white/5 bg-[#0a0a15]/40 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-white text-center mb-12 flex items-center justify-center gap-2">
+          <h2 className="text-3xl font-bold text-white text-center mb-3 flex items-center justify-center gap-2">
             <Quote className="text-emerald-400" /> What Engineering Teams Say
           </h2>
+          <p className="text-[11px] text-gray-500 text-center mb-12">
+            Illustrative examples of how teams use HireIQ.
+          </p>
 
-          <motion.div 
+          <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, amount: 0.2 }}
